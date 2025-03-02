@@ -51,27 +51,20 @@ export default function PhoneScreen() {
       const result = await sendVerificationCode(fullPhoneNumber, verifier);
       
       if (result.success && result.confirmationResult) {
-        // For mobile, store verification info using AsyncStorage in a real app
-        // For demo/testing, we'll use mock values
-        if (Platform.OS !== 'web') {
-          // In a real app, you would store the verification ID
-          // In our mock implementation, we know the test code is 123456
-          console.log('Using mock verification flow for mobile');
-        }
-        
-        // Navigate to verify screen with simplified params
+        // Navigate to verify screen
+        // For development builds, we're using a mock verificationId
         router.push({
           pathname: '/(auth)/verify' as any,
           params: {
             phoneNumber: fullPhoneNumber,
-            // For both web and mobile, we pass verificationId
-            verificationId: result.confirmationResult.verificationId
+            verificationId: result.confirmationResult.verificationId || 'mock-verification-id'
           }
         });
       } else {
         throw new Error(result.error ? (result.error as Error).message : 'Failed to send verification code');
       }
     } catch (err) {
+      console.error('Error in handleSendCode:', err);
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);

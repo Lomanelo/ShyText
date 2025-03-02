@@ -74,16 +74,11 @@ export default function VerifyScreen() {
     setError(null);
 
     try {
-      // For mobile testing, we can use our mock code
-      if (Platform.OS !== 'web' && verificationCode === '123456') {
-        console.log('Using mock verification success path');
-        // Success path for our mock implementation
-        router.push('/(auth)/display-name' as any);
-        return;
-      }
-      
-      // For web and real implementations, use the verificationId
+      // For development builds, we're using a simple verification approach
+      // The mock verification will succeed with code '123456'
       const confirmation = { verificationId };
+      
+      // Call the verifyPhoneNumber function
       const result = await verifyPhoneNumber(confirmation, verificationCode);
       
       if (result.success) {
@@ -93,6 +88,7 @@ export default function VerifyScreen() {
         throw new Error(result.error ? (result.error as Error).message : 'Invalid verification code');
       }
     } catch (err) {
+      console.error('Error in handleVerify:', err);
       setError(err instanceof Error ? err.message : 'Invalid verification code');
     } finally {
       setLoading(false);
