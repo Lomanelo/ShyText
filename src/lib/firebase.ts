@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User, PhoneAuthProvider, signInWithCredential, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
 import { getFirestore, GeoPoint, collection, doc, setDoc, updateDoc, getDoc, query, where, getDocs, addDoc, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -30,98 +30,85 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
-// Phone authentication functions
-let recaptchaVerifier: RecaptchaVerifier | null = null;
+// Email and password authentication functions
 
-// Initialize recaptcha verifier for web platforms
-export const initRecaptchaVerifier = (containerOrId: string | HTMLElement) => {
-  if (typeof window !== 'undefined') {
-    recaptchaVerifier = new RecaptchaVerifier(auth, containerOrId, {
-      size: 'invisible',
-    });
-    return recaptchaVerifier;
-  }
-  return null;
-};
-
-// Send verification code to phone number
-export const sendVerificationCode = async (phoneNumber: string, recaptchaVerifierInstance: RecaptchaVerifier | null = null) => {
+// Register new user with email and password
+export const registerWithEmail = async (email: string, password: string) => {
   try {
-    // Web implementation requires recaptcha
-    if (Platform.OS === 'web') {
-      const verifierToUse = recaptchaVerifierInstance || recaptchaVerifier;
-      if (!verifierToUse) {
-        throw new Error('RecaptchaVerifier is not initialized (required for web platform)');
-      }
-      
-      const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, verifierToUse);
-      return { success: true, confirmationResult };
-    } 
-    // Mobile implementation (iOS/Android)
-    else {
-      console.log("Using mobile phone authentication");
-      
-      // For development builds, always use mock verification
-      // This avoids SMS verification and AsyncStorage issues
-      const mockConfirmationResult = {
-        verificationId: 'mock-verification-id',
-        confirm: async (code: string) => {
-          if (code === '123456') { // Test code
-            return {
-              user: { uid: 'test-user-id' }
-            };
-          } else {
-            throw new Error('Invalid verification code');
-          }
-        }
-      };
-      
-      return { success: true, confirmationResult: mockConfirmationResult };
-    }
-  } catch (error) {
-    console.error('Error sending verification code:', error);
-    return { success: false, error };
-  }
-};
-
-// Verify phone number with code
-export const verifyPhoneNumber = async (confirmation: any, verificationCode: string) => {
-  try {
-    // Handle both real Firebase confirmations and our mock implementation
-    let userCredential;
+    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     
-    if (Platform.OS === 'web') {
-      // For web
-      userCredential = await confirmation.confirm(verificationCode);
-    } else {
-      // For mobile, use our mock implementation for development builds
-      if (verificationCode === '123456') {
-        console.log("Using mock verification success path");
-        userCredential = { user: { uid: 'test-user-id' } };
-      } else {
-        throw new Error('Invalid verification code');
-      }
-    }
+    // Create initial user profile
+    await setDoc(doc(db, 'profiles', userCredential.user.uid), {
+      email: email,
+      created_at: new Date().toISOString(),
+      display_name: '',
+      birth_date: '',
+      photo_url: '',
+      onboarding_completed: false
+    });
     
     return { success: true, user: userCredential.user };
   } catch (error) {
-    console.error('Error verifying code:', error);
+    console.error('Error registering with email:', error);
     return { success: false, error };
   }
 };
 
-// Complete user profile after phone authentication
+// Sign in with email and password
+export const signInWithEmail = async (email: string, password: string) => {
+  try {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return { success: true, user: userCredential.user };
+  } catch (error) {
+    console.error('Error signing in with email:', error);
+    return { success: false, error };
+  }
+};
+
+// Validate email format
+export const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
+// Validate password strength
+export const isValidPassword = (password: string): { isValid: boolean; message: string } => {
+  if (password.length < 6) {
+    return { isValid: false, message: 'Password must be at least 6 characters' };
+  }
+  
+  // Add more password requirements as needed
+  return { isValid: true, message: '' };
+};
+
+// Complete user profile after authentication
 export const completeUserProfile = async (uid: string, profileData: { displayName: string; birthDate: string; photoURL?: string }) => {
   try {
     const { displayName, birthDate, photoURL } = profileData;
     
-    // Update user profile in Firebase Auth if available
-    if (auth.currentUser) {
-      await updateDoc(doc(db, 'profiles', uid), {
+    console.log("Completing profile for user:", uid);
+    
+    // First check if the profile document exists
+    const profileRef = doc(db, 'profiles', uid);
+    const profileSnap = await getDoc(profileRef);
+    
+    if (profileSnap.exists()) {
+      // Update existing profile
+      await updateDoc(profileRef, {
         display_name: displayName,
         birth_date: birthDate,
-        photo_url: photoURL,
+        photo_url: photoURL || '',
         updated_at: new Date().toISOString(),
+      });
+    } else {
+      // Create new profile document if it doesn't exist
+      await setDoc(profileRef, {
+        display_name: displayName,
+        birth_date: birthDate,
+        photo_url: photoURL || '',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        onboarding_completed: false,
       });
     }
     
@@ -248,39 +235,45 @@ export async function startConversation(receiverId: string, message: string) {
     const newConversationRef = await addDoc(conversationRef, {
       initiator_id: user.uid,
       receiver_id: receiverId,
+      status: 'pending', // pending, accepted, declined
       created_at: new Date().toISOString(),
-      status: 'pending',
+      updated_at: new Date().toISOString(),
     });
     
     // Add the first message
-    const messagesRef = collection(db, 'messages');
+    const messagesRef = collection(db, 'conversations', newConversationRef.id, 'messages');
     await addDoc(messagesRef, {
-      conversation_id: newConversationRef.id,
       sender_id: user.uid,
       content: message,
-      created_at: new Date().toISOString(),
+      timestamp: new Date().toISOString(),
+      read: false,
     });
     
-    // Get the conversation data
-    const conversationSnapshot = await getDoc(newConversationRef);
-    return { id: conversationSnapshot.id, ...conversationSnapshot.data() };
+    return { success: true, conversationId: newConversationRef.id };
   } catch (error) {
-    console.error('Error creating conversation:', error);
-    throw error;
+    console.error('Error starting conversation:', error);
+    return { success: false, error };
   }
 }
 
-// Respond to a conversation (accept or reject)
+// Respond to a conversation request (accept or decline)
 export async function respondToConversation(conversationId: string, accept: boolean) {
+  const user = getCurrentUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+  
   try {
     const conversationRef = doc(db, 'conversations', conversationId);
     await updateDoc(conversationRef, {
-      status: accept ? 'accepted' : 'rejected',
+      status: accept ? 'accepted' : 'declined',
       updated_at: new Date().toISOString(),
     });
+    
+    return { success: true };
   } catch (error) {
     console.error('Error responding to conversation:', error);
-    throw error;
+    return { success: false, error };
   }
 }
 
@@ -292,28 +285,33 @@ export async function sendMessage(conversationId: string, content: string) {
   }
   
   try {
-    const messagesRef = collection(db, 'messages');
-    await addDoc(messagesRef, {
-      conversation_id: conversationId,
+    const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+    const messageDoc = await addDoc(messagesRef, {
       sender_id: user.uid,
-      content: content,
-      created_at: new Date().toISOString(),
+      content,
+      timestamp: new Date().toISOString(),
+      read: false,
     });
+    
+    // Update the conversation's last update timestamp
+    const conversationRef = doc(db, 'conversations', conversationId);
+    await updateDoc(conversationRef, {
+      updated_at: new Date().toISOString(),
+    });
+    
+    return { success: true, messageId: messageDoc.id };
   } catch (error) {
     console.error('Error sending message:', error);
-    throw error;
+    return { success: false, error };
   }
 }
 
-// Subscribe to conversation messages
+// Subscribe to messages in a conversation
 export function subscribeToMessages(conversationId: string, callback: (messages: any[]) => void) {
-  const messagesQuery = query(
-    collection(db, 'messages'),
-    where('conversation_id', '==', conversationId),
-    orderBy('created_at', 'asc')
-  );
+  const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+  const q = query(messagesRef, orderBy('timestamp', 'asc'));
   
-  return onSnapshot(messagesQuery, (snapshot) => {
+  return onSnapshot(q, (snapshot) => {
     const messages = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -322,7 +320,7 @@ export function subscribeToMessages(conversationId: string, callback: (messages:
   });
 }
 
-// Get user conversations
+// Get all conversations for the current user
 export async function getUserConversations() {
   const user = getCurrentUser();
   if (!user) {
@@ -330,28 +328,56 @@ export async function getUserConversations() {
   }
   
   try {
+    // Query conversations where the user is either the initiator or receiver
     const q1 = query(
       collection(db, 'conversations'),
       where('initiator_id', '==', user.uid)
     );
+    
     const q2 = query(
       collection(db, 'conversations'),
       where('receiver_id', '==', user.uid)
     );
     
-    const [initiatedSnap, receivedSnap] = await Promise.all([
+    const [initiatedSnapshots, receivedSnapshots] = await Promise.all([
       getDocs(q1),
       getDocs(q2)
     ]);
     
-    const conversations = [
-      ...initiatedSnap.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-      ...receivedSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    // Define type for conversation data
+    type ConversationData = {
+      id: string;
+      initiator_id: string;
+      receiver_id: string;
+      status: string;
+      created_at: string;
+      updated_at: string;
+      isInitiator: boolean;
+      [key: string]: any; // For any additional fields
+    };
+    
+    // Combine and format results
+    const conversations: ConversationData[] = [
+      ...initiatedSnapshots.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        isInitiator: true
+      })) as ConversationData[],
+      ...receivedSnapshots.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        isInitiator: false
+      })) as ConversationData[]
     ];
     
-    return conversations;
+    // Sort by updated_at (most recent first)
+    conversations.sort((a, b) => {
+      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+    });
+    
+    return { success: true, conversations };
   } catch (error) {
-    console.error('Error getting conversations:', error);
-    throw error;
+    console.error('Error getting user conversations:', error);
+    return { success: false, error };
   }
 } 

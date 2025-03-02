@@ -158,10 +158,13 @@ export default function BirthdateScreen() {
       // Get current user
       const currentUser = getCurrentUser();
       if (!currentUser) {
-        setError('User not authenticated');
+        console.error("No authenticated user found in birthdate screen");
+        setError('User not authenticated. Please restart the signup process.');
         setLoading(false);
         return;
       }
+      
+      console.log("Current user in birthdate screen:", currentUser.uid);
       
       // Complete the user profile with collected information
       const result = await completeUserProfile(currentUser.uid, {
@@ -176,9 +179,14 @@ export default function BirthdateScreen() {
           params: { displayName }
         });
       } else {
-        setError('Failed to save your information. Please try again.');
+        const errorMsg = result.error instanceof Error 
+          ? result.error.message 
+          : 'Failed to save your information. Please try again.';
+        console.error("Error completing profile:", errorMsg);
+        setError(errorMsg);
       }
     } catch (err) {
+      console.error("Exception in birthdate submission:", err);
       setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setLoading(false);

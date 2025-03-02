@@ -1,103 +1,43 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Platform, Dimensions, ActivityIndicator } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import React, { useState } from 'react';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Dimensions, ActivityIndicator, Platform } from 'react-native';
+import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { BlurView } from 'expo-blur';
-import { auth, verifyPhoneNumber } from '../../src/lib/firebase';
 import { Ionicons } from '@expo/vector-icons';
+import { isValidEmail } from '../../src/lib/firebase';
 
 const { width } = Dimensions.get('window');
 
-export default function VerifyScreen() {
-  const params = useLocalSearchParams();
-  const phoneNumber = params.phoneNumber as string;
-  const verificationId = params.verificationId as string;
-  
-  const [verificationCode, setVerificationCode] = useState('');
+export default function EmailScreen() {
+  const [email, setEmail] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  
-  // Create refs for 6 input fields
-  const inputRefs = [
-    useRef<TextInput>(null),
-    useRef<TextInput>(null),
-    useRef<TextInput>(null),
-    useRef<TextInput>(null),
-    useRef<TextInput>(null),
-    useRef<TextInput>(null),
-  ];
-  
-  // State to track each digit
-  const [codeDigits, setCodeDigits] = useState(['', '', '', '', '', '']);
-  
-  // Focus first input on component mount
-  useEffect(() => {
-    inputRefs[0].current?.focus();
-  }, []);
-  
-  // Handle input change for each digit
-  const handleCodeDigitChange = (text: string, index: number) => {
-    if (text.length > 1) {
-      text = text.charAt(0);
-    }
-    
-    // Update the digit at this index
-    const newCodeDigits = [...codeDigits];
-    newCodeDigits[index] = text;
-    setCodeDigits(newCodeDigits);
-    
-    // Combine digits for the full code
-    const fullCode = newCodeDigits.join('');
-    setVerificationCode(fullCode);
-    
-    // Auto-focus next input if a digit was entered
-    if (text.length === 1 && index < 5) {
-      inputRefs[index + 1].current?.focus();
-    }
-  };
-  
-  // Handle backspace for each input
-  const handleKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === 'Backspace' && index > 0 && !codeDigits[index]) {
-      inputRefs[index - 1].current?.focus();
-    }
-  };
 
-  const handleVerify = async () => {
-    if (verificationCode.length !== 6) {
-      setError('Please enter all 6 digits of the verification code');
+  const handleContinue = async () => {
+    // Reset error state
+    setError(null);
+    
+    // Validate email format
+    if (!isValidEmail(email)) {
+      setError('Please enter a valid email address');
       return;
     }
-
+    
     setLoading(true);
-    setError(null);
-
+    
     try {
-      // For development builds, we're using a simple verification approach
-      // The mock verification will succeed with code '123456'
-      const confirmation = { verificationId };
-      
-      // Call the verifyPhoneNumber function
-      const result = await verifyPhoneNumber(confirmation, verificationCode);
-      
-      if (result.success) {
-        // Navigate to the next step - display name
-        router.push('/(auth)/display-name' as any);
-      } else {
-        throw new Error(result.error ? (result.error as Error).message : 'Invalid verification code');
-      }
+      // Navigate to password screen with email
+      router.push({
+        pathname: '/(auth)/password' as any,
+        params: { email }
+      });
     } catch (err) {
-      console.error('Error in handleVerify:', err);
-      setError(err instanceof Error ? err.message : 'Invalid verification code');
+      console.error('Error:', err);
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleResendCode = () => {
-    // TODO: Implement resend code functionality
-    router.back();
   };
 
   return (
@@ -111,47 +51,50 @@ export default function VerifyScreen() {
       
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>Verification</Text>
-          <Text style={styles.subtitle}>Enter the 6-digit code sent to {phoneNumber}</Text>
+          <Text style={styles.title}>Your email</Text>
+          <Text style={styles.subtitle}>Enter your email address to get started</Text>
         </View>
         
         <BlurView intensity={20} tint="dark" style={styles.formContainer}>
           <View style={styles.stepIndicator}>
-            <View style={styles.stepComplete}><Ionicons name="checkmark" size={16} color="#fff" /></View>
+            <View style={styles.stepActive}><Text style={styles.stepText}>1</Text></View>
             <View style={styles.stepDivider} />
-            <View style={styles.stepActive}><Text style={styles.stepText}>2</Text></View>
+            <View style={styles.stepInactive}><Text style={styles.stepText}>2</Text></View>
             <View style={styles.stepDivider} />
             <View style={styles.stepInactive}><Text style={styles.stepText}>3</Text></View>
             <View style={styles.stepDivider} />
             <View style={styles.stepInactive}><Text style={styles.stepText}>4</Text></View>
           </View>
             
-          <View style={styles.codeInputContainer}>
-            {inputRefs.map((ref, index) => (
-              <TextInput
-                key={index}
-                ref={ref}
-                style={styles.codeInput}
-                keyboardType="number-pad"
-                maxLength={1}
-                value={codeDigits[index]}
-                onChangeText={(text) => handleCodeDigitChange(text, index)}
-                onKeyPress={(e) => handleKeyPress(e, index)}
-                editable={!loading}
-              />
-            ))}
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Email Address</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your email"
+              placeholderTextColor="#9ca3af"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+              autoCorrect={false}
+              value={email}
+              onChangeText={(text) => {
+                setEmail(text);
+                setError(null);
+              }}
+              editable={!loading}
+            />
+            
+            {error && (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle" size={18} color="#ff4d4f" />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
           </View>
-          
-          {error && (
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={18} color="#ff4d4f" />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          )}
           
           <TouchableOpacity 
             style={[styles.button, loading && styles.buttonDisabled]} 
-            onPress={handleVerify}
+            onPress={handleContinue}
             disabled={loading}>
             <LinearGradient
               colors={['#6366f1', '#4f46e5']}
@@ -162,7 +105,7 @@ export default function VerifyScreen() {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <View style={styles.buttonContent}>
-                  <Text style={styles.buttonText}>Verify</Text>
+                  <Text style={styles.buttonText}>Continue</Text>
                   <Ionicons name="arrow-forward" size={20} color="#fff" />
                 </View>
               )}
@@ -170,9 +113,9 @@ export default function VerifyScreen() {
           </TouchableOpacity>
           
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Didn't receive a code?</Text>
-            <TouchableOpacity onPress={handleResendCode} disabled={loading}>
-              <Text style={styles.resendButton}>Try again</Text>
+            <Text style={styles.footerText}>Already have an account?</Text>
+            <TouchableOpacity onPress={() => router.push('/(auth)/login' as any)}>
+              <Text style={styles.signInButton}>Sign in</Text>
             </TouchableOpacity>
           </View>
         </BlurView>
@@ -260,25 +203,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#2a2a3c',
     marginHorizontal: 5,
   },
-  codeInputContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  inputContainer: {
     marginBottom: 24,
   },
-  codeInput: {
-    width: 45,
+  label: {
+    color: '#fff',
+    fontSize: 16,
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  input: {
     height: 56,
     borderRadius: 8,
     backgroundColor: 'rgba(42, 42, 60, 0.8)',
     color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    fontSize: 16,
+    padding: 16,
+    marginBottom: 8,
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginTop: 8,
     padding: 12,
     backgroundColor: 'rgba(254, 226, 226, 0.1)',
     borderRadius: 8,
@@ -323,7 +269,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginRight: 8,
   },
-  resendButton: {
+  signInButton: {
     color: '#6366f1',
     fontSize: 14,
     fontWeight: '600',

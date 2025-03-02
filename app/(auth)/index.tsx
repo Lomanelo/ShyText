@@ -15,7 +15,7 @@ export default function WelcomeScreen() {
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.button}
-          onPress={() => router.push('/phone')}>
+          onPress={() => router.push('/(auth)/email' as any)}>
           <LinearGradient
             colors={['#007AFF', '#0055FF']}
             style={styles.gradient}

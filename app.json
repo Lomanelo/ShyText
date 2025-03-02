@@ -12,7 +12,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.rahimrady.shytext",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to help you connect with nearby users.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to help you connect with nearby users.",
+        "NSLocationAlwaysUsageDescription": "This app needs access to your location to help you connect with nearby users."
       }
     },
     "web": {
