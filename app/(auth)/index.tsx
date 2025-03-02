@@ -1,6 +1,7 @@
 import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import colors from '../../src/theme/colors';
 
 export default function WelcomeScreen() {
   return (
@@ -17,7 +18,7 @@ export default function WelcomeScreen() {
           style={styles.button}
           onPress={() => router.push('/(auth)/email' as any)}>
           <LinearGradient
-            colors={['#007AFF', '#0055FF']}
+            colors={[colors.primary, colors.primaryDark]}
             style={styles.gradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}>
@@ -40,6 +41,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'space-between',
     padding: 20,
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
@@ -49,12 +51,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.text,
     marginBottom: 20,
   },
   subtitle: {
     fontSize: 18,
-    color: '#888',
+    color: colors.darkGray,
     textAlign: 'center',
     lineHeight: 24,
   },
@@ -74,16 +76,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonText: {
-    color: '#fff',
+    color: colors.background,
     fontSize: 18,
     fontWeight: '600',
   },
   terms: {
-    color: '#666',
+    color: colors.darkGray,
     textAlign: 'center',
     fontSize: 12,
   },
   link: {
-    color: '#007AFF',
+    color: colors.primary,
   },
 });

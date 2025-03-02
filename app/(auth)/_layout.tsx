@@ -1,18 +1,21 @@
 import { Stack } from 'expo-router';
+import colors from '../../src/theme/colors';
 
 export default function AuthLayout() {
   return (
     <Stack screenOptions={{
       headerStyle: {
-        backgroundColor: '#1a1a1a',
+        backgroundColor: colors.background,
       },
-      headerTintColor: '#fff',
+      headerTintColor: colors.text,
       headerTitleStyle: {
         fontWeight: 'bold',
+        color: colors.text,
       },
       contentStyle: {
-        backgroundColor: '#1a1a1a',
+        backgroundColor: colors.background,
       },
+      headerShadowVisible: false,
     }}>
       <Stack.Screen
         name="index"
@@ -21,9 +24,39 @@ export default function AuthLayout() {
         }}
       />
       <Stack.Screen
-        name="phone"
+        name="email"
         options={{
-          title: 'Phone Verification',
+          title: 'Email',
+        }}
+      />
+      <Stack.Screen
+        name="password"
+        options={{
+          title: 'Create Password',
+        }}
+      />
+      <Stack.Screen
+        name="login"
+        options={{
+          title: 'Sign In',
+        }}
+      />
+      <Stack.Screen
+        name="display-name"
+        options={{
+          title: 'Your Name',
+        }}
+      />
+      <Stack.Screen
+        name="birthdate"
+        options={{
+          title: 'Your Birthday',
+        }}
+      />
+      <Stack.Screen
+        name="profile-image"
+        options={{
+          title: 'Profile Photo',
         }}
       />
       <Stack.Screen

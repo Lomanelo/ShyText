@@ -3,9 +3,9 @@ import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Dime
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { isValidEmail } from '../../src/lib/firebase';
+import colors from '../../src/theme/colors';
 
 const { width } = Dimensions.get('window');
 
@@ -42,12 +42,7 @@ export default function EmailScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
-      
-      <LinearGradient
-        colors={['#1e1e2e', '#121218']}
-        style={styles.background}
-      />
+      <StatusBar style="dark" />
       
       <View style={styles.content}>
         <View style={styles.header}>
@@ -55,7 +50,7 @@ export default function EmailScreen() {
           <Text style={styles.subtitle}>Enter your email address to get started</Text>
         </View>
         
-        <BlurView intensity={20} tint="dark" style={styles.formContainer}>
+        <View style={styles.formContainer}>
           <View style={styles.stepIndicator}>
             <View style={styles.stepActive}><Text style={styles.stepText}>1</Text></View>
             <View style={styles.stepDivider} />
@@ -71,7 +66,7 @@ export default function EmailScreen() {
             <TextInput
               style={styles.input}
               placeholder="Enter your email"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.darkGray}
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
@@ -86,7 +81,7 @@ export default function EmailScreen() {
             
             {error && (
               <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={18} color="#ff4d4f" />
+                <Ionicons name="alert-circle" size={18} color={colors.error} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
@@ -97,16 +92,16 @@ export default function EmailScreen() {
             onPress={handleContinue}
             disabled={loading}>
             <LinearGradient
-              colors={['#6366f1', '#4f46e5']}
+              colors={[colors.primary, colors.primaryDark]}
               style={styles.gradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}>
               {loading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.background} />
               ) : (
                 <View style={styles.buttonContent}>
                   <Text style={styles.buttonText}>Continue</Text>
-                  <Ionicons name="arrow-forward" size={20} color="#fff" />
+                  <Ionicons name="arrow-forward" size={20} color={colors.background} />
                 </View>
               )}
             </LinearGradient>
@@ -118,7 +113,7 @@ export default function EmailScreen() {
               <Text style={styles.signInButton}>Sign in</Text>
             </TouchableOpacity>
           </View>
-        </BlurView>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -127,14 +122,7 @@ export default function EmailScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121218',
-  },
-  background: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
@@ -147,20 +135,25 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#fff',
+    color: colors.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#9ca3af',
+    color: colors.darkGray,
     textAlign: 'center',
   },
   formContainer: {
     borderRadius: 16,
     overflow: 'hidden',
     padding: 24,
-    backgroundColor: 'rgba(30, 30, 46, 0.6)',
+    backgroundColor: colors.lightGray,
+    shadowColor: colors.text,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   stepIndicator: {
     flexDirection: 'row',
@@ -172,7 +165,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#6366f1',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -180,7 +173,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#10b981',
+    backgroundColor: colors.success,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -188,26 +181,26 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#2a2a3c',
+    backgroundColor: colors.mediumGray,
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepText: {
-    color: '#fff',
+    color: colors.background,
     fontSize: 12,
     fontWeight: 'bold',
   },
   stepDivider: {
     width: 24,
     height: 1,
-    backgroundColor: '#2a2a3c',
+    backgroundColor: colors.mediumGray,
     marginHorizontal: 5,
   },
   inputContainer: {
     marginBottom: 24,
   },
   label: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 16,
     marginBottom: 8,
     fontWeight: '600',
@@ -215,22 +208,24 @@ const styles = StyleSheet.create({
   input: {
     height: 56,
     borderRadius: 8,
-    backgroundColor: 'rgba(42, 42, 60, 0.8)',
-    color: '#fff',
+    backgroundColor: colors.background,
+    color: colors.text,
     fontSize: 16,
     padding: 16,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: colors.mediumGray,
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 8,
     padding: 12,
-    backgroundColor: 'rgba(254, 226, 226, 0.1)',
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
     borderRadius: 8,
   },
   errorText: {
-    color: '#ff4d4f',
+    color: colors.error,
     marginLeft: 8,
     fontSize: 14,
   },
@@ -253,25 +248,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 18,
+    color: colors.background,
+    fontSize: 16,
     fontWeight: '600',
     marginRight: 8,
   },
   footer: {
-    marginTop: 24,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 24,
   },
   footerText: {
-    color: '#9ca3af',
+    color: colors.darkGray,
     fontSize: 14,
-    marginRight: 8,
   },
   signInButton: {
-    color: '#6366f1',
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
+    marginLeft: 8,
   },
 }); 
