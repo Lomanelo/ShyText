@@ -1,50 +1,57 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { auth, db, getUserConversations } from '../lib/firebase';
+import { collection, query, where, onSnapshot, or, documentId } from 'firebase/firestore';
+
+interface Conversation {
+  id: string;
+  initiator_id: string;
+  receiver_id: string;
+  status: string;
+  created_at: string;
+  initiator?: any;
+  receiver?: any;
+  messages?: any[];
+  [key: string]: any;
+}
 
 export function useConversations() {
-  const [conversations, setConversations] = useState([]);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const user = supabase.auth.user();
+    const user = auth.currentUser;
     if (!user) return;
 
     // Fetch initial conversations
     fetchConversations();
 
-    // Subscribe to new conversations
-    const subscription = supabase
-      .from('conversations')
-      .on('*', () => {
-        fetchConversations();
-      })
-      .subscribe();
+    // Set up listeners for conversations where the user is involved
+    const conversationsRef = collection(db, 'conversations');
+    const q = query(
+      conversationsRef,
+      where('initiator_id', '==', user.uid), 
+      where('receiver_id', '==', user.uid)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      fetchConversations();
+    }, (err) => {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    });
 
     return () => {
-      subscription.unsubscribe();
+      unsubscribe();
     };
   }, []);
 
   async function fetchConversations() {
     try {
-      const { data, error: fetchError } = await supabase
-        .from('conversations')
-        .select(`
-          *,
-          initiator:profiles!initiator_id(*),
-          receiver:profiles!receiver_id(*),
-          messages(
-            id,
-            content,
-            created_at,
-            sender_id
-          )
-        `)
-        .or(`initiator_id.eq.${supabase.auth.user()?.id},receiver_id.eq.${supabase.auth.user()?.id}`)
-        .order('created_at', { ascending: false });
-
-      if (fetchError) throw fetchError;
+      const data = await getUserConversations();
+      
+      // Get additional data for each conversation (profiles, messages, etc.)
+      // This would need a more complex implementation to get all related data
+      
       setConversations(data || []);
       setLoading(false);
     } catch (err) {

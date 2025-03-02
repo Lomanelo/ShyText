@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '../../src/lib/supabase';
+import { auth, db } from '../../src/lib/firebase';
+import { doc, setDoc } from 'firebase/firestore';
 
 export default function ProfileScreen() {
   const [firstName, setFirstName] = useState('');
@@ -19,17 +20,16 @@ export default function ProfileScreen() {
     setError(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = auth.currentUser;
       if (!user) throw new Error('No user found');
 
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id,
-          first_name: firstName.trim(),
-        });
-
-      if (profileError) throw profileError;
+      // Update profile in Firestore
+      await setDoc(doc(db, 'profiles', user.uid), {
+        id: user.uid,
+        first_name: firstName.trim(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }, { merge: true });
 
       router.replace('/(tabs)');
     } catch (err) {

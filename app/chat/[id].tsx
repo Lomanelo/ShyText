@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { supabase } from '../../src/lib/supabase';
+import { auth, sendMessage, subscribeToMessages } from '../../src/lib/firebase';
 import { Ionicons } from '@expo/vector-icons';
 
 type Message = {
@@ -22,29 +22,18 @@ export default function ChatScreen() {
   useEffect(() => {
     fetchMessages();
     
-    const subscription = supabase
-      .from(`messages:conversation_id=eq.${id}`)
-      .on('INSERT', (payload) => {
-        setMessages((current) => [...current, payload.new as Message]);
-        flatListRef.current?.scrollToEnd({ animated: true });
-      })
-      .subscribe();
+    const unsubscribe = subscribeToMessages(id as string, (newMessages) => {
+      setMessages(newMessages as Message[]);
+      flatListRef.current?.scrollToEnd({ animated: true });
+    });
 
     return () => {
-      subscription.unsubscribe();
+      unsubscribe();
     };
   }, [id]);
 
   const fetchMessages = async () => {
     try {
-      const { data, error: fetchError } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', id)
-        .order('created_at', { ascending: true });
-
-      if (fetchError) throw fetchError;
-      setMessages(data || []);
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -56,14 +45,7 @@ export default function ChatScreen() {
     if (!newMessage.trim()) return;
 
     try {
-      const { error: sendError } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id: id,
-          content: newMessage.trim(),
-        });
-
-      if (sendError) throw sendError;
+      await sendMessage(id as string, newMessage.trim());
       setNewMessage('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message');
@@ -97,7 +79,7 @@ export default function ChatScreen() {
         renderItem={({ item }) => (
           <View style={[
             styles.messageContainer,
-            item.sender_id === supabase.auth.user()?.id ? 
+            item.sender_id === auth.currentUser?.uid ? 
               styles.sentMessage : 
               styles.receivedMessage
           ]}>

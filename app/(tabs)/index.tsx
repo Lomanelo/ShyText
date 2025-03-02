@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, Platform, TouchableOpacity } from 'react-native
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useNearbyUsers } from '../../src/hooks/useNearbyUsers';
-import { supabase, startConversation } from '../../src/lib/supabase';
+import { startConversation } from '../../src/lib/firebase';
 import { LinearGradient } from 'expo-linear-gradient';
 
 // Lazy load platform-specific components

@@ -1,9 +1,15 @@
 import { useState, useEffect } from 'react';
-import { findNearbyUsers } from '../lib/supabase';
+import { findNearbyUsers } from '../lib/firebase';
 import * as Location from 'expo-location';
 
+interface NearbyUser {
+  id: string;
+  distance: number;
+  [key: string]: any;
+}
+
 export function useNearbyUsers() {
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState<NearbyUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
