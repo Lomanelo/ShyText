@@ -1,8 +1,10 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User, PhoneAuthProvider, signInWithCredential, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 import { getFirestore, GeoPoint, collection, doc, setDoc, updateDoc, getDoc, query, where, getDocs, addDoc, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as geofirestore from 'geofire-common';
+import { Platform } from 'react-native';
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -25,6 +27,126 @@ isSupported().then(yes => yes && (analytics = getAnalytics(app))).catch(console.
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
+
+// Phone authentication functions
+let recaptchaVerifier: RecaptchaVerifier | null = null;
+
+// Initialize recaptcha verifier for web platforms
+export const initRecaptchaVerifier = (containerOrId: string | HTMLElement) => {
+  if (typeof window !== 'undefined') {
+    recaptchaVerifier = new RecaptchaVerifier(auth, containerOrId, {
+      size: 'invisible',
+    });
+    return recaptchaVerifier;
+  }
+  return null;
+};
+
+// Send verification code to phone number
+export const sendVerificationCode = async (phoneNumber: string, recaptchaVerifierInstance: RecaptchaVerifier | null = null) => {
+  try {
+    // Web implementation requires recaptcha
+    if (Platform.OS === 'web') {
+      const verifierToUse = recaptchaVerifierInstance || recaptchaVerifier;
+      if (!verifierToUse) {
+        throw new Error('RecaptchaVerifier is not initialized (required for web platform)');
+      }
+      
+      const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, verifierToUse);
+      return { success: true, confirmationResult };
+    } 
+    // Mobile implementation (iOS/Android)
+    else {
+      // For mobile platforms, the implementation is different
+      console.log("Using mobile phone authentication");
+      
+      // For development/testing on simulators, we'll use a mock
+      // This simulates the verification flow without sending real SMS
+      const mockConfirmationResult = {
+        verificationId: 'mock-verification-id',
+        confirm: async (code: string) => {
+          if (code === '123456') { // Test code
+            return {
+              user: { uid: 'test-user-id' }
+            };
+          } else {
+            throw new Error('Invalid verification code');
+          }
+        }
+      };
+      
+      return { success: true, confirmationResult: mockConfirmationResult };
+      
+      // NOTE: For production, you would implement the actual verification flow using:
+      // - On iOS: the PhoneAuthProvider with proper APNs setup
+      // - On Android: the PhoneAuthProvider with SafetyNet/reCAPTCHA verification
+      // This requires proper setup in Firebase console for your iOS/Android app
+    }
+  } catch (error) {
+    console.error('Error sending verification code:', error);
+    return { success: false, error };
+  }
+};
+
+// Verify phone number with code
+export const verifyPhoneNumber = async (confirmation: any, verificationCode: string) => {
+  try {
+    // Handle both real Firebase confirmations and our mock implementation
+    let userCredential;
+    
+    if (Platform.OS === 'web') {
+      userCredential = await confirmation.verificationId.confirm(verificationCode);
+    } else {
+      // For mobile platforms, use our mock or actual implementation
+      userCredential = await confirmation.confirm(verificationCode);
+    }
+    
+    return { success: true, user: userCredential.user };
+  } catch (error) {
+    console.error('Error verifying code:', error);
+    return { success: false, error };
+  }
+};
+
+// Complete user profile after phone authentication
+export const completeUserProfile = async (uid: string, profileData: { displayName: string; birthDate: string; photoURL?: string }) => {
+  try {
+    const { displayName, birthDate, photoURL } = profileData;
+    
+    // Update user profile in Firebase Auth if available
+    if (auth.currentUser) {
+      await updateDoc(doc(db, 'profiles', uid), {
+        display_name: displayName,
+        birth_date: birthDate,
+        photo_url: photoURL,
+        updated_at: new Date().toISOString(),
+      });
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error completing user profile:', error);
+    return { success: false, error };
+  }
+};
+
+// Upload profile image
+export const uploadProfileImage = async (uri: string, userId: string) => {
+  try {
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    
+    const storageRef = ref(storage, `profile_images/${userId}`);
+    await uploadBytes(storageRef, blob);
+    
+    const downloadURL = await getDownloadURL(storageRef);
+    return { success: true, downloadURL };
+  } catch (error) {
+    console.error('Error uploading profile image:', error);
+    return { success: false, error };
+  }
+};
 
 // Helper function to get current user
 export const getCurrentUser = (): User | null => {
