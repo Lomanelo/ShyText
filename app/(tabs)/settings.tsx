@@ -1,43 +1,73 @@
-import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import colors from '../../src/theme/colors';
 
 export default function SettingsScreen() {
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          onPress: () => {
+            // Navigate back to the welcome screen
+            router.replace('/(auth)');
+          },
+          style: 'destructive',
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.profileSection}>
-        <TouchableOpacity style={styles.profileImageContainer}>
-          <Image
-            source={{ uri: 'https://via.placeholder.com/150' }}
-            style={styles.profileImage}
-          />
-          <View style={styles.editIconContainer}>
-            <Ionicons name="camera" size={20} color="#fff" />
-          </View>
-        </TouchableOpacity>
-        <Text style={styles.profileName}>John Doe</Text>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Settings</Text>
       </View>
 
       <View style={styles.settingsSection}>
         <TouchableOpacity style={styles.settingsItem}>
-          <Ionicons name="notifications" size={24} color="#fff" />
+          <Ionicons name="notifications-outline" size={24} color={colors.primary} />
           <Text style={styles.settingsText}>Notifications</Text>
-          <Ionicons name="chevron-forward" size={24} color="#666" />
+          <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.settingsItem}>
-          <Ionicons name="lock-closed" size={24} color="#fff" />
+          <Ionicons name="lock-closed-outline" size={24} color={colors.primary} />
           <Text style={styles.settingsText}>Privacy</Text>
-          <Ionicons name="chevron-forward" size={24} color="#666" />
+          <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.settingsItem}>
-          <Ionicons name="help-circle" size={24} color="#fff" />
-          <Text style={styles.settingsText}>Help</Text>
-          <Ionicons name="chevron-forward" size={24} color="#666" />
+          <Ionicons name="person-outline" size={24} color={colors.primary} />
+          <Text style={styles.settingsText}>Account</Text>
+          <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.settingsItem, styles.signOutButton]}>
-          <Ionicons name="log-out" size={24} color="#ff4444" />
+        <TouchableOpacity style={styles.settingsItem}>
+          <Ionicons name="help-circle-outline" size={24} color={colors.primary} />
+          <Text style={styles.settingsText}>Help & Support</Text>
+          <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.settingsItem}>
+          <Ionicons name="information-circle-outline" size={24} color={colors.primary} />
+          <Text style={styles.settingsText}>About</Text>
+          <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.settingsItem, styles.signOutButton]}
+          onPress={handleSignOut}
+        >
+          <Ionicons name="log-out-outline" size={24} color={colors.error} />
           <Text style={[styles.settingsText, styles.signOutText]}>Sign Out</Text>
         </TouchableOpacity>
       </View>
@@ -48,38 +78,19 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+    backgroundColor: colors.background,
   },
-  profileSection: {
-    alignItems: 'center',
-    padding: 20,
+  header: {
+    paddingTop: 60,
+    paddingBottom: 15,
+    paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: colors.mediumGray,
   },
-  profileImageContainer: {
-    position: 'relative',
-    marginBottom: 10,
-  },
-  profileImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  editIconContainer: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#007AFF',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  profileName: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '600',
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: colors.text,
   },
   settingsSection: {
     marginTop: 20,
@@ -88,19 +99,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 15,
+    marginHorizontal: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    borderBottomColor: colors.lightGray,
   },
   settingsText: {
-    color: '#fff',
+    color: colors.text,
     fontSize: 16,
     marginLeft: 15,
     flex: 1,
   },
   signOutButton: {
     marginTop: 20,
+    borderBottomWidth: 0,
   },
   signOutText: {
-    color: '#ff4444',
+    color: colors.error,
   },
 });
