@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { findNearbyUsers, updateLocation, getCurrentUser } from '../lib/firebase';
 import * as Location from 'expo-location';
 
@@ -17,6 +17,72 @@ export function useRadarUsers(maxDistance: number = 100) {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Function to update the list of nearby users
+  const updateNearbyUsers = useCallback(async (userLocation: Location.LocationObject) => {
+    try {
+      // Generate some mock statuses
+      const statuses = ['Open to chat', 'Chilling', 'Looking around', 'Just browsing'];
+
+      // Fetch nearby users from Firebase
+      const nearbyUsers = await findNearbyUsers(
+        userLocation.coords.latitude,
+        userLocation.coords.longitude,
+        maxDistance / 1000 // Convert meters to km
+      );
+      
+      // Process the users
+      const processedUsers = nearbyUsers.map(user => ({
+        ...user,
+        // Assign a random status if not present
+        status: user.status || statuses[Math.floor(Math.random() * statuses.length)],
+        // Ensure distance is a number
+        distance: typeof user.distance === 'number' ? user.distance : 0,
+      } as RadarUser));
+      
+      setUsers(processedUsers);
+      setLoading(false);
+    } catch (err) {
+      console.error('Error fetching nearby users:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch nearby users');
+      setLoading(false);
+    }
+  }, [maxDistance]);
+
+  // Function to manually refresh the list of nearby users
+  const refreshUsers = useCallback(async () => {
+    setError(null);
+    
+    try {
+      if (!location) {
+        // Get current location if not available
+        const currentLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced
+        });
+        setLocation(currentLocation);
+        
+        // Update user location in Firebase
+        const currentUser = getCurrentUser();
+        if (currentUser) {
+          await updateLocation(
+            currentLocation.coords.latitude,
+            currentLocation.coords.longitude
+          );
+        }
+        
+        await updateNearbyUsers(currentLocation);
+      } else {
+        // Use existing location
+        await updateNearbyUsers(location);
+      }
+      
+      return true;
+    } catch (err) {
+      console.error('Error refreshing users:', err);
+      setError(err instanceof Error ? err.message : 'Failed to refresh nearby users');
+      return false;
+    }
+  }, [location, updateNearbyUsers]);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
@@ -82,36 +148,6 @@ export function useRadarUsers(maxDistance: number = 100) {
       }
     }
 
-    async function updateNearbyUsers(userLocation: Location.LocationObject) {
-      try {
-        // Generate some mock statuses
-        const statuses = ['Open to chat', 'Chilling', 'Looking around', 'Just browsing'];
-
-        // Fetch nearby users from Firebase
-        const nearbyUsers = await findNearbyUsers(
-          userLocation.coords.latitude,
-          userLocation.coords.longitude,
-          maxDistance / 1000 // Convert meters to km
-        );
-        
-        // Process the users
-        const processedUsers = nearbyUsers.map(user => ({
-          ...user,
-          // Assign a random status if not present
-          status: user.status || statuses[Math.floor(Math.random() * statuses.length)],
-          // Format distance to be in meters (it comes back in km)
-          distance: user.distance || 0,
-        }));
-        
-        setUsers(processedUsers);
-        setLoading(false);
-      } catch (err) {
-        console.error('Error fetching nearby users:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch nearby users');
-        setLoading(false);
-      }
-    }
-
     setupLocationTracking();
 
     // Cleanup
@@ -119,7 +155,7 @@ export function useRadarUsers(maxDistance: number = 100) {
       if (intervalId) clearInterval(intervalId);
       if (locationSubscription) locationSubscription.remove();
     };
-  }, [maxDistance]);
+  }, [maxDistance, updateNearbyUsers]);
 
   return {
     users,
@@ -127,5 +163,6 @@ export function useRadarUsers(maxDistance: number = 100) {
     loading,
     error,
     currentUser: getCurrentUser(),
+    refreshUsers
   };
 } 

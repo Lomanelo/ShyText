@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   View, 
   Text, 
   Image, 
   TouchableOpacity, 
-  ViewStyle 
+  ViewStyle,
+  ActivityIndicator,
+  Platform
 } from 'react-native';
 import { styles } from './styles';
 import colors from '../../theme/colors';
@@ -25,64 +27,88 @@ interface UserBubbleProps {
 }
 
 const UserBubble = ({ user, onPress, style, size = 50 }: UserBubbleProps) => {
-  // For current user, use primary color. For others, use primary or variants
-  const backgroundColor = user.isCurrentUser 
-    ? colors.primary 
-    : [colors.primary, colors.primaryLight, colors.primaryDark][user.id.length % 3];
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  const displayName = user.display_name || 'User';
+  const initial = displayName.charAt(0).toUpperCase();
+  
+  // Helper function to validate photo URL
+  const hasValidPhotoUrl = () => {
+    if (!user.photo_url) return false;
+    
+    // Check if it's a data URL (starts with data:image)
+    if (user.photo_url.startsWith('data:image/')) {
+      return true;
+    }
+    
+    // Check if it's a remote URL (http/https)
+    if (user.photo_url.startsWith('http://') || user.photo_url.startsWith('https://')) {
+      try {
+        new URL(user.photo_url);
+        return true;
+      } catch (e) {
+        console.log(`Invalid URL format for user ${user.id}: ${user.photo_url}`);
+        return false;
+      }
+    }
+    
+    console.log(`Unsupported photo URL format for user ${user.id}: ${user.photo_url.substring(0, 30)}...`);
+    return false;
+  };
+
+  // Handle image load start
+  const handleImageLoadStart = () => {
+    console.log(`Starting to load image for user: ${user.id}`);
+    setImageLoading(true);
+    setImageError(false);
+  };
+
+  // Handle image load success
+  const handleImageLoadSuccess = () => {
+    console.log(`Successfully loaded image for user: ${user.id}`);
+    setImageLoading(false);
+  };
+
+  // Handle image load error
+  const handleImageLoadError = () => {
+    console.log(`Error loading image for user: ${user.id}, URL: ${user.photo_url}`);
+    setImageLoading(false);
+    setImageError(true);
+  };
 
   return (
-    <View style={[styles.userBubbleContainer, style]}>
-      <TouchableOpacity
-        style={[
-          styles.userBubble,
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            borderColor: colors.background,
-            borderWidth: user.isCurrentUser ? 3 : 2,
-          },
-        ]}
-        onPress={onPress}
-        activeOpacity={0.9}
-      >
-        {user.photo_url ? (
+    <TouchableOpacity 
+      style={[styles.userBubble, { width: size, height: size }, style]} 
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      {hasValidPhotoUrl() && !imageError ? (
+        <>
           <Image
             source={{ uri: user.photo_url }}
-            style={[
-              styles.userPhoto,
-              {
-                width: size,
-                height: size,
-                borderRadius: size / 2,
-              },
-            ]}
+            style={[styles.userPhoto, { width: size, height: size }]}
+            onLoadStart={handleImageLoadStart}
+            onLoad={handleImageLoadSuccess}
+            onError={handleImageLoadError}
           />
-        ) : (
-          <View
-            style={[
-              styles.userPlaceholder,
-              {
-                width: size,
-                height: size,
-                borderRadius: size / 2,
-                backgroundColor,
-              },
-            ]}
-          >
-            <Text style={styles.userInitial}>
-              {user.display_name ? user.display_name.charAt(0).toUpperCase() : '?'}
-            </Text>
-          </View>
-        )}
-      </TouchableOpacity>
-      
-      {user.isCurrentUser && (
-        <View style={styles.currentUserIndicator}>
-          <Text style={styles.currentUserText}>You</Text>
+          {imageLoading && (
+            <ActivityIndicator 
+              size="small" 
+              color={colors.primary} 
+              style={styles.userPlaceholder} 
+            />
+          )}
+        </>
+      ) : (
+        <View style={[styles.userPlaceholder, { width: size, height: size, backgroundColor: colors.primary }]}>
+          <Text style={styles.userInitial}>{initial}</Text>
         </View>
       )}
-    </View>
+      {user.isCurrentUser && (
+        <View style={styles.currentUserIndicator} />
+      )}
+    </TouchableOpacity>
   );
 };
 

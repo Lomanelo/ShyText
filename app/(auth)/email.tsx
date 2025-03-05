@@ -44,6 +44,11 @@ export default function EmailScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
       
+      <LinearGradient
+        colors={[colors.background, colors.lightGray]}
+        style={styles.background}
+      />
+      
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.title}>Your email</Text>
@@ -59,8 +64,10 @@ export default function EmailScreen() {
             <View style={styles.stepInactive}><Text style={styles.stepText}>3</Text></View>
             <View style={styles.stepDivider} />
             <View style={styles.stepInactive}><Text style={styles.stepText}>4</Text></View>
+            <View style={styles.stepDivider} />
+            <View style={styles.stepInactive}><Text style={styles.stepText}>5</Text></View>
           </View>
-            
+          
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Email Address</Text>
             <TextInput
@@ -124,6 +131,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  background: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
   content: {
     flex: 1,
     padding: 20,
@@ -133,10 +147,10 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
     color: colors.text,
-    marginBottom: 8,
+    marginBottom: 10,
     textAlign: 'center',
   },
   subtitle: {
@@ -148,12 +162,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     padding: 24,
-    backgroundColor: colors.lightGray,
-    shadowColor: colors.text,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.mediumGray,
   },
   stepIndicator: {
     flexDirection: 'row',
@@ -191,7 +202,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   stepDivider: {
-    width: 24,
+    width: 20,
     height: 1,
     backgroundColor: colors.mediumGray,
     marginHorizontal: 5,
@@ -208,7 +219,7 @@ const styles = StyleSheet.create({
   input: {
     height: 56,
     borderRadius: 8,
-    backgroundColor: colors.background,
+    backgroundColor: colors.lightGray,
     color: colors.text,
     fontSize: 16,
     padding: 16,
@@ -249,15 +260,15 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: colors.background,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     marginRight: 8,
   },
   footer: {
+    marginTop: 24,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 24,
   },
   footerText: {
     color: colors.darkGray,

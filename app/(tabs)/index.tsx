@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, ActivityIndicator, SafeAreaView, Image } from 'react-native';
+import { useState, useCallback } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, Modal, ActivityIndicator, SafeAreaView, Image, RefreshControl } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import Radar from '../../src/components/Radar';
 import { useRadarUsers } from '../../src/hooks/useRadarUsers';
 import { startConversation } from '../../src/lib/firebase';
 import colors from '../../src/theme/colors';
+import { ScrollView } from 'react-native';
 
 // Maximum distance for radar in meters
 const MAX_RADAR_DISTANCE = 100; 
@@ -15,7 +16,8 @@ export default function NearbyScreen() {
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [showingUserInfo, setShowingUserInfo] = useState(false);
   const [viewingFullProfile, setViewingFullProfile] = useState(false);
-  const { users, location, loading, error, currentUser } = useRadarUsers(MAX_RADAR_DISTANCE);
+  const [refreshing, setRefreshing] = useState(false);
+  const { users, location, loading, error, currentUser, refreshUsers } = useRadarUsers(MAX_RADAR_DISTANCE);
 
   const handleUserPress = (userId: string) => {
     const user = users.find(u => u.id === userId);
@@ -54,6 +56,17 @@ export default function NearbyScreen() {
     }
   };
 
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await refreshUsers();
+    } catch (error) {
+      console.error('Error refreshing nearby users:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [refreshUsers]);
+
   const renderProfileStat = (label: string, value: string | number) => (
     <View style={styles.profileStat}>
       <Text style={styles.profileStatValue}>{value}</Text>
@@ -61,7 +74,7 @@ export default function NearbyScreen() {
     </View>
   );
 
-  if (loading) {
+  if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -70,13 +83,13 @@ export default function NearbyScreen() {
     );
   }
 
-  if (error) {
+  if (error && !refreshing) {
     return (
       <View style={styles.errorContainer}>
         <Ionicons name="alert-circle" size={60} color={colors.error} />
         <Text style={styles.errorTitle}>Oops!</Text>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.tryAgainButton}>
+        <TouchableOpacity style={styles.tryAgainButton} onPress={onRefresh}>
           <Text style={styles.tryAgainText}>Try Again</Text>
         </TouchableOpacity>
       </View>
@@ -87,33 +100,45 @@ export default function NearbyScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
       
-      <View style={styles.header}>
-        <Text style={styles.title}>People Nearby</Text>
-        <Text style={styles.subtitle}>
-          {users.length > 0 
-            ? `${users.length} people within ${MAX_RADAR_DISTANCE}m`
-            : 'No one nearby yet. Stay active!'}
-        </Text>
-      </View>
-      
-      <View style={styles.radarContainer}>
-        {users.length > 0 && currentUser ? (
-          <Radar
-            users={users}
-            currentUser={{
-              id: currentUser.uid,
-              photo_url: currentUser.photoURL || undefined
-            }}
-            maxDistance={MAX_RADAR_DISTANCE}
-            onUserPress={handleUserPress}
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary]}
+            tintColor={colors.primary}
           />
-        ) : (
-          <View style={styles.emptyRadar}>
-            <Ionicons name="people" size={60} color={colors.mediumGray} />
-            <Text style={styles.emptyRadarText}>Keep the app open to discover people nearby</Text>
-          </View>
-        )}
-      </View>
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>People Nearby</Text>
+          <Text style={styles.subtitle}>
+            {users.length > 0 
+              ? `${users.length} people within ${MAX_RADAR_DISTANCE}m`
+              : 'No one nearby yet. Stay active!'}
+          </Text>
+        </View>
+        
+        <View style={styles.radarContainer}>
+          {users.length > 0 && currentUser ? (
+            <Radar
+              users={users}
+              currentUser={{
+                id: currentUser.uid,
+                photo_url: currentUser.photoURL || undefined
+              }}
+              maxDistance={MAX_RADAR_DISTANCE}
+              onUserPress={handleUserPress}
+            />
+          ) : (
+            <View style={styles.emptyRadar}>
+              <Ionicons name="people" size={60} color={colors.mediumGray} />
+              <Text style={styles.emptyRadarText}>Keep the app open to discover people nearby</Text>
+            </View>
+          )}
+        </View>
+      </ScrollView>
 
       {/* User Info Modal */}
       <Modal
@@ -414,5 +439,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  scrollContainer: {
+    flexGrow: 1,
   },
 });

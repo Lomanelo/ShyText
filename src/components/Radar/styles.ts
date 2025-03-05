@@ -22,15 +22,15 @@ export const styles = StyleSheet.create({
   
   // Circular background
   radarBackground: {
-    width: '100%',
     aspectRatio: 1,
     borderRadius: 1000, // Large value ensures circle
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+    overflow: 'visible', // Allow bubbles to slightly overflow
     borderWidth: 1,
     borderColor: colors.mediumGray,
-    backgroundColor: colors.background,
+    backgroundColor: colors.lightGray,
+    position: 'relative', // Ensures absolute positioning of children works correctly
   },
   
   // Current user (center of radar)
@@ -38,7 +38,7 @@ export const styles = StyleSheet.create({
     position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
+    zIndex: 20, // Ensure it's above other users
   },
   
   // User bubble styles
@@ -51,11 +51,11 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    shadowColor: colors.text,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 6, // Increased elevation for better shadow on Android
     borderWidth: 2,
     borderColor: colors.background,
   },
@@ -63,6 +63,8 @@ export const styles = StyleSheet.create({
   userPhoto: {
     width: '100%',
     height: '100%',
+    backgroundColor: colors.lightGray, // Background color while image loads
+    resizeMode: 'cover', // Ensure image fills the container
   },
   
   userPlaceholder: {
@@ -80,17 +82,24 @@ export const styles = StyleSheet.create({
   // Current user indicator
   currentUserIndicator: {
     position: 'absolute',
-    bottom: -5,
+    bottom: -15, // Move further down
     backgroundColor: colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: colors.background,
+    zIndex: 21, // Ensure it's above the user bubble
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
   },
   
   currentUserText: {
     color: colors.background,
-    fontSize: 10,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
   },
 }); 
