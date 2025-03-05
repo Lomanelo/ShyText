@@ -50,51 +50,43 @@ export const styles = StyleSheet.create({
   userBubble: {
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 6, // Increased elevation for better shadow on Android
-    borderWidth: 2,
-    borderColor: colors.background,
+    borderRadius: 1000, // Make it circular
+    overflow: 'hidden', // Ensure image stays within bounds
+    backgroundColor: colors.primary,
   },
   
   userPhoto: {
     width: '100%',
     height: '100%',
-    backgroundColor: colors.lightGray, // Background color while image loads
-    resizeMode: 'cover', // Ensure image fills the container
+    borderRadius: 1000, // Make image circular
   },
   
   userPlaceholder: {
+    position: 'absolute',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
+    width: '100%',
+    height: '100%',
+    borderRadius: 1000, // Make placeholder circular
   },
   
   userInitial: {
     color: colors.background,
-    fontWeight: 'bold',
     fontSize: 20,
+    fontWeight: 'bold',
   },
   
-  // Current user indicator
   currentUserIndicator: {
     position: 'absolute',
-    bottom: -15, // Move further down
-    backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 15,
+    top: -4,
+    right: -4,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: colors.success,
     borderWidth: 2,
     borderColor: colors.background,
-    zIndex: 21, // Ensure it's above the user bubble
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 3,
+    zIndex: 2,
   },
   
   currentUserText: {

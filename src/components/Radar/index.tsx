@@ -20,6 +20,7 @@ interface RadarProps {
   currentUser: {
     id: string;
     photo_url?: string;
+    display_name?: string;
   };
   maxDistance: number; // Maximum distance in meters
   onUserPress: (userId: string) => void;
@@ -201,7 +202,7 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress }: RadarProps) => 
           <UserBubble
             user={{
               id: currentUser.id,
-              display_name: 'You',
+              display_name: currentUser.display_name || 'You',
               photo_url: currentUser.photo_url,
               isCurrentUser: true,
             }}

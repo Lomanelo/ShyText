@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { findNearbyUsers, updateLocation, getCurrentUser } from '../lib/firebase';
+import { findNearbyUsers, updateLocation, getCurrentUser, getProfile } from '../lib/firebase';
 import * as Location from 'expo-location';
 
 interface RadarUser {
@@ -12,11 +12,48 @@ interface RadarUser {
   [key: string]: any;
 }
 
+interface CurrentUserProfile {
+  id: string;
+  photo_url?: string;
+  display_name?: string;
+}
+
 export function useRadarUsers(maxDistance: number = 100) {
   const [users, setUsers] = useState<RadarUser[]>([]);
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentUserProfile, setCurrentUserProfile] = useState<CurrentUserProfile | null>(null);
+
+  // Function to fetch current user's profile
+  const fetchCurrentUserProfile = useCallback(async () => {
+    const currentUser = getCurrentUser();
+    if (currentUser) {
+      try {
+        console.log('Fetching profile for current user:', currentUser.uid);
+        const profile = await getProfile(currentUser.uid);
+        console.log('Current user profile data:', profile);
+        if (profile) {
+          setCurrentUserProfile({
+            id: currentUser.uid,
+            photo_url: profile.photo_url,
+            display_name: profile.display_name
+          });
+          console.log('Updated current user profile:', {
+            id: currentUser.uid,
+            photo_url: profile.photo_url,
+            display_name: profile.display_name
+          });
+        } else {
+          console.log('No profile found for current user');
+        }
+      } catch (err) {
+        console.error('Error fetching current user profile:', err);
+      }
+    } else {
+      console.log('No current user found');
+    }
+  }, []);
 
   // Function to update the list of nearby users
   const updateNearbyUsers = useCallback(async (userLocation: Location.LocationObject) => {
@@ -54,6 +91,8 @@ export function useRadarUsers(maxDistance: number = 100) {
     setError(null);
     
     try {
+      await fetchCurrentUserProfile();
+      
       if (!location) {
         // Get current location if not available
         const currentLocation = await Location.getCurrentPositionAsync({
@@ -82,7 +121,7 @@ export function useRadarUsers(maxDistance: number = 100) {
       setError(err instanceof Error ? err.message : 'Failed to refresh nearby users');
       return false;
     }
-  }, [location, updateNearbyUsers]);
+  }, [location, updateNearbyUsers, fetchCurrentUserProfile]);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
@@ -103,6 +142,9 @@ export function useRadarUsers(maxDistance: number = 100) {
           accuracy: Location.Accuracy.Balanced
         });
         setLocation(initialLocation);
+
+        // Fetch current user's profile
+        await fetchCurrentUserProfile();
 
         // Update user location in Firebase
         const currentUser = getCurrentUser();
@@ -140,6 +182,7 @@ export function useRadarUsers(maxDistance: number = 100) {
         intervalId = setInterval(() => {
           if (location) {
             updateNearbyUsers(location).catch(console.error);
+            fetchCurrentUserProfile().catch(console.error);
           }
         }, 10000); // Update every 10 seconds
       } catch (err) {
@@ -155,14 +198,14 @@ export function useRadarUsers(maxDistance: number = 100) {
       if (intervalId) clearInterval(intervalId);
       if (locationSubscription) locationSubscription.remove();
     };
-  }, [maxDistance, updateNearbyUsers]);
+  }, [maxDistance, updateNearbyUsers, fetchCurrentUserProfile]);
 
   return {
     users,
     location,
     loading,
     error,
-    currentUser: getCurrentUser(),
+    currentUser: currentUserProfile,
     refreshUsers
   };
 } 

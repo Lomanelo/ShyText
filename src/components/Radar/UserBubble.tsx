@@ -53,7 +53,6 @@ const UserBubble = ({ user, onPress, style, size = 50 }: UserBubbleProps) => {
       }
     }
     
-    console.log(`Unsupported photo URL format for user ${user.id}: ${user.photo_url.substring(0, 30)}...`);
     return false;
   };
 
@@ -101,7 +100,7 @@ const UserBubble = ({ user, onPress, style, size = 50 }: UserBubbleProps) => {
           )}
         </>
       ) : (
-        <View style={[styles.userPlaceholder, { width: size, height: size, backgroundColor: colors.primary }]}>
+        <View style={[styles.userPlaceholder, { width: size, height: size }]}>
           <Text style={styles.userInitial}>{initial}</Text>
         </View>
       )}

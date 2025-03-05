@@ -125,8 +125,9 @@ export default function NearbyScreen() {
             <Radar
               users={users}
               currentUser={{
-                id: currentUser.uid,
-                photo_url: currentUser.photoURL || undefined
+                id: currentUser.id,
+                photo_url: currentUser.photo_url,
+                display_name: currentUser.display_name
               }}
               maxDistance={MAX_RADAR_DISTANCE}
               onUserPress={handleUserPress}
