@@ -45,13 +45,37 @@ export default function LoginScreen() {
     try {
       await signInWithEmail(email, password);
       router.replace('/(tabs)');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Login error:', err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Login failed. Please check your credentials.'
-      );
+      
+      // Handle specific Firebase auth errors
+      if (err.code) {
+        switch (err.code) {
+          case 'auth/user-not-found':
+            setError('No account exists with this email. Please sign up first.');
+            break;
+          case 'auth/wrong-password':
+            setError('Incorrect password. Please try again.');
+            break;
+          case 'auth/invalid-credential':
+            setError('Invalid login credentials. Please check your email and password.');
+            break;
+          case 'auth/too-many-requests':
+            setError('Too many failed login attempts. Please try again later or reset your password.');
+            break;
+          case 'auth/user-disabled':
+            setError('This account has been disabled. Please contact support.');
+            break;
+          default:
+            setError('Login failed. Please check your credentials and try again.');
+        }
+      } else {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Login failed. Please check your credentials.'
+        );
+      }
     } finally {
       setLoading(false);
     }

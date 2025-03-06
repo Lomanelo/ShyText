@@ -1,8 +1,32 @@
-import { Tabs } from 'expo-router';
+import React, { useEffect } from 'react';
+import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../../src/theme/colors';
+import { getCurrentUser } from '../../src/lib/firebase';
 
 export default function TabLayout() {
+  const router = useRouter();
+
+  // Check if user is authenticated
+  useEffect(() => {
+    const checkAuth = () => {
+      const currentUser = getCurrentUser();
+      if (!currentUser) {
+        // Not authenticated, redirect to login
+        console.log('User not authenticated, redirecting to login');
+        router.replace('/(auth)');
+      }
+    };
+
+    // Check immediately on component mount
+    checkAuth();
+
+    // Set up periodic checks (optional, for extra safety)
+    const interval = setInterval(checkAuth, 5000);
+    
+    return () => clearInterval(interval);
+  }, [router]);
+
   return (
     <Tabs
       screenOptions={{

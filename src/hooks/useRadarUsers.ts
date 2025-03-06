@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { findNearbyUsers, updateLocation, getCurrentUser, getProfile } from '../lib/firebase';
-import * as Location from 'expo-location';
+import RNLocation from 'react-native-location';
+import { Alert, Platform } from 'react-native';
 
 interface RadarUser {
   id: string;
@@ -20,7 +21,7 @@ interface CurrentUserProfile {
 
 export function useRadarUsers(maxDistance: number = 100) {
   const [users, setUsers] = useState<RadarUser[]>([]);
-  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+  const [location, setLocation] = useState<RNLocation.Location | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<CurrentUserProfile | null>(null);
@@ -56,15 +57,15 @@ export function useRadarUsers(maxDistance: number = 100) {
   }, []);
 
   // Function to update the list of nearby users
-  const updateNearbyUsers = useCallback(async (userLocation: Location.LocationObject) => {
+  const updateNearbyUsers = useCallback(async (userLocation: RNLocation.Location) => {
     try {
       // Generate some mock statuses
       const statuses = ['Open to chat', 'Chilling', 'Looking around', 'Just browsing'];
 
       // Fetch nearby users from Firebase
       const nearbyUsers = await findNearbyUsers(
-        userLocation.coords.latitude,
-        userLocation.coords.longitude,
+        userLocation.latitude,
+        userLocation.longitude,
         maxDistance / 1000 // Convert meters to km
       );
       
@@ -86,6 +87,101 @@ export function useRadarUsers(maxDistance: number = 100) {
     }
   }, [maxDistance]);
 
+  // Function to initialize location tracking
+  const initializeLocationTracking = useCallback(async () => {
+    // Configure the library
+    RNLocation.configure({
+      distanceFilter: 5, // Minimum distance in meters between location updates
+      desiredAccuracy: {
+        ios: 'best',
+        android: 'balancedPowerAccuracy',
+      },
+      // Android-specific
+      androidProvider: 'auto',
+      interval: 5000, // Milliseconds between active location updates
+      fastestInterval: 10000, // Milliseconds between location updates from all apps
+      maxWaitTime: 15000, // Max time to wait for location in milliseconds
+
+      // iOS-specific
+      activityType: 'other',
+      allowsBackgroundLocationUpdates: true, // Enable background location updates
+      headingFilter: 1, // Minimum angular change in degrees for heading updates
+      headingOrientation: 'portrait',
+      pausesLocationUpdatesAutomatically: false,
+      showsBackgroundLocationIndicator: true,
+    });
+
+    // Request permission
+    let permissionGranted = false;
+
+    try {
+      permissionGranted = await RNLocation.requestPermission({
+        ios: 'whenInUse', // or 'always' for background
+        android: {
+          detail: 'fine', // or 'coarse' for less precise
+          rationale: {
+            title: 'Location Permission',
+            message: 'We need access to your location to find people nearby, even when the app is in the background.',
+            buttonPositive: 'OK',
+            buttonNegative: 'Cancel',
+          },
+        },
+      });
+
+      // Request background permission specifically for Android 10+ and iOS
+      if (permissionGranted) {
+        if (Platform.OS === 'android' && Platform.Version >= 29) {
+          // For Android 10+ we need a special permission dialog
+          Alert.alert(
+            'Background Location Access',
+            'ShyText needs your permission to access location in the background. This allows you to discover nearby users even when the app is closed.',
+            [
+              {
+                text: 'Cancel',
+                style: 'cancel',
+              },
+              {
+                text: 'Open Settings',
+                onPress: () => {
+                  // This would typically open settings, but for simplicity we'll just request again
+                  RNLocation.requestPermission({
+                    android: {
+                      detail: 'fine',
+                      rationale: {
+                        title: 'Background Location Permission',
+                        message: 'We need background location access to find people nearby even when the app is closed.',
+                        buttonPositive: 'OK',
+                        buttonNegative: 'Cancel',
+                      },
+                    },
+                  });
+                },
+              },
+            ],
+          );
+        } else if (Platform.OS === 'ios') {
+          // Request 'always' permission for iOS background tracking
+          permissionGranted = await RNLocation.requestPermission({
+            ios: 'always',
+          });
+        }
+      }
+
+      if (!permissionGranted) {
+        setError('Location permission denied');
+        setLoading(false);
+        return false;
+      }
+
+      return true;
+    } catch (err) {
+      console.error('Error requesting location permission:', err);
+      setError('Failed to request location permission');
+      setLoading(false);
+      return false;
+    }
+  }, []);
+
   // Function to manually refresh the list of nearby users
   const refreshUsers = useCallback(async () => {
     setError(null);
@@ -94,22 +190,32 @@ export function useRadarUsers(maxDistance: number = 100) {
       await fetchCurrentUserProfile();
       
       if (!location) {
-        // Get current location if not available
-        const currentLocation = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced
+        // Configure and get permission
+        const permissionGranted = await initializeLocationTracking();
+        if (!permissionGranted) return false;
+        
+        // Get current location
+        const currentLocation = await RNLocation.getLatestLocation({
+          timeout: 10000,
         });
-        setLocation(currentLocation);
         
-        // Update user location in Firebase
-        const currentUser = getCurrentUser();
-        if (currentUser) {
-          await updateLocation(
-            currentLocation.coords.latitude,
-            currentLocation.coords.longitude
-          );
+        if (currentLocation) {
+          setLocation(currentLocation);
+          
+          // Update user location in Firebase
+          const currentUser = getCurrentUser();
+          if (currentUser) {
+            await updateLocation(
+              currentLocation.latitude,
+              currentLocation.longitude
+            );
+          }
+          
+          await updateNearbyUsers(currentLocation);
+        } else {
+          setError('Could not get current location');
+          return false;
         }
-        
-        await updateNearbyUsers(currentLocation);
       } else {
         // Use existing location
         await updateNearbyUsers(location);
@@ -121,70 +227,64 @@ export function useRadarUsers(maxDistance: number = 100) {
       setError(err instanceof Error ? err.message : 'Failed to refresh nearby users');
       return false;
     }
-  }, [location, updateNearbyUsers, fetchCurrentUserProfile]);
+  }, [location, updateNearbyUsers, fetchCurrentUserProfile, initializeLocationTracking]);
 
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
-    let locationSubscription: Location.LocationSubscription;
+    let locationSubscription: RNLocation.Subscription | null = null;
 
     async function setupLocationTracking() {
       try {
-        // Request permission
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          setError('Location permission denied');
-          setLoading(false);
-          return;
-        }
+        // Configure and get permission
+        const permissionGranted = await initializeLocationTracking();
+        if (!permissionGranted) return;
 
         // Get initial location
-        const initialLocation = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced
+        const initialLocation = await RNLocation.getLatestLocation({
+          timeout: 10000,
         });
-        setLocation(initialLocation);
 
-        // Fetch current user's profile
-        await fetchCurrentUserProfile();
+        if (initialLocation) {
+          setLocation(initialLocation);
 
-        // Update user location in Firebase
-        const currentUser = getCurrentUser();
-        if (currentUser) {
-          await updateLocation(
-            initialLocation.coords.latitude,
-            initialLocation.coords.longitude
-          );
-        }
+          // Fetch current user's profile
+          await fetchCurrentUserProfile();
 
-        // Subscribe to location updates
-        locationSubscription = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.Balanced,
-            distanceInterval: 5, // Update when moved 5 meters
-            timeInterval: 10000, // Or every 10 seconds
-          },
-          (newLocation) => {
-            setLocation(newLocation);
-            
-            // Update user location in Firebase (throttled)
-            if (currentUser) {
-              updateLocation(
-                newLocation.coords.latitude,
-                newLocation.coords.longitude
-              ).catch(console.error);
+          // Update user location in Firebase
+          const currentUser = getCurrentUser();
+          if (currentUser) {
+            await updateLocation(
+              initialLocation.latitude,
+              initialLocation.longitude
+            );
+          }
+
+          // Subscribe to location updates
+          locationSubscription = RNLocation.subscribeToLocationUpdates(async (locations) => {
+            if (locations && locations.length > 0) {
+              const newLocation = locations[0];
+              setLocation(newLocation);
+              
+              // Update user location in Firebase
+              const currentUser = getCurrentUser();
+              if (currentUser) {
+                updateLocation(
+                  newLocation.latitude,
+                  newLocation.longitude
+                ).catch(console.error);
+              }
+              
+              // Update nearby users
+              updateNearbyUsers(newLocation).catch(console.error);
+              fetchCurrentUserProfile().catch(console.error);
             }
-          }
-        );
+          });
 
-        // Initial fetch of nearby users
-        await updateNearbyUsers(initialLocation);
-        
-        // Setup interval for periodic updates
-        intervalId = setInterval(() => {
-          if (location) {
-            updateNearbyUsers(location).catch(console.error);
-            fetchCurrentUserProfile().catch(console.error);
-          }
-        }, 10000); // Update every 10 seconds
+          // Initial fetch of nearby users
+          await updateNearbyUsers(initialLocation);
+        } else {
+          setError('Could not get current location');
+          setLoading(false);
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to setup location');
         setLoading(false);
@@ -195,10 +295,11 @@ export function useRadarUsers(maxDistance: number = 100) {
 
     // Cleanup
     return () => {
-      if (intervalId) clearInterval(intervalId);
-      if (locationSubscription) locationSubscription.remove();
+      if (locationSubscription) {
+        RNLocation.unsubscribeFromLocationUpdates(locationSubscription);
+      }
     };
-  }, [maxDistance, updateNearbyUsers, fetchCurrentUserProfile]);
+  }, [maxDistance, updateNearbyUsers, fetchCurrentUserProfile, initializeLocationTracking]);
 
   return {
     users,

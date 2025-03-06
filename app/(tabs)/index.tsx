@@ -1,13 +1,15 @@
-import { useState, useCallback } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, ActivityIndicator, SafeAreaView, Image, RefreshControl } from 'react-native';
+import { useState, useCallback, useEffect } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, Modal, ActivityIndicator, SafeAreaView, Image, RefreshControl, Alert } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Radar from '../../src/components/Radar';
 import { useRadarUsers } from '../../src/hooks/useRadarUsers';
-import { startConversation } from '../../src/lib/firebase';
+import { startConversation, getCurrentUser } from '../../src/lib/firebase';
 import colors from '../../src/theme/colors';
 import { ScrollView } from 'react-native';
+import LocationService from '../../src/services/LocationService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Maximum distance for radar in meters
 const MAX_RADAR_DISTANCE = 100; 
@@ -17,7 +19,65 @@ export default function NearbyScreen() {
   const [showingUserInfo, setShowingUserInfo] = useState(false);
   const [viewingFullProfile, setViewingFullProfile] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [authError, setAuthError] = useState<boolean>(false);
   const { users, location, loading, error, currentUser, refreshUsers } = useRadarUsers(MAX_RADAR_DISTANCE);
+
+  // Check authentication on component mount
+  useEffect(() => {
+    const user = getCurrentUser();
+    if (!user) {
+      setAuthError(true);
+      // We let the TabLayout handle the redirect
+    }
+  }, []);
+
+  // Initialize the background location service
+  useEffect(() => {
+    const initBackgroundLocation = async () => {
+      // Only initialize background tracking if user is logged in
+      const user = getCurrentUser();
+      if (!user) return;
+      
+      try {
+        const success = await LocationService.startBackgroundTracking();
+        if (success) {
+          console.log('Background location tracking initialized successfully');
+        } else {
+          console.warn('Failed to initialize background location tracking');
+          // We'll show a banner only once to avoid annoying the user
+          const hasShownPermissionAlert = await AsyncStorage.getItem('hasShownLocationPermissionAlert');
+          if (!hasShownPermissionAlert) {
+            Alert.alert(
+              'Background Location',
+              'To discover nearby users even when the app is closed, please allow ShyText to access your location "Always" in your device settings.',
+              [
+                { text: 'Later', style: 'cancel' },
+                { 
+                  text: 'Settings', 
+                  onPress: () => {
+                    // This would typically open settings
+                    // For simplicity, we're just marking that we showed the alert
+                    AsyncStorage.setItem('hasShownLocationPermissionAlert', 'true')
+                      .catch(err => console.error('Error saving alert preference:', err));
+                  }
+                }
+              ]
+            );
+          }
+        }
+      } catch (error) {
+        console.error('Error initializing background location:', error);
+      }
+    };
+    
+    initBackgroundLocation();
+    
+    // Cleanup
+    return () => {
+      // Note: We're intentionally NOT stopping background tracking 
+      // when component unmounts, as we want it to continue in the background
+    };
+  }, []);
 
   const handleUserPress = (userId: string) => {
     const user = users.find(u => u.id === userId);
@@ -83,14 +143,42 @@ export default function NearbyScreen() {
     );
   }
 
+  if (authError) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle" size={60} color={colors.error} />
+        <Text style={styles.errorTitle}>Authentication Required</Text>
+        <Text style={styles.errorText}>You need to be logged in to access this feature.</Text>
+        <TouchableOpacity 
+          style={styles.tryAgainButton} 
+          onPress={() => router.replace('/(auth)')}>
+          <Text style={styles.tryAgainText}>Sign In</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   if (error && !refreshing) {
+    // Check if error is authentication related
+    const isAuthError = error.includes("not authenticated") || 
+                         error.includes("User not authenticated") || 
+                         error.includes("auth/");
+    
     return (
       <View style={styles.errorContainer}>
         <Ionicons name="alert-circle" size={60} color={colors.error} />
         <Text style={styles.errorTitle}>Oops!</Text>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.tryAgainButton} onPress={onRefresh}>
-          <Text style={styles.tryAgainText}>Try Again</Text>
+        <Text style={styles.errorText}>
+          {isAuthError 
+            ? "You need to be logged in to access this feature." 
+            : error}
+        </Text>
+        <TouchableOpacity 
+          style={styles.tryAgainButton} 
+          onPress={isAuthError ? () => router.replace('/(auth)') : onRefresh}>
+          <Text style={styles.tryAgainText}>
+            {isAuthError ? "Sign In" : "Try Again"}
+          </Text>
         </TouchableOpacity>
       </View>
     );

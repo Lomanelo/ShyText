@@ -149,7 +149,7 @@ export const signInWithEmail = async (email: string, password: string) => {
     return { success: true, user: userCredential.user };
   } catch (error) {
     console.error('Error signing in with email:', error);
-    return { success: false, error };
+    throw error;
   }
 };
 

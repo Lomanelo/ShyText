@@ -13,10 +13,25 @@
       "bundleIdentifier": "com.rahimrady.shytext",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to help you connect with nearby users.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to help you connect with nearby users.",
-        "NSLocationAlwaysUsageDescription": "This app needs access to your location to help you connect with nearby users."
+        "NSLocationWhenInUseUsageDescription": "ShyText needs access to your location to help you connect with nearby users.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ShyText needs access to your location in the background to help you discover nearby users even when the app is closed.",
+        "NSLocationAlwaysUsageDescription": "ShyText needs access to your location in the background to help you discover nearby users even when the app is closed.",
+        "UIBackgroundModes": ["location", "fetch"]
       }
+    },
+    "android": {
+      "package": "com.rahimrady.shytext",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "WAKE_LOCK"
+      ]
     },
     "web": {
       "bundler": "metro",
