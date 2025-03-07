@@ -118,7 +118,7 @@ class LocationService {
   // Stop background location tracking
   static stopBackgroundTracking() {
     if (this.locationSubscription) {
-      RNLocation.unsubscribeFromLocationUpdates(this.locationSubscription);
+      this.locationSubscription();
       this.locationSubscription = null;
       console.log('Background location tracking stopped');
     }

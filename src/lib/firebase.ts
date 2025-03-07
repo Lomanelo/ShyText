@@ -432,14 +432,40 @@ export async function startConversation(receiverId: string, message: string) {
   }
   
   try {
+    // Check if there's already a conversation between these users
+    const existingConvQuery = query(
+      collection(db, 'conversations'),
+      where('initiator_id', 'in', [user.uid, receiverId]),
+      where('receiver_id', 'in', [user.uid, receiverId])
+    );
+    
+    const existingConvSnapshot = await getDocs(existingConvQuery);
+    
+    // If there's an existing conversation, check its status
+    if (!existingConvSnapshot.empty) {
+      const existingConv = existingConvSnapshot.docs[0].data();
+      if (existingConv.status === 'declined' && existingConv.initiator_id === user.uid) {
+        throw new Error('This user has declined your previous conversation request');
+      }
+      if (existingConv.status === 'pending') {
+        throw new Error('You already have a pending conversation with this user');
+      }
+      if (existingConv.status === 'accepted') {
+        return { success: true, conversationId: existingConvSnapshot.docs[0].id };
+      }
+    }
+    
     // Create a new conversation
     const conversationRef = collection(db, 'conversations');
     const newConversationRef = await addDoc(conversationRef, {
       initiator_id: user.uid,
       receiver_id: receiverId,
-      status: 'pending', // pending, accepted, declined
+      status: 'pending',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      messages_count: 1, // Important for security rules
+      last_message: message,
+      last_message_time: new Date().toISOString(),
     });
     
     // Add the first message
@@ -449,12 +475,13 @@ export async function startConversation(receiverId: string, message: string) {
       content: message,
       timestamp: new Date().toISOString(),
       read: false,
+      type: 'initial', // Mark this as the initial message
     });
     
     return { success: true, conversationId: newConversationRef.id };
   } catch (error) {
     console.error('Error starting conversation:', error);
-    return { success: false, error };
+    throw error;
   }
 }
 
@@ -467,15 +494,46 @@ export async function respondToConversation(conversationId: string, accept: bool
   
   try {
     const conversationRef = doc(db, 'conversations', conversationId);
+    const conversationSnap = await getDoc(conversationRef);
+    
+    if (!conversationSnap.exists()) {
+      throw new Error('Conversation not found');
+    }
+    
+    const conversationData = conversationSnap.data();
+    
+    // Verify this user is the receiver
+    if (conversationData.receiver_id !== user.uid) {
+      throw new Error('Not authorized to respond to this conversation');
+    }
+    
+    // Verify the conversation is pending
+    if (conversationData.status !== 'pending') {
+      throw new Error('This conversation is no longer pending');
+    }
+    
+    // Update the conversation status
     await updateDoc(conversationRef, {
       status: accept ? 'accepted' : 'declined',
       updated_at: new Date().toISOString(),
     });
     
-    return { success: true };
+    // If accepted, add a system message indicating acceptance
+    if (accept) {
+      const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+      await addDoc(messagesRef, {
+        sender_id: user.uid,
+        content: `${user.displayName || 'User'} accepted the conversation`,
+        timestamp: new Date().toISOString(),
+        read: false,
+        type: 'system',
+      });
+    }
+    
+    return { success: true, status: accept ? 'accepted' : 'declined' };
   } catch (error) {
     console.error('Error responding to conversation:', error);
-    return { success: false, error };
+    throw error;
   }
 }
 
@@ -487,24 +545,52 @@ export async function sendMessage(conversationId: string, content: string) {
   }
   
   try {
+    // Get conversation data first
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const conversationSnap = await getDoc(conversationRef);
+    
+    if (!conversationSnap.exists()) {
+      throw new Error('Conversation not found');
+    }
+    
+    const conversationData = conversationSnap.data();
+    
+    // Check if user is part of the conversation
+    if (conversationData.initiator_id !== user.uid && conversationData.receiver_id !== user.uid) {
+      throw new Error('Not authorized to send messages in this conversation');
+    }
+    
+    // Check conversation status
+    if (conversationData.status === 'declined') {
+      throw new Error('Cannot send messages in a declined conversation');
+    }
+    
+    if (conversationData.status === 'pending' && conversationData.initiator_id !== user.uid) {
+      throw new Error('Cannot send messages in a pending conversation');
+    }
+    
+    // Add the message
     const messagesRef = collection(db, 'conversations', conversationId, 'messages');
     const messageDoc = await addDoc(messagesRef, {
       sender_id: user.uid,
       content,
       timestamp: new Date().toISOString(),
       read: false,
+      type: 'message',
     });
     
-    // Update the conversation's last update timestamp
-    const conversationRef = doc(db, 'conversations', conversationId);
+    // Update conversation metadata
     await updateDoc(conversationRef, {
+      last_message: content,
+      last_message_time: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      messages_count: (conversationData.messages_count || 0) + 1,
     });
     
     return { success: true, messageId: messageDoc.id };
   } catch (error) {
     console.error('Error sending message:', error);
-    return { success: false, error };
+    throw error;
   }
 }
 
@@ -533,12 +619,14 @@ export async function getUserConversations() {
     // Query conversations where the user is either the initiator or receiver
     const q1 = query(
       collection(db, 'conversations'),
-      where('initiator_id', '==', user.uid)
+      where('initiator_id', '==', user.uid),
+      orderBy('updated_at', 'desc')
     );
     
     const q2 = query(
       collection(db, 'conversations'),
-      where('receiver_id', '==', user.uid)
+      where('receiver_id', '==', user.uid),
+      orderBy('updated_at', 'desc')
     );
     
     const [initiatedSnapshots, receivedSnapshots] = await Promise.all([
@@ -546,31 +634,34 @@ export async function getUserConversations() {
       getDocs(q2)
     ]);
     
-    // Define type for conversation data
-    type ConversationData = {
-      id: string;
-      initiator_id: string;
-      receiver_id: string;
-      status: string;
-      created_at: string;
-      updated_at: string;
-      isInitiator: boolean;
-      [key: string]: any; // For any additional fields
-    };
-    
     // Combine and format results
-    const conversations: ConversationData[] = [
-      ...initiatedSnapshots.docs.map(doc => ({
+    const conversations = [];
+    
+    // Process initiated conversations
+    for (const doc of initiatedSnapshots.docs) {
+      const data = doc.data();
+      // Get the other user's profile
+      const otherUserProfile = await getProfile(data.receiver_id);
+      conversations.push({
         id: doc.id,
-        ...doc.data(),
-        isInitiator: true
-      })) as ConversationData[],
-      ...receivedSnapshots.docs.map(doc => ({
+        ...data,
+        isInitiator: true,
+        otherUser: otherUserProfile,
+      });
+    }
+    
+    // Process received conversations
+    for (const doc of receivedSnapshots.docs) {
+      const data = doc.data();
+      // Get the other user's profile
+      const otherUserProfile = await getProfile(data.initiator_id);
+      conversations.push({
         id: doc.id,
-        ...doc.data(),
-        isInitiator: false
-      })) as ConversationData[]
-    ];
+        ...data,
+        isInitiator: false,
+        otherUser: otherUserProfile,
+      });
+    }
     
     // Sort by updated_at (most recent first)
     conversations.sort((a, b) => {
@@ -580,7 +671,7 @@ export async function getUserConversations() {
     return { success: true, conversations };
   } catch (error) {
     console.error('Error getting user conversations:', error);
-    return { success: false, error };
+    throw error;
   }
 }
 
@@ -605,4 +696,48 @@ export async function getProfile(userId: string) {
 // Clear registration data
 export const clearRegistrationData = () => {
   registrationData = null;
-}; 
+};
+
+// Get the first message of a conversation
+export async function getFirstMessage(conversationId: string) {
+  const user = getCurrentUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+  
+  try {
+    // Get the conversation to make sure the user is authorized
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const conversationSnap = await getDoc(conversationRef);
+    
+    if (!conversationSnap.exists()) {
+      throw new Error('Conversation not found');
+    }
+    
+    const conversationData = conversationSnap.data();
+    
+    // Check if user is part of the conversation
+    if (conversationData.initiator_id !== user.uid && conversationData.receiver_id !== user.uid) {
+      throw new Error('Not authorized to view this conversation');
+    }
+    
+    // Query the first message - sort by timestamp to get the oldest one
+    const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+    const q = query(messagesRef, orderBy('timestamp', 'asc'), limit(1));
+    const messageSnapshot = await getDocs(q);
+    
+    if (messageSnapshot.empty) {
+      return { success: false, message: null };
+    }
+    
+    const firstMessage = {
+      id: messageSnapshot.docs[0].id,
+      ...messageSnapshot.docs[0].data()
+    };
+    
+    return { success: true, message: firstMessage };
+  } catch (error) {
+    console.error('Error getting first message:', error);
+    throw error;
+  }
+} 

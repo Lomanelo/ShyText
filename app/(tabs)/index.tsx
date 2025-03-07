@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, ActivityIndicator, SafeAreaView, Image, RefreshControl, Alert } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Modal, ActivityIndicator, SafeAreaView, Image, RefreshControl, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView as RNScrollView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,7 +7,6 @@ import Radar from '../../src/components/Radar';
 import { useRadarUsers } from '../../src/hooks/useRadarUsers';
 import { startConversation, getCurrentUser } from '../../src/lib/firebase';
 import colors from '../../src/theme/colors';
-import { ScrollView } from 'react-native';
 import LocationService from '../../src/services/LocationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -20,6 +19,8 @@ export default function NearbyScreen() {
   const [viewingFullProfile, setViewingFullProfile] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [authError, setAuthError] = useState<boolean>(false);
+  const [customMessage, setCustomMessage] = useState('');
+  const [showMessageInput, setShowMessageInput] = useState(false);
   const { users, location, loading, error, currentUser, refreshUsers } = useRadarUsers(MAX_RADAR_DISTANCE);
 
   // Check authentication on component mount
@@ -91,16 +92,29 @@ export default function NearbyScreen() {
   const handleStartChat = async () => {
     if (!selectedUser) return;
     
+    if (!showMessageInput) {
+      setShowMessageInput(true);
+      return;
+    }
+    
+    if (!customMessage.trim()) {
+      Alert.alert('Message Required', 'Please enter a message to start the conversation.');
+      return;
+    }
+    
     try {
-      await startConversation(selectedUser.id, 'Hey, I noticed you nearby. Would you like to chat?');
+      await startConversation(selectedUser.id, customMessage.trim());
       router.push('/chats');
     } catch (error) {
       console.error('Error starting conversation:', error);
+      Alert.alert('Error', 'Failed to start conversation. Please try again.');
     }
     
     setSelectedUser(null);
     setShowingUserInfo(false);
     setViewingFullProfile(false);
+    setShowMessageInput(false);
+    setCustomMessage('');
   };
   
   const handleViewProfile = () => {
@@ -188,7 +202,7 @@ export default function NearbyScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
       
-      <ScrollView
+      <RNScrollView
         contentContainerStyle={styles.scrollContainer}
         refreshControl={
           <RefreshControl
@@ -227,7 +241,7 @@ export default function NearbyScreen() {
             </View>
           )}
         </View>
-      </ScrollView>
+      </RNScrollView>
 
       {/* User Info Modal */}
       <Modal
@@ -236,79 +250,108 @@ export default function NearbyScreen() {
         animationType="slide"
         onRequestClose={handleCloseProfile}
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            {/* Modal Header */}
-            <View style={styles.modalHeader}>
-              <TouchableOpacity style={styles.closeButton} onPress={handleCloseProfile}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
-              
-              {viewingFullProfile ? (
-                <Text style={styles.modalTitle}>Profile</Text>
-              ) : (
-                <TouchableOpacity style={styles.viewProfileButton} onPress={handleViewProfile}>
-                  <Text style={styles.viewProfileText}>View Full Profile</Text>
+        <KeyboardAvoidingView 
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardAvoidingView}
+        >
+          <SafeAreaView style={styles.modalContainer}>
+            <View style={styles.modalContent}>
+              {/* Modal Header */}
+              <View style={styles.modalHeader}>
+                <TouchableOpacity style={styles.closeButton} onPress={handleCloseProfile}>
+                  <Ionicons name="close" size={24} color={colors.text} />
                 </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Profile Content */}
-            <View style={styles.profileContent}>
-              {/* Profile Photo */}
-              <View style={styles.profileImageContainer}>
-                {selectedUser?.photo_url ? (
-                  <Image
-                    source={{ uri: selectedUser.photo_url }}
-                    style={styles.profileImage}
-                  />
+                
+                {viewingFullProfile ? (
+                  <Text style={styles.modalTitle}>Profile</Text>
                 ) : (
-                  <View style={styles.profileImagePlaceholder}>
-                    <Text style={styles.profileImagePlaceholderText}>
-                      {selectedUser?.display_name?.charAt(0) || '?'}
-                    </Text>
+                  <TouchableOpacity style={styles.viewProfileButton} onPress={handleViewProfile}>
+                    <Text style={styles.viewProfileText}>View Full Profile</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Profile Content */}
+              <RNScrollView 
+                style={styles.scrollableContent}
+                contentContainerStyle={styles.profileContentContainer}
+                keyboardShouldPersistTaps="handled"
+              >
+                <View style={styles.profileContent}>
+                  {/* Profile Photo */}
+                  <View style={styles.profileImageContainer}>
+                    {selectedUser?.photo_url ? (
+                      <Image
+                        source={{ uri: selectedUser.photo_url }}
+                        style={styles.profileImage}
+                      />
+                    ) : (
+                      <View style={styles.profileImagePlaceholder}>
+                        <Text style={styles.profileImagePlaceholderText}>
+                          {selectedUser?.display_name?.charAt(0) || '?'}
+                        </Text>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
 
-              {/* Basic Info */}
-              <View style={styles.profileInfo}>
-                <Text style={styles.profileName}>
-                  {selectedUser?.display_name || 'Anonymous'}{' '}
-                  {selectedUser?.birthdate && (
-                    <Text style={styles.profileAge}>
-                      {calculateAge(selectedUser.birthdate)}
+                  {/* Basic Info */}
+                  <View style={styles.profileInfo}>
+                    <Text style={styles.profileName}>
+                      {selectedUser?.display_name || 'Anonymous'}{' '}
+                      {selectedUser?.birthdate && (
+                        <Text style={styles.profileAge}>
+                          {calculateAge(selectedUser.birthdate)}
+                        </Text>
+                      )}
                     </Text>
-                  )}
-                </Text>
-                
-                <View style={styles.profileDistance}>
-                  <Ionicons name="location" size={16} color={colors.primary} />
-                  <Text style={styles.profileDistanceText}>
-                    {selectedUser?.distance < 1000
-                      ? `${Math.round(selectedUser?.distance)} meters away`
-                      : `${(selectedUser?.distance / 1000).toFixed(1)} km away`}
-                  </Text>
-                </View>
-                
-                {viewingFullProfile && selectedUser?.bio && (
-                  <Text style={styles.profileBio}>{selectedUser.bio}</Text>
-                )}
-              </View>
+                    
+                    <View style={styles.profileDistance}>
+                      <Ionicons name="location" size={16} color={colors.primary} />
+                      <Text style={styles.profileDistanceText}>
+                        {selectedUser?.distance < 1000
+                          ? `${Math.round(selectedUser?.distance)} meters away`
+                          : `${(selectedUser?.distance / 1000).toFixed(1)} km away`}
+                      </Text>
+                    </View>
+                    
+                    {viewingFullProfile && selectedUser?.bio && (
+                      <Text style={styles.profileBio}>{selectedUser.bio}</Text>
+                    )}
+                  </View>
 
-              {/* Action Buttons */}
+                  {/* Message Input */}
+                  {showMessageInput && (
+                    <View style={styles.messageInputContainer}>
+                      <Text style={styles.messageInputLabel}>Send a message to start the conversation:</Text>
+                      <TextInput
+                        style={styles.messageInput}
+                        value={customMessage}
+                        onChangeText={setCustomMessage}
+                        placeholder="Write your message here..."
+                        multiline
+                        maxLength={500}
+                        autoFocus
+                      />
+                    </View>
+                  )}
+                </View>
+              </RNScrollView>
+
+              {/* Action Buttons - Outside ScrollView to stay fixed at bottom */}
               <View style={styles.actionButtons}>
                 <TouchableOpacity
                   style={styles.startChatButton}
                   onPress={handleStartChat}
                 >
-                  <Ionicons name="chatbubble" size={20} color={colors.background} />
-                  <Text style={styles.startChatText}>Send Message</Text>
+                  <Ionicons name={showMessageInput ? "send" : "chatbubble"} size={20} color={colors.background} />
+                  <Text style={styles.startChatText}>
+                    {showMessageInput ? "Send Message" : "Start Conversation"}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
-        </SafeAreaView>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -405,6 +448,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -414,8 +460,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    paddingBottom: 20,
-    minHeight: '60%',
+    padding: 20,
+    maxHeight: '90%',
+    flex: 1,
+    flexDirection: 'column',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -442,7 +490,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   profileContent: {
-    padding: 20,
+    flex: 1,
   },
   profileImageContainer: {
     alignItems: 'center',
@@ -513,7 +561,13 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   actionButtons: {
-    marginTop: 10,
+    paddingTop: 15,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 15,
+    borderTopWidth: 1,
+    borderTopColor: colors.lightGray,
+    marginHorizontal: -20,
+    paddingHorizontal: 20,
+    backgroundColor: colors.background,
   },
   startChatButton: {
     backgroundColor: colors.primary,
@@ -531,5 +585,33 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
+  },
+  scrollableContent: {
+    flex: 1,
+  },
+  profileContentContainer: {
+    flexGrow: 1,
+    paddingBottom: 20,
+  },
+  messageInputContainer: {
+    marginTop: 20,
+    width: '100%',
+  },
+  messageInputLabel: {
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: 8,
+  },
+  messageInput: {
+    borderWidth: 1,
+    borderColor: colors.lightGray,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: colors.text,
+    backgroundColor: colors.background,
+    minHeight: 100,
+    maxHeight: 150,
+    textAlignVertical: 'top',
   },
 });

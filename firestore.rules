@@ -1,0 +1,59 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isUserInConversation(conversationId) {
+      let conversation = get(/databases/$(database)/documents/conversations/$(conversationId)).data;
+      return conversation.initiator_id == request.auth.uid || conversation.receiver_id == request.auth.uid;
+    }
+    
+    // Allow authenticated users to read all profiles
+    match /profiles/{userId} {
+      // Allow any authenticated user to read any profile
+      allow read: if isSignedIn();
+      
+      // Allow users to create and update their own profile
+      allow create, update: if isSignedIn() && request.auth.uid == userId;
+      
+      // Special rule for updating just location data
+      allow update: if isSignedIn() && 
+                     request.auth.uid == userId;
+    }
+    
+    // Allow authenticated users to read and create conversations they're part of
+    match /conversations/{conversationId} {
+      // Allow listing all conversations (needed for queries)
+      allow list: if isSignedIn();
+      
+      // Allow reading specific conversations the user is part of
+      allow get: if isSignedIn() && 
+                  (resource.data.initiator_id == request.auth.uid || 
+                   resource.data.receiver_id == request.auth.uid);
+      
+      // Allow creating conversations where the user is the initiator
+      allow create: if isSignedIn() && 
+                     request.resource.data.initiator_id == request.auth.uid;
+      
+      // Allow updating conversations the user is part of
+      allow update: if isSignedIn() && 
+                     (resource.data.initiator_id == request.auth.uid || 
+                      resource.data.receiver_id == request.auth.uid);
+      
+      // Handle the messages subcollection
+      match /messages/{messageId} {
+        // Allow reading messages in conversations the user is part of
+        allow read: if isSignedIn() && isUserInConversation(conversationId);
+        
+        // Allow creating messages if the user is part of the conversation
+        // and if sender_id matches the current user
+        allow create: if isSignedIn() && 
+                       request.resource.data.sender_id == request.auth.uid && 
+                       isUserInConversation(conversationId);
+      }
+    }
+  }
+} 
