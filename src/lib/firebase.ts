@@ -297,7 +297,16 @@ export const getCurrentUser = (): User | null => {
 };
 
 // Update user location
-export async function updateLocation(latitude: number, longitude: number) {
+export async function updateLocation(
+  latitude: number, 
+  longitude: number, 
+  motionData?: {
+    heading?: number;
+    speed?: number;
+    activity?: string;
+    movementIntensity?: number;
+  }
+) {
   const user = getCurrentUser();
   if (!user) {
     throw new Error('User not authenticated');
@@ -306,12 +315,33 @@ export async function updateLocation(latitude: number, longitude: number) {
   const userRef = doc(db, 'profiles', user.uid);
   
   try {
-    await updateDoc(userRef, {
+    const updateData: any = {
       last_location: new GeoPoint(latitude, longitude),
       last_active: new Date().toISOString(),
       // Store geohash for efficient geoqueries
       geohash: geofirestore.geohashForLocation([latitude, longitude] as [number, number])
-    });
+    };
+    
+    // Add motion data if available
+    if (motionData) {
+      if (motionData.heading !== undefined) {
+        updateData.last_heading = motionData.heading;
+      }
+      
+      if (motionData.speed !== undefined) {
+        updateData.last_speed = motionData.speed;
+      }
+      
+      if (motionData.activity) {
+        updateData.last_activity = motionData.activity;
+      }
+      
+      if (motionData.movementIntensity !== undefined) {
+        updateData.movement_intensity = motionData.movementIntensity;
+      }
+    }
+    
+    await updateDoc(userRef, updateData);
   } catch (error) {
     console.error('Error updating location:', error);
     throw error;
@@ -319,7 +349,7 @@ export async function updateLocation(latitude: number, longitude: number) {
 }
 
 // Find nearby users using geohash queries
-export async function findNearbyUsers(latitude: number, longitude: number, distanceInKm = 1) {
+export async function findNearbyUsers(latitude: number, longitude: number, distanceInKm = 0.01) {
   const user = getCurrentUser();
   if (!user) {
     throw new Error('User not authenticated');

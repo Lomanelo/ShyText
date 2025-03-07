@@ -41,6 +41,43 @@ export const styles = StyleSheet.create({
     zIndex: 20, // Ensure it's above other users
   },
   
+  // Drop target in the center
+  dropTarget: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  
+  // Active drop target (highlighted when something is being dragged)
+  dropTargetActive: {
+    backgroundColor: 'rgba(200, 240, 255, 0.95)',
+    borderColor: colors.primary,
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  
+  // Drop target icon (plus sign)
+  dropTargetIcon: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    height: '100%',
+  },
+  
+  // Drop target text (plus sign)
+  dropTargetText: {
+    fontSize: 32,
+    color: colors.primary,
+    fontWeight: 'bold',
+  },
+  
   // User bubble styles
   userBubbleContainer: {
     alignItems: 'center',
@@ -93,5 +130,59 @@ export const styles = StyleSheet.create({
     color: colors.background,
     fontSize: 12,
     fontWeight: '600',
+  },
+  
+  // User name below bubble
+  userName: {
+    position: 'absolute',
+    bottom: -20,
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.text,
+    width: 60,
+    textAlign: 'center',
+  },
+  
+  // Concentric circles
+  radarCircle: {
+    position: 'absolute',
+    borderWidth: 1,
+    borderColor: 'rgba(200, 200, 200, 0.5)',
+    borderRadius: 1000,
+  },
+  
+  // Message composition area
+  messageComposer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background,
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.lightGray,
+    zIndex: 100,
+  },
+  
+  messageInput: {
+    backgroundColor: colors.lightGray,
+    borderRadius: 20,
+    padding: 12,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: colors.text,
+    maxHeight: 100,
+  },
+  
+  sendButton: {
+    position: 'absolute',
+    right: 24,
+    bottom: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 }); 

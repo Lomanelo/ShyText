@@ -2,7 +2,7 @@
 const colors = {
   // Primary colors
   primary: '#00ADB5', // Teal accent color
-  background: '#FFFFFF', // White
+  background: '#FFFFFF', x   r// White
   text: '#000000', // Black
   
   // Secondary/utility colors

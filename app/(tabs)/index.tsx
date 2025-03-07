@@ -10,8 +10,29 @@ import colors from '../../src/theme/colors';
 import LocationService from '../../src/services/LocationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Define ActivityType here as a fallback in case the import fails
+const FallbackActivityType = {
+  STILL: 'still',
+  WALKING: 'walking',
+  RUNNING: 'running',
+  VEHICLE: 'vehicle',
+  UNKNOWN: 'unknown'
+};
+
+// Get ActivityType from LocationService if available
+let ActivityType = FallbackActivityType;
+try {
+  // Try to access the ActivityType from the LocationService module
+  const motionModule = require('../../src/services/MotionService');
+  if (motionModule && motionModule.ActivityType) {
+    ActivityType = motionModule.ActivityType;
+  }
+} catch (error) {
+  console.warn('Failed to import ActivityType, using fallback:', error);
+}
+
 // Maximum distance for radar in meters
-const MAX_RADAR_DISTANCE = 100; 
+const MAX_RADAR_DISTANCE = 10;
 
 export default function NearbyScreen() {
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
@@ -22,6 +43,13 @@ export default function NearbyScreen() {
   const [customMessage, setCustomMessage] = useState('');
   const [showMessageInput, setShowMessageInput] = useState(false);
   const { users, location, loading, error, currentUser, refreshUsers } = useRadarUsers(MAX_RADAR_DISTANCE);
+  const [motionData, setMotionData] = useState<{ 
+    activity: string; 
+    heading?: number;
+    speed?: number;
+    movementIntensity?: number;
+  } | null>(null);
+  const [showMotionData, setShowMotionData] = useState(false);
 
   // Check authentication on component mount
   useEffect(() => {
@@ -43,6 +71,25 @@ export default function NearbyScreen() {
         const success = await LocationService.startBackgroundTracking();
         if (success) {
           console.log('Background location tracking initialized successfully');
+          
+          // Set up a timer to periodically update motion data
+          const intervalId = setInterval(() => {
+            try {
+              const data = LocationService.getLocationAndMotionData();
+              if (data.motionData) {
+                setMotionData({
+                  activity: data.activity || ActivityType.UNKNOWN,
+                  heading: data.motionData.heading,
+                  speed: data.motionData.speed,
+                  movementIntensity: data.motionData.movementIntensity
+                });
+              }
+            } catch (error) {
+              console.warn('Error updating motion data in interval:', error);
+            }
+          }, 2000); // Update every 2 seconds
+          
+          return () => clearInterval(intervalId);
         } else {
           console.warn('Failed to initialize background location tracking');
           // We'll show a banner only once to avoid annoying the user
@@ -148,6 +195,51 @@ export default function NearbyScreen() {
     </View>
   );
 
+  // Helper function to get a human-readable activity name
+  const getActivityName = (activity: string) => {
+    try {
+      switch (activity) {
+        case ActivityType.STILL: return 'Still';
+        case ActivityType.WALKING: return 'Walking';
+        case ActivityType.RUNNING: return 'Running';
+        case ActivityType.VEHICLE: return 'In Vehicle';
+        default: return 'Unknown';
+      }
+    } catch (error) {
+      console.warn('Error getting activity name:', error);
+      return 'Unknown';
+    }
+  };
+
+  // Helper function to format heading as a direction
+  const formatHeading = (heading?: number) => {
+    try {
+      if (heading === undefined) return 'Unknown';
+      
+      const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW', 'N'];
+      return directions[Math.round(heading / 45)];
+    } catch (error) {
+      console.warn('Error formatting heading:', error);
+      return 'Unknown';
+    }
+  };
+
+  // Helper function to format speed
+  const formatSpeed = (speed?: number) => {
+    try {
+      if (speed === undefined) return 'Unknown';
+      return `${(speed * 3.6).toFixed(1)} km/h`; // Convert to km/h and format
+    } catch (error) {
+      console.warn('Error formatting speed:', error);
+      return 'Unknown';
+    }
+  };
+
+  // Toggle motion data display
+  const toggleMotionData = () => {
+    setShowMotionData(!showMotionData);
+  };
+
   if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
@@ -220,6 +312,57 @@ export default function NearbyScreen() {
               ? `${users.length} people within ${MAX_RADAR_DISTANCE}m`
               : 'No one nearby yet. Stay active!'}
           </Text>
+          
+          {motionData && (
+            <TouchableOpacity 
+              style={styles.activityIndicator}
+              onPress={toggleMotionData}
+            >
+              <Ionicons 
+                name={
+                  motionData.activity === ActivityType.STILL ? 'body' :
+                  motionData.activity === ActivityType.WALKING ? 'walk' :
+                  motionData.activity === ActivityType.RUNNING ? 'fitness' :
+                  motionData.activity === ActivityType.VEHICLE ? 'car' : 'help-circle'
+                } 
+                size={18} 
+                color={colors.primary} 
+              />
+              <Text style={styles.activityText}>
+                {getActivityName(motionData.activity)}
+              </Text>
+              <Ionicons 
+                name={showMotionData ? 'chevron-up' : 'chevron-down'} 
+                size={16} 
+                color={colors.darkGray} 
+              />
+            </TouchableOpacity>
+          )}
+          
+          {showMotionData && motionData && (
+            <View style={styles.motionDataContainer}>
+              <View style={styles.motionDataItem}>
+                <Ionicons name="compass" size={16} color={colors.darkGray} />
+                <Text style={styles.motionDataText}>
+                  Heading: {formatHeading(motionData.heading)}
+                </Text>
+              </View>
+              
+              <View style={styles.motionDataItem}>
+                <Ionicons name="speedometer" size={16} color={colors.darkGray} />
+                <Text style={styles.motionDataText}>
+                  Speed: {formatSpeed(motionData.speed)}
+                </Text>
+              </View>
+              
+              <View style={styles.motionDataItem}>
+                <Ionicons name="pulse" size={16} color={colors.darkGray} />
+                <Text style={styles.motionDataText}>
+                  Movement: {motionData.movementIntensity?.toFixed(2) || 'Unknown'}
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
         
         <View style={styles.radarContainer}>
@@ -613,5 +756,38 @@ const styles = StyleSheet.create({
     minHeight: 100,
     maxHeight: 150,
     textAlignVertical: 'top',
+  },
+  activityIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.lightGray,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 8,
+    alignSelf: 'center',
+  },
+  activityText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+    marginHorizontal: 6,
+  },
+  motionDataContainer: {
+    backgroundColor: colors.lightGray,
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 8,
+    width: '100%',
+  },
+  motionDataItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  motionDataText: {
+    color: colors.text,
+    fontSize: 14,
+    marginLeft: 8,
   },
 });
