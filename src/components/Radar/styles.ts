@@ -280,52 +280,53 @@ export const styles = StyleSheet.create({
     backgroundColor: COLORS.white,
     borderRadius: 20,
     width: '90%',
-    maxWidth: 400,
-    paddingTop: 60, // Extra padding at top for the profile picture and name
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    maxWidth: 340, // Narrower modal
+    paddingTop: 45, // Reduced padding to bring content closer together
+    paddingBottom: 15,
+    paddingHorizontal: 25,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 5,
-    position: 'relative', // For absolute positioning of profile pic
+    position: 'relative',
   },
 
   // Message modal header
   messageModalHeader: {
     flexDirection: 'row',
-    justifyContent: 'center', // Center the title
+    justifyContent: 'flex-start', // Changed from center to flex-start to align name to the left
     alignItems: 'center',
-    marginBottom: 30,
-    position: 'relative', // For absolute positioning of X button
+    marginBottom: 15, // Slightly reduced to bring text input closer
+    position: 'relative',
+    marginLeft: 85, // Add left margin to make space for the photo
   },
 
   // Message modal title
   messageModalTitle: {
-    fontSize: 24,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: '500',
     color: COLORS.black,
-    textAlign: 'center',
+    textAlign: 'left', // Changed from center to left
   },
 
   // Close button for modal - positioned at top right
   closeButton: {
     position: 'absolute',
-    right: 0,
-    top: 0,
+    right: -5,
+    top: -5,
     padding: 8,
   },
 
   // User profile picture in message modal
   messageUserProfileContainer: {
     position: 'absolute',
-    top: -40, // Negative value to position it partially outside
-    left: 20,
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    borderWidth: 4,
+    top: -35, // Adjusted to position it better
+    left: 15,
+    width: 85, // Increased size from 75 to 85
+    height: 85, // Increased size from 75 to 85
+    borderRadius: 42.5, // Half of width/height
+    borderWidth: 3,
     borderColor: COLORS.white,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -333,7 +334,7 @@ export const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 5,
     zIndex: 10,
-    backgroundColor: COLORS.white, // Fallback background
+    backgroundColor: COLORS.white,
     overflow: 'hidden',
   },
 
@@ -341,14 +342,14 @@ export const styles = StyleSheet.create({
   messageUserProfile: {
     width: '100%',
     height: '100%',
-    borderRadius: 35,
+    borderRadius: 42.5, // Half of container width/height
   },
 
   // User profile fallback (for when image is not available)
   messageUserProfileFallback: {
     width: '100%',
     height: '100%',
-    borderRadius: 35,
+    borderRadius: 42.5, // Half of container width/height
     backgroundColor: COLORS.teal,
     alignItems: 'center',
     justifyContent: 'center',
@@ -357,41 +358,20 @@ export const styles = StyleSheet.create({
   // User profile fallback text
   messageUserProfileFallbackText: {
     color: COLORS.white,
-    fontSize: 24,
+    fontSize: 32, // Larger text for the bigger container
     fontWeight: 'bold',
   },
 
   // Message input in modal - light gray like in second image
   messageModalInput: {
     backgroundColor: '#F2F2F2',
-    borderRadius: 20,
-    padding: 18,
+    borderRadius: 16,
+    padding: 15,
     fontSize: 16,
     color: COLORS.black,
-    minHeight: 100,
+    minHeight: 80,
     textAlignVertical: 'top',
-    marginBottom: 15,
-  },
-
-  // Message modal footer
-  messageModalFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-
-  // Send message button - rounded with arrow
-  sendMessageButton: {
-    backgroundColor: '#F2F2F2',
-    borderRadius: 30,
-    width: 60, // Fixed width for a circular button
-    height: 60, // Fixed height for a circular button
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // Send arrow icon
-  sendArrow: {
-    fontSize: 24,
-    color: '#666',
+    marginTop: 5, // Added small margin to separate from header
+    marginBottom: 10,
   },
 }); 

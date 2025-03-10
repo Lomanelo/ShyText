@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { View, Dimensions, Platform, Animated, TextInput, TouchableOpacity, Text, Modal, Image } from 'react-native';
+import { View, Dimensions, Platform, Animated, TextInput, TouchableOpacity, Text, Modal, Image, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import UserBubble from './UserBubble';
 import { styles } from './styles';
@@ -47,6 +47,7 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
   const inputRef = useRef<TextInput>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [draggedUser, setDraggedUser] = useState<any>(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   
   // Calculate the radar center coordinates
   const centerX = RADAR_SIZE / 2;
@@ -60,6 +61,21 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
     setIsDragging(false);
     setDraggedUser(null);
   }, [users]);
+  
+  // Add keyboard event listeners
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', () => {
+      setIsKeyboardVisible(true);
+    });
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+      setIsKeyboardVisible(false);
+    });
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
   
   // Convert actual distances to radar display distances with improved distribution
   const getPositionOnRadar = (distance: number, angle: number) => {
@@ -270,6 +286,15 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
     setDraggedUser(null);
   };
   
+  // Handle background tap
+  const handleBackgroundTap = () => {
+    if (isKeyboardVisible) {
+      Keyboard.dismiss();
+    } else {
+      handleCancelMessage();
+    }
+  };
+  
   // Draw concentric circles to indicate distance
   const renderConcentricCircles = () => {
     const circles = [];
@@ -295,6 +320,21 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
     
     return circles;
   };
+  
+  // Add a special effect to preserve modal state during user/location updates
+  useEffect(() => {
+    // Only update the users data if we're not currently showing the message input
+    // This prevents the modal from closing when location updates occur
+    if (!showMessageInput) {
+      // If draggedUser exists, find and preserve it in the updated users array
+      if (draggedUser && draggedUserId) {
+        const updatedDraggedUser = users.find(u => u.id === draggedUserId);
+        if (updatedDraggedUser) {
+          setDraggedUser(updatedDraggedUser);
+        }
+      }
+    }
+  }, [users, showMessageInput]);
   
   return (
     <View style={styles.container}>
@@ -372,68 +412,62 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
         animationType="fade"
         onRequestClose={handleCancelMessage}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.messageModal}>
-            {/* User Profile Image - Positioned to overlap from the left */}
-            {draggedUser && (
-              <View style={styles.messageUserProfileContainer}>
-                {draggedUser.photo_url ? (
-                  <Image
-                    source={{ uri: draggedUser.photo_url }}
-                    style={styles.messageUserProfile}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.messageUserProfileFallback}>
-                    <Text style={styles.messageUserProfileFallbackText}>
-                      {draggedUser.display_name?.charAt(0).toUpperCase() || '?'}
-                    </Text>
+        <TouchableWithoutFeedback onPress={handleBackgroundTap}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.messageModal}>
+                {/* User Profile Image - Positioned to overlap from the left */}
+                {draggedUser && (
+                  <View style={styles.messageUserProfileContainer}>
+                    {draggedUser.photo_url ? (
+                      <Image
+                        source={{ uri: draggedUser.photo_url }}
+                        style={styles.messageUserProfile}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.messageUserProfileFallback}>
+                        <Text style={styles.messageUserProfileFallbackText}>
+                          {draggedUser.display_name?.charAt(0).toUpperCase() || '?'}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 )}
-              </View>
-            )}
-            
-            <View style={styles.messageModalHeader}>
-              {draggedUser && (
-                <Text style={styles.messageModalTitle}>
-                  {draggedUser.display_name || 'User'}
-                </Text>
-              )}
-              <TouchableOpacity onPress={handleCancelMessage} style={styles.closeButton}>
-                <Ionicons name="close" size={24} color={'#666'} />
-              </TouchableOpacity>
-            </View>
+                
+                <View style={styles.messageModalHeader}>
+                  {draggedUser && (
+                    <Text style={styles.messageModalTitle}>
+                      {draggedUser.display_name || 'User'}
+                    </Text>
+                  )}
+                  <TouchableOpacity onPress={handleCancelMessage} style={styles.closeButton}>
+                    <Text style={{fontSize: 20, color: '#999', fontWeight: '300'}}>×</Text>
+                  </TouchableOpacity>
+                </View>
 
-            <TextInput
-              ref={inputRef}
-              style={styles.messageModalInput}
-              placeholder={`Hey ${draggedUser?.display_name || 'there'}, was nice meeting you...`}
-              placeholderTextColor="#999"
-              value={message}
-              onChangeText={setMessage}
-              multiline
-              maxLength={500}
-              autoFocus
-            />
-            
-            <View style={styles.messageModalFooter}>
-              <TouchableOpacity 
-                style={[
-                  styles.sendMessageButton,
-                  message.trim() === '' ? styles.sendButtonDisabled : null
-                ]}
-                onPress={handleSendMessage}
-                disabled={message.trim() === ''}
-              >
-                <Ionicons 
-                  name="arrow-forward" 
-                  size={24} 
-                  color={'#666'} 
+                <TextInput
+                  ref={inputRef}
+                  style={styles.messageModalInput}
+                  placeholder={`Hey ${draggedUser?.display_name || 'there'}, was nice meeting you...`}
+                  placeholderTextColor="#BBBBBB"
+                  value={message}
+                  onChangeText={setMessage}
+                  multiline={true}
+                  maxLength={500}
+                  autoFocus
+                  returnKeyType="send"
+                  blurOnSubmit={true}
+                  onSubmitEditing={() => {
+                    if (message.trim() !== '') {
+                      handleSendMessage();
+                    }
+                  }}
                 />
-              </TouchableOpacity>
-            </View>
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </View>
   );

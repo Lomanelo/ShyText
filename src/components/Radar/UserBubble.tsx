@@ -84,11 +84,11 @@ const UserBubble = ({
         // Use offset to maintain position between moves
         pan.extractOffset();
         
-        // Scale up smoothly when dragging starts
+        // Scale up more dramatically when dragging starts
         Animated.spring(scale, {
-          toValue: 1.08, // Subtle scale increase
-          friction: 8,   // Higher friction for more control
-          tension: 40,   // Lower tension for more subtle effect
+          toValue: 1.35, // Even bigger scale increase for dragging
+          friction: 6,
+          tension: 50,
           useNativeDriver: true
         }).start();
         
@@ -119,12 +119,9 @@ const UserBubble = ({
       },
       
       onPanResponderMove: (_, gesture) => {
-        // Normal movement - no JS-based snapping during move
-        // Just use setValue which is compatible with native driver
+        // Normal movement
         pan.setValue({ x: gesture.dx, y: gesture.dy });
         
-        // Instead of animated snapping during drag, we'll do position 
-        // checking and only snap on release
         if (centerPoint) {
           const touchX = gesture.moveX;
           const touchY = gesture.moveY;
@@ -136,14 +133,56 @@ const UserBubble = ({
           );
           
           // Calculate the snap threshold
-          const dropTargetRadius = 45; // Using a consistent size (visual circle is 70px)
+          const dropTargetRadius = 35; // Half of visual circle
           const userBubbleRadius = size / 2;
-          // Apply the multiplier to increase detection area
-          const snapDistance = (dropTargetRadius + userBubbleRadius) * DETECTION_RADIUS_MULTIPLIER;
+          // Apply the multiplier to increase detection area, but less aggressive
+          const snapDistance = (dropTargetRadius + userBubbleRadius) * 1.1; // More subtle
           
-          // Just update the snapped state for visual feedback
-          // but don't do animations during drag
-          setIsSnapped(distanceToCenter < snapDistance);
+          // For smooth magnetic effect when close to the center target
+          if (distanceToCenter < snapDistance && !isSnapped) {
+            setIsSnapped(true);
+            
+            // Calculate the direction vector to center
+            const dx = screenCenterX - touchX;
+            const dy = screenCenterY - touchY;
+            
+            // Normalize for smooth animation
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const nx = dx / distance;
+            const ny = dy / distance;
+            
+            // Create a stronger magnetic pull effect
+            pan.flattenOffset();
+            Animated.spring(pan, {
+              toValue: { 
+                x: gesture.dx + (nx * dropTargetRadius * 0.6), // Stronger pull
+                y: gesture.dy + (ny * dropTargetRadius * 0.6)
+              },
+              friction: 5,  // Less friction for faster snap
+              tension: 80,  // Higher tension for stronger pull
+              useNativeDriver: true
+            }).start();
+            
+            // Even more scale increase when snapped
+            Animated.spring(scale, {
+              toValue: 1.5, // Bigger scale when snapped
+              friction: 4,
+              tension: 80,
+              useNativeDriver: true
+            }).start();
+          } 
+          else if (distanceToCenter >= snapDistance && isSnapped) {
+            // Reset when moving away from snap area
+            setIsSnapped(false);
+            
+            // Reset scales with subtle transition
+            Animated.spring(scale, {
+              toValue: 1.35, // Back to dragging scale
+              friction: 6,
+              tension: 40,
+              useNativeDriver: true
+            }).start();
+          }
         }
       },
       
