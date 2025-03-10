@@ -39,6 +39,18 @@ interface RadarProps {
   onDragStateChange?: (dragging: boolean) => void;
 }
 
+// Interface for fixed position
+interface SlotPosition {
+  x: number;
+  y: number;
+  userId?: string;
+}
+
+// Define user position type
+interface UserPositions {
+  [key: string]: SlotPosition;
+}
+
 const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, onDragStateChange }: RadarProps) => {
   // State for handling drag-and-drop messaging
   const [draggedUserId, setDraggedUserId] = useState<string | null>(null);
@@ -48,6 +60,7 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
   const [isDragging, setIsDragging] = useState(false);
   const [draggedUser, setDraggedUser] = useState<any>(null);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [userPositions, setUserPositions] = useState<UserPositions>({});
   
   // Calculate the radar center coordinates
   const centerX = RADAR_SIZE / 2;
@@ -77,152 +90,66 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
     };
   }, []);
   
-  // Convert actual distances to radar display distances with improved distribution
-  const getPositionOnRadar = (distance: number, angle: number) => {
-    // Scale distance based on maximum distance with better distribution
-    // Using sqrt for more natural distribution (focuses more users toward center)
-    const scaleFactor = Math.min(1, Math.sqrt(distance / maxDistance));
+  // Get fixed slot positions
+  const getFixedSlotPositions = (): SlotPosition[] => {
+    const slots: SlotPosition[] = [];
+    const numSlots = 10; // Number of fixed positions
+    const radius = RADAR_SIZE * 0.35; // 35% of radar size for a nice circle
     
-    // Modified scaling to create better spacing - minimum 30% from center, max 80% of radius
-    // This ensures users don't appear too close to the center
-    const scaledDistance = (scaleFactor * 0.5 + 0.3) * (RADAR_SIZE / 2);
-    
-    // Convert polar coordinates to cartesian
-    const x = centerX + scaledDistance * Math.cos(angle);
-    const y = centerY + scaledDistance * Math.sin(angle);
-    
-    return { x, y };
-  };
-  
-  // Check if two positions are too close
-  const arePositionsColliding = (pos1: {x: number, y: number}, pos2: {x: number, y: number}) => {
-    const dx = pos1.x - pos2.x;
-    const dy = pos1.y - pos2.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    return distance < MIN_DISTANCE;
-  };
-  
-  // Check if position is too close to center (current user)
-  const isTooCloseToCenter = (pos: {x: number, y: number}) => {
-    const dx = pos.x - centerX;
-    const dy = pos.y - centerY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    return distance < CENTER_BUFFER;
-  };
-  
-  // Adjust position to avoid overlap with improved algorithm
-  const adjustPosition = (position: {x: number, y: number}, existingPositions: Array<{x: number, y: number}>) => {
-    let adjustedPosition = { ...position };
-    let attempts = 0;
-    const maxAttempts = 40; // Increased max attempts for better placement
-    
-    // First check if too close to center and adjust if needed
-    if (isTooCloseToCenter(adjustedPosition)) {
-      const dx = adjustedPosition.x - centerX;
-      const dy = adjustedPosition.y - centerY;
-      const angle = Math.atan2(dy, dx);
-      adjustedPosition.x = centerX + CENTER_BUFFER * Math.cos(angle);
-      adjustedPosition.y = centerY + CENTER_BUFFER * Math.sin(angle);
+    for (let i = 0; i < numSlots; i++) {
+      // Calculate angle for evenly distributed points around a circle
+      // Starting from the top (270 degrees or -90 degrees) and going clockwise
+      // We're using -90 degrees (top of the circle) as the starting point
+      const angle = ((i * 2 * Math.PI) / numSlots) - Math.PI/2;
+      
+      // Convert polar coordinates to cartesian
+      const x = centerX + radius * Math.cos(angle);
+      const y = centerY + radius * Math.sin(angle);
+      
+      slots.push({ x, y });
     }
     
-    while (attempts < maxAttempts) {
-      // Check if current position collides with any existing positions
-      const collision = existingPositions.some(pos => 
-        arePositionsColliding(adjustedPosition, pos)
-      );
-      
-      if (!collision) {
-        // No collision, position is good
-        break;
-      }
-      
-      // Calculate vector from center to current position
-      const dx = adjustedPosition.x - centerX;
-      const dy = adjustedPosition.y - centerY;
-      const currentDistance = Math.sqrt(dx * dx + dy * dy);
-      const angle = Math.atan2(dy, dx);
-      
-      // Try different strategies based on attempt number
-      if (attempts < 10) {
-        // First try: Increase distance from center
-        const newDistance = currentDistance + (MIN_DISTANCE * 0.25);
-        adjustedPosition.x = centerX + newDistance * Math.cos(angle);
-        adjustedPosition.y = centerY + newDistance * Math.sin(angle);
-      } else if (attempts < 20) {
-        // Second try: Slightly adjust angle
-        const angleAdjustment = (Math.random() - 0.5) * 0.5; // Up to ±0.25 radians
-        const newAngle = angle + angleAdjustment;
-        adjustedPosition.x = centerX + currentDistance * Math.cos(newAngle);
-        adjustedPosition.y = centerY + currentDistance * Math.sin(newAngle);
-      } else if (attempts < 30) {
-        // Third try: Combine both approaches
-        const angleAdjustment = (Math.random() - 0.5) * 0.3;
-        const newAngle = angle + angleAdjustment;
-        const newDistance = currentDistance + (MIN_DISTANCE * 0.3);
-        adjustedPosition.x = centerX + newDistance * Math.cos(newAngle);
-        adjustedPosition.y = centerY + newDistance * Math.sin(newAngle);
-      } else {
-        // Last resort: Try a random position at the outer edge
-        const randomAngle = Math.random() * Math.PI * 2;
-        const edgeDistance = (RADAR_SIZE / 2) - (BUBBLE_SIZE / 2) - 10;
-        adjustedPosition.x = centerX + edgeDistance * Math.cos(randomAngle);
-        adjustedPosition.y = centerY + edgeDistance * Math.sin(randomAngle);
-      }
-      
-      attempts++;
-    }
-    
-    // Ensure the adjusted position stays within radar bounds
-    const distanceFromCenter = Math.sqrt(
-      Math.pow(adjustedPosition.x - centerX, 2) + 
-      Math.pow(adjustedPosition.y - centerY, 2)
-    );
-    
-    const maxAllowedDistance = (RADAR_SIZE / 2) - (BUBBLE_SIZE / 2) - 5;
-    
-    if (distanceFromCenter > maxAllowedDistance) {
-      const angle = Math.atan2(
-        adjustedPosition.y - centerY, 
-        adjustedPosition.x - centerX
-      );
-      adjustedPosition.x = centerX + maxAllowedDistance * Math.cos(angle);
-      adjustedPosition.y = centerY + maxAllowedDistance * Math.sin(angle);
-    }
-    
-    return adjustedPosition;
+    return slots;
   };
   
-  // Generate positions for users with memoization to prevent unnecessary recalculations
-  const usersWithPositions = useMemo(() => {
-    const usersWithPos = [];
-    const existingPositions: Array<{x: number, y: number}> = [];
-    
-    // Sort users by distance so closer users are positioned first
+  // Calculate positions for each user with sorting by distance
+  const calculatePositions = (): UserPositions => {
+    // Sort users by distance (closest first)
     const sortedUsers = [...users].sort((a, b) => a.distance - b.distance);
     
-    for (const user of sortedUsers) {
-      // Generate a random angle if not available, or use existing one
-      // This ensures positions remain stable between renders
-      user.angle = user.angle || Math.random() * Math.PI * 2;
-      
-      // Get initial position
-      let position = getPositionOnRadar(user.distance, user.angle);
-      
-      // Adjust position to avoid overlaps
-      position = adjustPosition(position, existingPositions);
-      
-      // Add to existing positions
-      existingPositions.push(position);
-      
-      // Add user with position
-      usersWithPos.push({
-        ...user,
-        position,
-      });
-    }
+    // Limit to 10 users maximum (the number of available slots)
+    const usersToDisplay = sortedUsers.slice(0, 10);
     
-    return usersWithPos;
-  }, [users, maxDistance]); // Dependencies that would cause a recalculation
+    // Get the fixed slot positions
+    const fixedSlots = getFixedSlotPositions();
+    
+    // Assign users to slots based on proximity
+    const positions: UserPositions = {};
+    
+    usersToDisplay.forEach((user, index) => {
+      // Assign this user to the corresponding fixed slot
+      if (index < fixedSlots.length) {
+        positions[user.id] = {
+          ...fixedSlots[index],
+          userId: user.id
+        };
+      }
+    });
+    
+    return positions;
+  };
+  
+  // Calculate user positions once when users array changes or window resizes
+  useEffect(() => {
+    const newPositions = calculatePositions();
+    setUserPositions(newPositions);
+  }, [users, width, height]);
+  
+  // Define the center point for dragging to
+  const dropCenterPoint = useMemo(() => ({
+    x: centerX,
+    y: centerY
+  }), [centerX, centerY]);
   
   // Handle when a user is dragged and dropped on the center target
   const handleUserDragRelease = (userId: string, dropSuccess: boolean) => {
@@ -258,10 +185,9 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
     }
   };
   
-  // Handle when dragging starts
+  // Handle user drag start
   const handleDragStart = () => {
     setIsDragging(true);
-    // Notify parent component that dragging has started
     if (onDragStateChange) {
       onDragStateChange(true);
     }
@@ -361,28 +287,30 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
         </View>
         
         {/* Nearby Users */}
-        {usersWithPositions.map(user => (
-          <UserBubble
-            key={user.id}
-            user={user}
-            onPress={() => onUserPress(user.id)}
-            onDragRelease={handleUserDragRelease}
-            onDragStart={handleDragStart}
-            draggable={true}
-            centerPoint={{ 
-              // Use the screen center as the target point
-              x: width / 2,
-              y: height / 2
-            }}
-            style={{
-              position: 'absolute',
-              left: user.position.x - (BUBBLE_SIZE / 2), // Half of bubble size
-              top: user.position.y - (BUBBLE_SIZE / 2),
-              zIndex: 5, // Ensure bubbles appear above radar background
-            }}
-            size={BUBBLE_SIZE}
-          />
-        ))}
+        {Object.entries(userPositions).map(([userId, position]) => {
+          // Find the user data based on userId
+          const userData = users.find(u => u.id === userId);
+          if (!userData) return null;
+          
+          return (
+            <UserBubble
+              key={userId}
+              user={userData}
+              onPress={() => onUserPress(userId)}
+              onDragRelease={handleUserDragRelease}
+              onDragStart={handleDragStart}
+              draggable={true}
+              centerPoint={dropCenterPoint}
+              style={{
+                position: 'absolute',
+                left: position.x - (BUBBLE_SIZE / 2), // Half of bubble size
+                top: position.y - (BUBBLE_SIZE / 2),
+                zIndex: 5, // Ensure bubbles appear above radar background
+              }}
+              size={BUBBLE_SIZE}
+            />
+          );
+        })}
         
         {/* Current User (Top) */}
         <View 
