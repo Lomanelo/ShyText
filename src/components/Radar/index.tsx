@@ -316,8 +316,10 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
         <View 
           style={{
             position: 'absolute',
-            top: -BUBBLE_SIZE,
+            top: -BUBBLE_SIZE * 2.5, // Position it much higher above the radar
             alignItems: 'center',
+            width: '100%',
+            marginBottom: 25, // Add margin at the bottom to increase distance from radar
           }}
         >
           <UserBubble
@@ -328,8 +330,28 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
               isCurrentUser: true,
             }}
             onPress={() => {}}
-            size={BUBBLE_SIZE}
+            size={BUBBLE_SIZE * 1.4} // Make the bubble significantly bigger
           />
+          <Text style={{
+            marginTop: 12,
+            fontSize: 16,
+            fontWeight: '600',
+            color: '#333',
+            letterSpacing: 0.3,
+            textAlign: 'center',
+            paddingHorizontal: 14,
+            paddingVertical: 6,
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+            borderRadius: 18,
+            overflow: 'hidden',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.15,
+            shadowRadius: 3,
+            elevation: 3,
+          }}>
+            People around me
+          </Text>
         </View>
       </View>
       

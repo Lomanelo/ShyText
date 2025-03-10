@@ -316,13 +316,6 @@ export default function NearbyScreen() {
         scrollEnabled={!isDragging} // Disable scrolling during drag
       >
         <View style={styles.header}>
-          <Text style={styles.title}>People Nearby</Text>
-          <Text style={styles.subtitle}>
-            {users.length > 0 
-              ? `${users.length} people within ${MAX_RADAR_DISTANCE}m`
-              : 'No one nearby yet. Stay active!'}
-          </Text>
-          
           {motionData && (
             <TouchableOpacity 
               style={styles.activityIndicator}
