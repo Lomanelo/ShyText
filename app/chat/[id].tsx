@@ -135,25 +135,36 @@ export default function ChatScreen() {
   };
 
   const renderCustomHeader = () => {
-    console.log("Rendering header with otherUser:", otherUser);
     return (
-      <View style={styles.headerProfile}>
-        {otherUser?.photo_url ? (
-          <Image 
-            source={{ uri: otherUser.photo_url }} 
-            style={styles.headerAvatar} 
-            onError={(e) => console.error("Error loading header avatar:", e.nativeEvent.error)}
-          />
-        ) : (
-          <View style={styles.headerAvatarPlaceholder}>
-            <Text style={styles.headerAvatarInitial}>
-              {otherUser?.display_name?.charAt(0) || '?'}
+      <View style={styles.headerContainer}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => router.back()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <FontAwesome name="chevron-left" size={20} color={colors.text} />
+        </TouchableOpacity>
+        
+        <View style={styles.headerProfile}>
+          {otherUser?.photo_url ? (
+            <Image 
+              source={{ uri: otherUser.photo_url }} 
+              style={styles.headerAvatar} 
+              onError={(e) => console.error("Error loading header avatar:", e.nativeEvent.error)}
+            />
+          ) : (
+            <View style={styles.headerAvatarPlaceholder}>
+              <Text style={styles.headerAvatarInitial}>
+                {otherUser?.display_name?.charAt(0) || '?'}
+              </Text>
+            </View>
+          )}
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerName} numberOfLines={1}>
+              {otherUser?.display_name || 'User'}
             </Text>
           </View>
-        )}
-        <Text style={styles.headerName} numberOfLines={1}>
-          {otherUser?.display_name || 'User'}
-        </Text>
+        </View>
       </View>
     );
   };
@@ -285,12 +296,13 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.container}>
       <Stack.Screen 
         options={{
-          title: otherUser?.display_name || 'Chat',
-          headerBackTitle: 'Back',
-          headerTitleAlign: 'center',
-          headerTitle: () => renderCustomHeader(),
+          headerShown: false // Hide the default header
         }}
       />
+      
+      {/* Custom header */}
+      {renderCustomHeader()}
+      
       <KeyboardAvoidingView 
         style={styles.innerContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -322,14 +334,15 @@ export default function ChatScreen() {
           <TouchableOpacity 
             style={[
               styles.sendButton,
-              !newMessage.trim() && styles.sendButtonDisabled
-            ]} 
+              newMessage.trim().length === 0 && styles.sendButtonDisabled
+            ]}
             onPress={handleSend}
-            disabled={!newMessage.trim()}>
+            disabled={newMessage.trim().length === 0}
+          >
             <Ionicons 
               name="send" 
               size={20} 
-              color={newMessage.trim() ? colors.background : colors.mediumGray} 
+              color={newMessage.trim().length === 0 ? colors.darkGray : colors.background} 
             />
           </TouchableOpacity>
         </View>
@@ -521,25 +534,44 @@ const styles = StyleSheet.create({
   sendButtonDisabled: {
     backgroundColor: colors.lightGray,
   },
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingHorizontal: 12,
+    width: '100%',
+    height: 52,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   headerProfile: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+  },
+  headerTextContainer: {
     justifyContent: 'center',
-    paddingVertical: 4,
+    flex: 1,
   },
   headerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
     borderWidth: 1,
     borderColor: colors.lightGray,
   },
   headerAvatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
@@ -548,13 +580,12 @@ const styles = StyleSheet.create({
   },
   headerAvatarInitial: {
     color: colors.primary,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
   },
   headerName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
-    color: colors.text,
-    maxWidth: 200,
+    color: colors.text
   },
 });
