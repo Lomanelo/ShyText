@@ -1,11 +1,51 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import LocationService from '../src/services/LocationService';
 import { getCurrentUser } from '../src/lib/firebase';
+import * as Notifications from 'expo-notifications';
+import { defineNotificationChannels, setupNotificationListeners } from '../src/lib/notifications';
+
+// Configure how notifications appear when the app is in the foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 export default function RootLayout() {
+  // Reference to notification listener cleanup function
+  const notificationListeners = useRef<{ unsubscribe: () => void } | null>(null);
+
+  // Initialize notifications
+  useEffect(() => {
+    // Set up notification channels (primarily for Android)
+    const setupNotifications = async () => {
+      try {
+        await defineNotificationChannels();
+        console.log('Notification channels defined');
+        
+        // Setup notification listeners for handling app in different states
+        notificationListeners.current = setupNotificationListeners();
+        console.log('Notification listeners set up');
+      } catch (error) {
+        console.warn('Error setting up notifications:', error);
+      }
+    };
+    
+    setupNotifications();
+    
+    return () => {
+      // Clean up notification listeners when component unmounts
+      if (notificationListeners.current) {
+        notificationListeners.current.unsubscribe();
+      }
+    };
+  }, []);
+
   // Initialize background location service and handle app state changes
   useEffect(() => {
     // Initialize the service

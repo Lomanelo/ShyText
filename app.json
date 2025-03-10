@@ -8,15 +8,29 @@
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#00ADAD",
+      "iosDisplayInForeground": true,
+      "androidMode": "default",
+      "androidCollapsedTitle": "ShyText"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.rahimrady.shytext",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "ShyText needs access to your location to help you connect with nearby users.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "ShyText needs access to your location in the background to help you discover nearby users even when the app is closed.",
-        "NSLocationAlwaysUsageDescription": "ShyText needs access to your location in the background to help you discover nearby users even when the app is closed.",
-        "UIBackgroundModes": ["location", "fetch"]
+        "NSLocationWhenInUseUsageDescription": "ShyText needs your location to find other users nearby.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ShyText needs your location to find other users nearby, even when the app is in the background.",
+        "NSLocationAlwaysUsageDescription": "ShyText needs your location to find other users nearby, even when the app is in the background.",
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification"
+        ],
+        "NSUserActivityTypes": [
+          "INSendMessageIntent"
+        ]
       }
     },
     "android": {
@@ -26,12 +40,14 @@
         "backgroundColor": "#ffffff"
       },
       "permissions": [
-        "ACCESS_FINE_LOCATION",
+        "NOTIFICATIONS",
         "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "WAKE_LOCK"
-      ]
+        "VIBRATE"
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -39,7 +55,15 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#00ADAD",
+          "sounds": ["./assets/notification-sound.wav"]
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

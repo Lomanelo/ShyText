@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { completeRegistration, getRegistrationData, auth, getCurrentUser, uploadProfileImage } from '../../src/lib/firebase';
 import { signOut as firebaseSignOut } from 'firebase/auth';
 import colors from '../../src/theme/colors';
+import { registerForPushNotifications } from '../../src/lib/notifications';
 
 export default function ProfileImageScreen() {
   const [image, setImage] = useState<string | null>(null);
@@ -154,6 +155,15 @@ export default function ProfileImageScreen() {
         }
       } else {
         setUploadProgress(100); // Complete without image
+      }
+      
+      // Request notification permissions now that registration is complete
+      try {
+        console.log('Requesting notification permissions after registration...');
+        await registerForPushNotifications();
+      } catch (notificationError) {
+        console.warn('Failed to register for notifications:', notificationError);
+        // Continue with registration completion even if notification registration fails
       }
       
       // Regardless of image upload result (unless it's a size error that we caught above), proceed to main app

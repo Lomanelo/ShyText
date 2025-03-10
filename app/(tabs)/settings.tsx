@@ -7,6 +7,7 @@ import { auth, getCurrentUser, getProfile, uploadProfileImage } from '../../src/
 import { signOut } from 'firebase/auth';
 import * as ImagePicker from 'expo-image-picker';
 import { Platform } from 'react-native';
+import { sendLocalNotification, sendChatNotification, sendChatRequestNotification } from '../../src/utils/notifications';
 
 export default function SettingsScreen() {
   const [user, setUser] = useState<any>(null);
@@ -240,6 +241,56 @@ export default function SettingsScreen() {
       </TouchableOpacity>
 
       <View style={styles.settingsSection}>
+        <View style={styles.settingsSectionHeader}>
+          <Text style={styles.settingsSectionTitle}>Notifications</Text>
+        </View>
+        
+        <TouchableOpacity 
+          style={styles.settingsItem}
+          onPress={async () => {
+            try {
+              await sendChatRequestNotification(
+                'John Doe',
+                'Hey there! Would you like to chat with me?',
+                'test-conversation-id',
+                'test-sender-id'
+              );
+              Alert.alert('Success', 'Test chat request notification sent!');
+            } catch (error) {
+              console.error('Error sending test notification:', error);
+              Alert.alert('Error', 'Failed to send test notification');
+            }
+          }}
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={24} color={colors.primary} />
+          <Text style={styles.settingsText}>Test Chat Request Notification</Text>
+          <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.settingsItem}
+          onPress={async () => {
+            try {
+              await sendChatNotification(
+                'Jane Smith',
+                'Hi! How are you doing today?',
+                'test-conversation-id',
+                'test-sender-id'
+              );
+              Alert.alert('Success', 'Test chat message notification sent!');
+            } catch (error) {
+              console.error('Error sending test notification:', error);
+              Alert.alert('Error', 'Failed to send test notification');
+            }
+          }}
+        >
+          <Ionicons name="mail-outline" size={24} color={colors.primary} />
+          <Text style={styles.settingsText}>Test Chat Message Notification</Text>
+          <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.settingsSection}>
         <TouchableOpacity style={styles.settingsItem}>
           <Ionicons name="notifications-outline" size={24} color={colors.primary} />
           <Text style={styles.settingsText}>Notifications</Text>
@@ -426,6 +477,16 @@ const styles = StyleSheet.create({
   },
   settingsSection: {
     marginTop: 20,
+  },
+  settingsSectionHeader: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
+  },
+  settingsSectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
   },
   settingsItem: {
     flexDirection: 'row',

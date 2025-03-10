@@ -463,6 +463,9 @@ export async function startConversation(receiverId: string, message: string) {
       }
     }
     
+    // Get sender profile info
+    const senderProfile = await getProfile(user.uid);
+    
     // Create a new conversation
     const conversationRef = collection(db, 'conversations');
     const newConversationRef = await addDoc(conversationRef, {
@@ -486,6 +489,28 @@ export async function startConversation(receiverId: string, message: string) {
       type: 'initial', // Mark this as the initial message
     });
     
+    // Send notification to receiver if they have a push token
+    const receiverProfile = await getProfile(receiverId);
+    if (receiverProfile && receiverProfile.push_token) {
+      try {
+        // Import locally to avoid circular dependency
+        const { sendChatRequestNotification } = require('../utils/notifications');
+        
+        // Send a local notification for the chat request
+        await sendChatRequestNotification(
+          senderProfile?.display_name || 'Someone',
+          message,
+          newConversationRef.id,
+          user.uid
+        );
+        
+        console.log('Chat request notification sent successfully');
+      } catch (notifError) {
+        console.error('Error sending chat request notification:', notifError);
+        // Continue even if notification fails
+      }
+    }
+    
     return { success: true, conversationId: newConversationRef.id };
   } catch (error) {
     console.error('Error starting conversation:', error);
@@ -501,6 +526,7 @@ export async function respondToConversation(conversationId: string, accept: bool
   }
   
   try {
+    // Get the conversation
     const conversationRef = doc(db, 'conversations', conversationId);
     const conversationSnap = await getDoc(conversationRef);
     
@@ -510,7 +536,7 @@ export async function respondToConversation(conversationId: string, accept: bool
     
     const conversationData = conversationSnap.data();
     
-    // Verify this user is the receiver
+    // Check if the current user is the receiver
     if (conversationData.receiver_id !== user.uid) {
       throw new Error('Not authorized to respond to this conversation');
     }
@@ -523,22 +549,54 @@ export async function respondToConversation(conversationId: string, accept: bool
     // Update the conversation status
     await updateDoc(conversationRef, {
       status: accept ? 'accepted' : 'declined',
-      updated_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     });
     
-    // If accepted, add a system message indicating acceptance
+    // If accepted, add a system message
     if (accept) {
+      // Get user profile
+      const userProfile = await getProfile(user.uid);
+      
+      // Add system message
       const messagesRef = collection(db, 'conversations', conversationId, 'messages');
       await addDoc(messagesRef, {
-        sender_id: user.uid,
-        content: `${user.displayName || 'User'} accepted the conversation`,
+        sender_id: 'system',
+        content: `${userProfile?.display_name || 'User'} accepted the conversation`,
         timestamp: new Date().toISOString(),
         read: false,
         type: 'system',
       });
+      
+      // Send notification to the initiator
+      try {
+        // Get initiator profile
+        const initiatorProfile = await getProfile(conversationData.initiator_id);
+        
+        if (initiatorProfile && initiatorProfile.push_token) {
+          // Import locally to avoid circular dependency
+          const { sendLocalNotification } = require('../utils/notifications');
+          
+          // Send notification of acceptance
+          await sendLocalNotification(
+            'Chat Request Accepted',
+            `${userProfile?.display_name || 'Someone'} accepted your chat request`,
+            {
+              type: 'message',
+              conversationId,
+              senderId: 'system',
+              timestamp: new Date().toISOString()
+            }
+          );
+          
+          console.log('Chat acceptance notification sent successfully');
+        }
+      } catch (notifError) {
+        console.error('Error sending chat acceptance notification:', notifError);
+        // Continue even if notification fails
+      }
     }
     
-    return { success: true, status: accept ? 'accepted' : 'declined' };
+    return { success: true };
   } catch (error) {
     console.error('Error responding to conversation:', error);
     throw error;
@@ -577,6 +635,9 @@ export async function sendMessage(conversationId: string, content: string) {
       throw new Error('Cannot send messages in a pending conversation');
     }
     
+    // Get sender profile
+    const senderProfile = await getProfile(user.uid);
+    
     // Add the message
     const messagesRef = collection(db, 'conversations', conversationId, 'messages');
     const messageDoc = await addDoc(messagesRef, {
@@ -594,6 +655,37 @@ export async function sendMessage(conversationId: string, content: string) {
       updated_at: new Date().toISOString(),
       messages_count: (conversationData.messages_count || 0) + 1,
     });
+    
+    // Determine the receiver ID (the other user in the conversation)
+    const receiverId = conversationData.initiator_id === user.uid 
+      ? conversationData.receiver_id 
+      : conversationData.initiator_id;
+    
+    // Send notification to receiver if they have a push token
+    const receiverProfile = await getProfile(receiverId);
+    if (receiverProfile && receiverProfile.push_token) {
+      try {
+        // Import locally to avoid circular dependency
+        const { sendLocalNotification } = require('../utils/notifications');
+        
+        // Send a local notification for immediate delivery
+        await sendLocalNotification(
+          `Message from ${senderProfile?.display_name || 'Someone'}`,
+          content.length > 40 ? content.substring(0, 37) + '...' : content,
+          {
+            type: 'message',
+            conversationId,
+            senderId: user.uid,
+            timestamp: new Date().toISOString()
+          }
+        );
+        
+        console.log('Chat notification sent successfully');
+      } catch (notifError) {
+        console.error('Error sending chat notification:', notifError);
+        // Continue even if notification fails
+      }
+    }
     
     return { success: true, messageId: messageDoc.id };
   } catch (error) {
@@ -788,5 +880,36 @@ export async function getConversation(conversationId: string) {
   } catch (error) {
     console.error('Error getting conversation:', error);
     throw error;
+  }
+}
+
+// Update user's push notification token
+export async function updatePushToken(userId: string, token: string) {
+  try {
+    const userRef = doc(db, 'users', userId);
+    
+    // First check if the user document exists
+    const userSnap = await getDoc(userRef);
+    
+    if (!userSnap.exists()) {
+      // If the user document doesn't exist, try the profile collection
+      const profileRef = doc(db, 'profiles', userId);
+      await updateDoc(profileRef, {
+        push_token: token,
+        token_updated_at: new Date().toISOString()
+      });
+    } else {
+      // Update the user document
+      await updateDoc(userRef, {
+        push_token: token,
+        token_updated_at: new Date().toISOString()
+      });
+    }
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error updating push token:', error);
+    // Don't throw the error, just return failure
+    return { success: false, error };
   }
 } 

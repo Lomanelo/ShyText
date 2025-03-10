@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { signInWithEmail, isValidEmail } from '../../src/lib/firebase';
 import colors from '../../src/theme/colors';
+import { registerForPushNotifications } from '../../src/lib/notifications';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -30,21 +32,36 @@ export default function LoginScreen() {
     setError(null);
 
     // Basic validation
-    if (!email || !password) {
-      setError('Please enter both email and password');
+    if (!email.trim()) {
+      setError('Please enter your email');
+      setLoading(false);
       return;
     }
 
-    if (!isValidEmail(email)) {
-      setError('Please enter a valid email address');
+    if (!password) {
+      setError('Please enter your password');
+      setLoading(false);
       return;
     }
 
     setLoading(true);
 
     try {
-      await signInWithEmail(email, password);
-      router.replace('/(tabs)');
+      const result = await signInWithEmail(email.trim(), password);
+      if (result.success) {
+        // Request notification permissions after successful login
+        try {
+          console.log('Requesting notification permissions after login...');
+          await registerForPushNotifications();
+        } catch (notificationError) {
+          console.warn('Failed to register for notifications:', notificationError);
+          // Continue with login even if notification registration fails
+        }
+        
+        router.replace('/(tabs)');
+      } else {
+        setError(result.error);
+      }
     } catch (err: any) {
       console.error('Login error:', err);
       
