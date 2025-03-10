@@ -162,68 +162,66 @@ export default function ChatsScreen() {
 
   const renderConversationItem = ({ item }: { item: Conversation }) => {
     const isPending = item.status === 'pending';
-    const isDeclined = item.status === 'declined';
-
+    const isRead = item.status !== 'unread';
+    
     return (
-      <TouchableOpacity
-        style={[
-          styles.conversationItem,
-          isPending && !item.isInitiator && styles.pendingConversation,
-          isDeclined && styles.declinedConversation,
-        ]}
+      <TouchableOpacity 
+        style={[styles.conversationItem, !isRead && styles.unreadConversationItem]}
         onPress={() => handleConversationPress(item)}
-        disabled={isDeclined}
+        activeOpacity={0.7}
       >
-        <View style={styles.avatarContainer}>
-          {item.otherUser.photo_url ? (
-            <Image
-              source={{ uri: item.otherUser.photo_url }}
-              style={styles.avatar}
+        <View style={styles.conversationAvatarContainer}>
+          {item.otherUser?.photo_url ? (
+            <Image 
+              source={{ uri: item.otherUser.photo_url }} 
+              style={styles.conversationAvatar} 
             />
           ) : (
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarText}>
-                {item.otherUser.display_name.charAt(0)}
+            <View style={styles.conversationAvatarPlaceholder}>
+              <Text style={styles.conversationAvatarInitial}>
+                {item.otherUser?.display_name?.charAt(0).toUpperCase() || '?'}
               </Text>
             </View>
           )}
+          {isPending && !item.isInitiator && (
+            <View style={styles.pendingIndicator}>
+              <Ionicons name="time-outline" size={12} color={colors.background} />
+            </View>
+          )}
         </View>
-
-        <View style={styles.conversationInfo}>
-          <View style={styles.nameRow}>
-            <Text style={styles.name}>{item.otherUser.display_name}</Text>
-            <Text style={styles.time}>
+        
+        <View style={styles.conversationDetails}>
+          <View style={styles.conversationHeader}>
+            <Text style={[
+              styles.conversationName,
+              !isRead && styles.unreadConversationName
+            ]} numberOfLines={1}>
+              {item.otherUser?.display_name || 'Unknown User'}
+            </Text>
+            <Text style={styles.conversationTime}>
               {formatTime(item.last_message_time)}
             </Text>
           </View>
-
-          <View style={styles.messageRow}>
-            {isPending && (
-              <View style={styles.statusBadge}>
-                <Text style={styles.statusText}>
-                  {item.isInitiator ? 'Pending' : 'New Request'}
-                </Text>
-              </View>
-            )}
-            {isDeclined && (
-              <View style={[styles.statusBadge, styles.declinedBadge]}>
-                <Text style={styles.statusText}>Declined</Text>
-              </View>
-            )}
-            {!isPending && !isDeclined && (
-              <Text style={styles.lastMessage} numberOfLines={1}>
-                {item.last_message}
+          
+          <View style={styles.conversationPreview}>
+            {isPending && !item.isInitiator ? (
+              <Text style={styles.pendingText}>
+                Chat request pending...
               </Text>
+            ) : (
+              <Text style={[
+                styles.conversationMessage,
+                !isRead && styles.unreadConversationMessage
+              ]} numberOfLines={1}>
+                {item.last_message || 'No messages yet'}
+              </Text>
+            )}
+            
+            {!isRead && (
+              <View style={styles.unreadIndicator} />
             )}
           </View>
         </View>
-
-        <Ionicons
-          name="chevron-forward"
-          size={24}
-          color={colors.mediumGray}
-          style={styles.chevron}
-        />
       </TouchableOpacity>
     );
   };
@@ -277,46 +275,53 @@ export default function ChatsScreen() {
         }
       />
 
-      {/* Conversation Request Modal */}
+      {/* Chat Request Modal */}
       <Modal
         visible={showRequestModal}
+        animationType="fade"
         transparent={true}
-        animationType="slide"
         onRequestClose={() => setShowRequestModal(false)}
       >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowRequestModal(false)}
+        >
+          <TouchableOpacity 
+            style={styles.modalContainer}
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Conversation</Text>
-              <TouchableOpacity 
-                style={styles.closeButton}
-                onPress={() => {
-                  setShowRequestModal(false);
-                  setPendingConversation(null);
-                }}
+              <Text style={styles.modalTitle}>New Chat Request</Text>
+              <TouchableOpacity
+                onPress={() => setShowRequestModal(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons name="close" size={24} color={colors.text} />
+                <Ionicons name="close" size={24} color={colors.darkGray} />
               </TouchableOpacity>
             </View>
-
+            
             {pendingConversation && (
-              <View style={styles.requestContent}>
-                <View style={styles.userInfoContainer}>
+              <View style={styles.modalContent}>
+                <View style={styles.profileImageContainer}>
                   {pendingConversation.otherUser.photo_url ? (
-                    <Image 
-                      source={{ uri: pendingConversation.otherUser.photo_url }} 
-                      style={styles.userPhoto}
+                    <Image
+                      source={{ uri: pendingConversation.otherUser.photo_url }}
+                      style={styles.profileImage}
                     />
                   ) : (
-                    <View style={styles.userPhotoPlaceholder}>
-                      <Text style={styles.userInitial}>
-                        {pendingConversation.otherUser.display_name.charAt(0)}
+                    <View style={styles.profileImagePlaceholder}>
+                      <Text style={styles.profileImageInitial}>
+                        {pendingConversation.otherUser.display_name.charAt(0).toUpperCase()}
                       </Text>
                     </View>
                   )}
-                  <Text style={styles.userName}>{pendingConversation.otherUser.display_name}</Text>
-                  <Text style={styles.requestLabel}>wants to chat with you</Text>
                 </View>
+                
+                <Text style={styles.requestUsername}>
+                  {pendingConversation.otherUser.display_name}
+                </Text>
                 
                 <View style={styles.messageContainer}>
                   <Text style={styles.messageLabel}>First Message:</Text>
@@ -325,46 +330,61 @@ export default function ChatsScreen() {
                   </View>
                 </View>
                 
-                <Text style={styles.questionText}>Would you like to continue this conversation?</Text>
-                
-                <View style={styles.actionButtons}>
-                  <TouchableOpacity 
-                    style={[styles.actionButton, styles.declineButton]}
-                    onPress={() => handleConversationResponse(pendingConversation.id, false)}
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.rejectButton]}
+                    onPress={() => {
+                      handleConversationResponse(pendingConversation.id, false);
+                      setShowRequestModal(false);
+                    }}
                   >
-                    <Ionicons name="close-circle" size={20} color={colors.background} />
-                    <Text style={styles.actionButtonText}>Decline</Text>
+                    <Ionicons name="close-circle" size={20} color={colors.error} style={styles.actionIcon} />
+                    <Text style={[styles.actionText, styles.rejectText]}>Decline</Text>
                   </TouchableOpacity>
                   
-                  <TouchableOpacity 
+                  <TouchableOpacity
                     style={[styles.actionButton, styles.acceptButton]}
-                    onPress={() => handleConversationResponse(pendingConversation.id, true)}
+                    onPress={() => {
+                      handleConversationResponse(pendingConversation.id, true);
+                      setShowRequestModal(false);
+                    }}
                   >
-                    <Ionicons name="checkmark-circle" size={20} color={colors.background} />
-                    <Text style={styles.actionButtonText}>Accept</Text>
+                    <Ionicons name="checkmark-circle" size={20} color={colors.success} style={styles.actionIcon} />
+                    <Text style={[styles.actionText, styles.acceptText]}>Accept</Text>
                   </TouchableOpacity>
                 </View>
               </View>
             )}
-          </View>
-        </SafeAreaView>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
 }
 
 const formatTime = (timestamp: string) => {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diff = now.getTime() - date.getTime();
-  const oneDay = 24 * 60 * 60 * 1000;
+  try {
+    const date = new Date(timestamp);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      return '';
+    }
+    
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const oneDay = 24 * 60 * 60 * 1000;
 
-  if (diff < oneDay) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  } else if (diff < 7 * oneDay) {
-    return date.toLocaleDateString([], { weekday: 'short' });
-  } else {
-    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    if (diff < oneDay) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (diff < 7 * oneDay) {
+      return date.toLocaleDateString([], { weekday: 'short' });
+    } else {
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+  } catch (e) {
+    console.error("Error formatting date:", e);
+    return '';
   }
 };
 
@@ -402,82 +422,98 @@ const styles = StyleSheet.create({
   },
   conversationItem: {
     flexDirection: 'row',
-    padding: 16,
-    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.lightGray,
   },
-  pendingConversation: {
-    backgroundColor: colors.lightGray,
+  unreadConversationItem: {
+    backgroundColor: 'rgba(0, 173, 181, 0.04)', // Very subtle highlight for unread
   },
-  declinedConversation: {
-    opacity: 0.5,
-  },
-  avatarContainer: {
+  conversationAvatarContainer: {
+    position: 'relative',
     marginRight: 16,
   },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  conversationAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
-  avatarPlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: colors.primary,
+  conversationAvatarPlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: {
-    color: colors.background,
-    fontSize: 20,
+  conversationAvatarInitial: {
+    fontSize: 22,
     fontWeight: 'bold',
+    color: colors.primary,
   },
-  conversationInfo: {
+  pendingIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.background,
+  },
+  conversationDetails: {
     flex: 1,
+    justifyContent: 'center',
   },
-  nameRow: {
+  conversationHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 4,
   },
-  name: {
+  conversationName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
+    flex: 1,
     color: colors.text,
+    marginRight: 8,
   },
-  time: {
-    fontSize: 12,
+  unreadConversationName: {
+    fontWeight: '700',
+  },
+  conversationTime: {
+    fontSize: 14,
     color: colors.darkGray,
   },
-  messageRow: {
+  conversationPreview: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  lastMessage: {
-    fontSize: 14,
+  conversationMessage: {
+    fontSize: 15,
     color: colors.darkGray,
     flex: 1,
-  },
-  statusBadge: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
     marginRight: 8,
   },
-  declinedBadge: {
-    backgroundColor: colors.error,
+  unreadConversationMessage: {
+    color: colors.text,
+    fontWeight: '500',
   },
-  statusText: {
-    color: colors.background,
-    fontSize: 12,
-    fontWeight: '600',
+  pendingText: {
+    fontSize: 15,
+    fontStyle: 'italic',
+    color: colors.primary,
+    flex: 1,
   },
-  chevron: {
-    marginLeft: 8,
+  unreadIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
   },
   emptyContainer: {
     flex: 1,
@@ -498,107 +534,100 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
-  modalContent: {
+  modalContainer: {
+    width: '85%',
+    maxWidth: 340,
     backgroundColor: colors.background,
-    borderRadius: 15,
-    width: '90%',
-    maxWidth: 400,
-    padding: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
     elevation: 5,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
     color: colors.text,
   },
-  closeButton: {
-    padding: 5,
-  },
-  requestContent: {
+  modalContent: {
+    padding: 20,
     alignItems: 'center',
   },
-  userInfoContainer: {
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  userPhoto: {
+  profileImageContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    marginBottom: 10,
+    marginBottom: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  userPhotoPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primary,
+  profileImage: {
+    width: '100%',
+    height: '100%',
+  },
+  profileImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
   },
-  userInitial: {
+  profileImageInitial: {
     fontSize: 36,
-    color: colors.background,
     fontWeight: 'bold',
+    color: colors.primary,
   },
-  userName: {
+  requestUsername: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: colors.text,
-    marginBottom: 5,
-  },
-  requestLabel: {
-    fontSize: 16,
-    color: colors.darkGray,
+    marginBottom: 20,
   },
   messageContainer: {
     width: '100%',
-    marginVertical: 20,
+    marginBottom: 24,
   },
   messageLabel: {
-    fontSize: 16,
+    fontSize: 14,
+    fontWeight: '500',
     color: colors.darkGray,
     marginBottom: 8,
   },
   messageBubble: {
     backgroundColor: colors.lightGray,
-    borderRadius: 15,
-    padding: 15,
-    width: '100%',
+    padding: 16,
+    borderRadius: 12,
+    borderTopLeftRadius: 4,
   },
   messageText: {
     fontSize: 16,
     color: colors.text,
     lineHeight: 22,
   },
-  questionText: {
-    fontSize: 18,
-    color: colors.text,
-    marginVertical: 20,
-    textAlign: 'center',
-  },
-  actionButtons: {
+  modalActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    marginTop: 10,
   },
   actionButton: {
     flexDirection: 'row',
@@ -606,19 +635,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 20,
-    borderRadius: 25,
-    flex: 0.48,
+    borderRadius: 8,
+    flex: 1,
+    marginHorizontal: 5,
+  },
+  rejectButton: {
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.2)',
   },
   acceptButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: 'rgba(52, 199, 89, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(52, 199, 89, 0.2)',
   },
-  declineButton: {
-    backgroundColor: colors.error,
+  actionIcon: {
+    marginRight: 8,
   },
-  actionButtonText: {
-    color: colors.background,
+  actionText: {
     fontSize: 16,
     fontWeight: '600',
-    marginLeft: 8,
+  },
+  rejectText: {
+    color: colors.error,
+  },
+  acceptText: {
+    color: colors.success,
   },
 });

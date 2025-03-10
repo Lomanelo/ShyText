@@ -748,4 +748,45 @@ export async function getFirstMessage(conversationId: string) {
     console.error('Error getting first message:', error);
     throw error;
   }
+}
+
+// Get a single conversation by ID
+export async function getConversation(conversationId: string) {
+  const user = getCurrentUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+  
+  try {
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const conversationSnap = await getDoc(conversationRef);
+    
+    if (!conversationSnap.exists()) {
+      throw new Error('Conversation not found');
+    }
+    
+    const conversationData = conversationSnap.data();
+    
+    // Check if user is part of the conversation
+    if (conversationData.initiator_id !== user.uid && conversationData.receiver_id !== user.uid) {
+      throw new Error('Not authorized to view this conversation');
+    }
+    
+    // Determine the other user ID
+    const otherUserId = conversationData.initiator_id === user.uid 
+      ? conversationData.receiver_id 
+      : conversationData.initiator_id;
+    
+    return { 
+      success: true, 
+      conversation: {
+        ...conversationData,
+        id: conversationId,
+        otherUserId
+      } 
+    };
+  } catch (error) {
+    console.error('Error getting conversation:', error);
+    throw error;
+  }
 } 
