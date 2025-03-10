@@ -10,8 +10,8 @@ const RADAR_SIZE = width * 0.9; // 90% of screen width
 const BUBBLE_SIZE = 60; // Increased bubble size for better visibility
 const MIN_DISTANCE = BUBBLE_SIZE * 1.8; // Further increased minimum distance between bubbles
 const CENTER_BUFFER = 100; // Buffer around center to prevent overlapping with current user
-const DROP_TARGET_SIZE = 120; // Increased from 100 to 120 - Size of the center drop target
-const DRAG_THRESHOLD = 120; // Increased from 80 to 120 - Distance from center to trigger a successful drop
+const DROP_TARGET_SIZE = 70; // Smaller visual circle with the plus icon
+const DRAG_THRESHOLD = 120; // Distance from center to trigger a successful drop
 
 interface RadarProps {
   users: Array<{
@@ -311,11 +311,6 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
               { ...styles.highlightedDropTarget, transform: [{ scale: 1.1 }] } : 
               styles.highlightedDropTarget}
           />
-          {isDragging && (
-            <View style={styles.dropTargetIndicator}>
-              <Text style={styles.dropTargetIndicatorText}>Drop here to message</Text>
-            </View>
-          )}
         </View>
         
         {/* Nearby Users */}

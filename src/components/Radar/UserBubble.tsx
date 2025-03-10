@@ -36,7 +36,10 @@ interface UserBubbleProps {
 }
 
 const DRAG_THRESHOLD = 80; // Distance from center to trigger a successful drop
-const SNAP_THRESHOLD = 0.33; // When 1/3 of the bubble overlaps with the center
+export const SNAP_THRESHOLD = 0.33; // When 1/3 of the bubble overlaps with the center
+
+// Additional constants for detection
+const DETECTION_RADIUS_MULTIPLIER = 1.5; // Makes the actual detection area larger than the visual circle
 
 const UserBubble = ({ 
   user, 
@@ -112,9 +115,10 @@ const UserBubble = ({
           );
           
           // Calculate the snap threshold
-          const dropTargetRadius = 60; // Half of DROP_TARGET_SIZE
+          const dropTargetRadius = 45; // Using a consistent size (visual circle is 70px)
           const userBubbleRadius = size / 2;
-          const snapDistance = dropTargetRadius + userBubbleRadius - (userBubbleRadius * SNAP_THRESHOLD);
+          // Apply the multiplier to increase detection area
+          const snapDistance = (dropTargetRadius + userBubbleRadius) * DETECTION_RADIUS_MULTIPLIER;
           
           // Just update the snapped state for visual feedback
           // but don't do animations during drag
@@ -147,10 +151,11 @@ const UserBubble = ({
             Math.pow(touchY - screenCenterY, 2)
           );
           
-          // Calculate the drop threshold - make it stricter than snap threshold
-          const dropTargetRadius = 60; // Half of DROP_TARGET_SIZE
+          // Calculate the drop threshold - use larger detection area
+          const dropTargetRadius = 45; // Half of visual circle (70px)
           const userBubbleRadius = size / 2;
-          const dropThreshold = dropTargetRadius * 0.8; // More strict than snapping
+          // Apply the multiplier to increase detection area
+          const dropThreshold = (dropTargetRadius + userBubbleRadius) * DETECTION_RADIUS_MULTIPLIER;
           
           dropSuccess = distanceToCenter < dropThreshold;
           
@@ -233,6 +238,29 @@ const UserBubble = ({
     }
     
     return baseStyles;
+  };
+
+  const renderDropTarget = () => {
+    if (!isDropTarget) return null;
+    
+    return (
+      <View style={{ 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        width: '100%', 
+        height: '100%',
+        borderRadius: 1000, // Ensure it's a perfect circle
+        backgroundColor: '#FFFFFF'
+      }}>
+        <Text style={{ 
+          fontSize: size * 0.5, 
+          fontWeight: '700',
+          color: '#00BCD4', // Teal color matching the design
+          textAlign: 'center',
+          marginTop: -2, // Adjust vertical alignment for the plus sign
+        }}>+</Text>
+      </View>
+    );
   };
 
   // For draggable bubbles, use Animated.View
@@ -318,9 +346,7 @@ const UserBubble = ({
         <View style={styles.currentUserIndicator} />
       )}
       {isDropTarget ? (
-        <View style={styles.dropTargetIcon}>
-          <Text style={styles.dropTargetText}>+</Text>
-        </View>
+        renderDropTarget()
       ) : (
         <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
       )}
