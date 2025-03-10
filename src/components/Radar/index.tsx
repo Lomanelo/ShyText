@@ -1,16 +1,17 @@
-import React, { useMemo, useState, useRef } from 'react';
-import { View, Dimensions, Platform, Animated, TextInput, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { View, Dimensions, Platform, Animated, TextInput, TouchableOpacity, Text, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import UserBubble from './UserBubble';
 import { styles } from './styles';
 import colors from '../../theme/colors';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 const RADAR_SIZE = width * 0.9; // 90% of screen width
 const BUBBLE_SIZE = 60; // Increased bubble size for better visibility
 const MIN_DISTANCE = BUBBLE_SIZE * 1.8; // Further increased minimum distance between bubbles
 const CENTER_BUFFER = 100; // Buffer around center to prevent overlapping with current user
-const DROP_TARGET_SIZE = 80; // Size of the center drop target
+const DROP_TARGET_SIZE = 120; // Increased from 100 to 120 - Size of the center drop target
+const DRAG_THRESHOLD = 120; // Increased from 80 to 120 - Distance from center to trigger a successful drop
 
 interface RadarProps {
   users: Array<{
@@ -28,19 +29,30 @@ interface RadarProps {
   maxDistance: number; // Maximum distance in meters
   onUserPress: (userId: string) => void;
   onMessageSend?: (userId: string, message: string) => void;
+  onDragStateChange?: (dragging: boolean) => void;
 }
 
-const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend }: RadarProps) => {
+const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, onDragStateChange }: RadarProps) => {
   // State for handling drag-and-drop messaging
   const [draggedUserId, setDraggedUserId] = useState<string | null>(null);
   const [showMessageInput, setShowMessageInput] = useState(false);
   const [message, setMessage] = useState('');
   const inputRef = useRef<TextInput>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [draggedUser, setDraggedUser] = useState<any>(null);
   
   // Calculate the radar center coordinates
   const centerX = RADAR_SIZE / 2;
   const centerY = RADAR_SIZE / 2;
+  
+  // Clear states when users change
+  useEffect(() => {
+    setDraggedUserId(null);
+    setShowMessageInput(false);
+    setMessage('');
+    setIsDragging(false);
+    setDraggedUser(null);
+  }, [users]);
   
   // Convert actual distances to radar display distances with improved distribution
   const getPositionOnRadar = (distance: number, angle: number) => {
@@ -191,7 +203,14 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend }: 
   
   // Handle when a user is dragged and dropped on the center target
   const handleUserDragRelease = (userId: string, dropSuccess: boolean) => {
+    console.log(`User ${userId} dropped with success: ${dropSuccess}`);
+    
+    // Only show message UI when properly dropped on center
     if (dropSuccess) {
+      console.log("Drop success detected! Showing message input for user:", userId);
+      // Find the user data for the dropped user
+      const user = users.find(u => u.id === userId);
+      setDraggedUser(user);
       setDraggedUserId(userId);
       setShowMessageInput(true);
       
@@ -201,14 +220,28 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend }: 
           inputRef.current.focus();
         }
       }, 100);
+    } else {
+      console.log("Drop was NOT successful, NOT showing message input");
+      // Ensure message input is NOT shown for unsuccessful drops
+      setShowMessageInput(false);
+      setDraggedUser(null);
+      setDraggedUserId(null);
     }
     
     setIsDragging(false);
+    // Notify parent component that dragging has ended
+    if (onDragStateChange) {
+      onDragStateChange(false);
+    }
   };
   
   // Handle when dragging starts
   const handleDragStart = () => {
     setIsDragging(true);
+    // Notify parent component that dragging has started
+    if (onDragStateChange) {
+      onDragStateChange(true);
+    }
   };
   
   // Handle sending a message
@@ -218,6 +251,7 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend }: 
       setShowMessageInput(false);
       setDraggedUserId(null);
       setMessage('');
+      setDraggedUser(null);
     }
   };
   
@@ -226,6 +260,7 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend }: 
     setShowMessageInput(false);
     setDraggedUserId(null);
     setMessage('');
+    setDraggedUser(null);
   };
   
   // Draw concentric circles to indicate distance
@@ -260,7 +295,7 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend }: 
         {/* Concentric circles for distance visualization */}
         {renderConcentricCircles()}
         
-        {/* Drop target in center */}
+        {/* Drop target in center - make it more visible */}
         <View style={styles.currentUserContainer}>
           <UserBubble
             user={{
@@ -272,7 +307,15 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend }: 
             onPress={() => {}}
             size={DROP_TARGET_SIZE}
             centerPoint={{ x: centerX, y: centerY }}
+            style={isDragging ? 
+              { ...styles.highlightedDropTarget, transform: [{ scale: 1.1 }] } : 
+              styles.highlightedDropTarget}
           />
+          {isDragging && (
+            <View style={styles.dropTargetIndicator}>
+              <Text style={styles.dropTargetIndicatorText}>Drop here to message</Text>
+            </View>
+          )}
         </View>
         
         {/* Nearby Users */}
@@ -282,8 +325,13 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend }: 
             user={user}
             onPress={() => onUserPress(user.id)}
             onDragRelease={handleUserDragRelease}
+            onDragStart={handleDragStart}
             draggable={true}
-            centerPoint={{ x: centerX, y: centerY }}
+            centerPoint={{ 
+              // Use the screen center as the target point
+              x: width / 2,
+              y: height / 2
+            }}
             style={{
               position: 'absolute',
               left: user.position.x - (BUBBLE_SIZE / 2), // Half of bubble size
@@ -315,32 +363,58 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend }: 
         </View>
       </View>
       
-      {/* Message Input */}
-      {showMessageInput && (
-        <Animated.View style={styles.messageComposer}>
-          <TextInput
-            ref={inputRef}
-            style={styles.messageInput}
-            placeholder="Write your first message..."
-            placeholderTextColor={colors.darkGray}
-            value={message}
-            onChangeText={setMessage}
-            multiline
-            maxLength={500}
-            returnKeyType="send"
-            onSubmitEditing={handleSendMessage}
-            autoFocus
-          />
-          
-          <TouchableOpacity 
-            style={styles.sendButton}
-            onPress={handleSendMessage}
-            disabled={message.trim() === ''}
-          >
-            <Ionicons name="send" size={20} color={message.trim() === '' ? colors.mediumGray : colors.background} />
-          </TouchableOpacity>
-        </Animated.View>
-      )}
+      {/* Message Input Modal - centered on screen like in the GIF */}
+      <Modal
+        visible={showMessageInput}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCancelMessage}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.messageModal}>
+            <View style={styles.messageModalHeader}>
+              {draggedUser && (
+                <Text style={styles.messageModalTitle}>
+                  Message to {draggedUser.display_name || 'User'}
+                </Text>
+              )}
+              <TouchableOpacity onPress={handleCancelMessage} style={styles.closeButton}>
+                <Ionicons name="close" size={20} color={colors.darkGray} />
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              ref={inputRef}
+              style={styles.messageModalInput}
+              placeholder="Write your first message..."
+              placeholderTextColor={colors.darkGray}
+              value={message}
+              onChangeText={setMessage}
+              multiline
+              maxLength={500}
+              autoFocus
+            />
+            
+            <View style={styles.messageModalFooter}>
+              <TouchableOpacity 
+                style={[
+                  styles.sendMessageButton,
+                  message.trim() === '' ? styles.sendButtonDisabled : null
+                ]}
+                onPress={handleSendMessage}
+                disabled={message.trim() === ''}
+              >
+                <Text style={styles.sendMessageButtonText}>Send</Text>
+                <Ionicons 
+                  name="send" 
+                  size={18} 
+                  color={message.trim() === '' ? colors.darkGray : colors.background} 
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };

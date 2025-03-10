@@ -40,9 +40,6 @@ export default function NearbyScreen() {
   const [viewingFullProfile, setViewingFullProfile] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [authError, setAuthError] = useState<boolean>(false);
-  const [customMessage, setCustomMessage] = useState('');
-  const [showMessageInput, setShowMessageInput] = useState(false);
-  const { users, location, loading, error, currentUser, refreshUsers } = useRadarUsers(MAX_RADAR_DISTANCE);
   const [motionData, setMotionData] = useState<{ 
     activity: string; 
     heading?: number;
@@ -50,6 +47,10 @@ export default function NearbyScreen() {
     movementIntensity?: number;
   } | null>(null);
   const [showMotionData, setShowMotionData] = useState(false);
+  const [customMessage, setCustomMessage] = useState('');
+  const [showMessageInput, setShowMessageInput] = useState(false);
+  const { users, location, loading, error, currentUser, refreshUsers } = useRadarUsers(MAX_RADAR_DISTANCE);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Check authentication on component mount
   useEffect(() => {
@@ -164,6 +165,20 @@ export default function NearbyScreen() {
     setCustomMessage('');
   };
   
+  const handleSendMessage = async (userId: string, message: string) => {
+    try {
+      await startConversation(userId, message);
+      Alert.alert(
+        'Message Sent',
+        'Your conversation request has been sent.',
+        [{ text: 'OK', onPress: () => router.push('/chats') }]
+      );
+    } catch (error) {
+      console.error('Error starting conversation:', error);
+      Alert.alert('Error', 'Failed to start conversation. Please try again.');
+    }
+  };
+  
   const handleViewProfile = () => {
     setViewingFullProfile(true);
   };
@@ -240,6 +255,11 @@ export default function NearbyScreen() {
     setShowMotionData(!showMotionData);
   };
 
+  // Handler to be passed to Radar to set drag state
+  const handleDragStateChange = (dragging: boolean) => {
+    setIsDragging(dragging);
+  };
+
   if (loading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
@@ -264,27 +284,16 @@ export default function NearbyScreen() {
     );
   }
 
-  if (error && !refreshing) {
-    // Check if error is authentication related
-    const isAuthError = error.includes("not authenticated") || 
-                         error.includes("User not authenticated") || 
-                         error.includes("auth/");
-    
+  if (error) {
     return (
       <View style={styles.errorContainer}>
         <Ionicons name="alert-circle" size={60} color={colors.error} />
-        <Text style={styles.errorTitle}>Oops!</Text>
-        <Text style={styles.errorText}>
-          {isAuthError 
-            ? "You need to be logged in to access this feature." 
-            : error}
-        </Text>
+        <Text style={styles.errorTitle}>Error</Text>
+        <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity 
           style={styles.tryAgainButton} 
-          onPress={isAuthError ? () => router.replace('/(auth)') : onRefresh}>
-          <Text style={styles.tryAgainText}>
-            {isAuthError ? "Sign In" : "Try Again"}
-          </Text>
+          onPress={refreshUsers}>
+          <Text style={styles.tryAgainText}>Try Again</Text>
         </TouchableOpacity>
       </View>
     );
@@ -304,6 +313,7 @@ export default function NearbyScreen() {
             tintColor={colors.primary}
           />
         }
+        scrollEnabled={!isDragging} // Disable scrolling during drag
       >
         <View style={styles.header}>
           <Text style={styles.title}>People Nearby</Text>
@@ -376,6 +386,8 @@ export default function NearbyScreen() {
               }}
               maxDistance={MAX_RADAR_DISTANCE}
               onUserPress={handleUserPress}
+              onMessageSend={handleSendMessage}
+              onDragStateChange={handleDragStateChange}
             />
           ) : (
             <View style={styles.emptyRadar}>

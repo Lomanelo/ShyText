@@ -78,6 +78,37 @@ export const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   
+  // Drop target indicator that appears when dragging
+  dropTargetIndicator: {
+    position: 'absolute',
+    bottom: -30,
+    backgroundColor: 'rgba(0, 173, 181, 0.9)',
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  
+  // Text for drop indicator
+  dropTargetIndicatorText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  
+  // Highlighted drop target during dragging
+  highlightedDropTarget: {
+    backgroundColor: 'rgba(230, 250, 255, 0.95)',
+    borderWidth: 3,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 15,
+    elevation: 10,
+    transform: [{ scale: 1.05 }]
+  },
+  
   // User bubble styles
   userBubbleContainer: {
     alignItems: 'center',
@@ -162,18 +193,61 @@ export const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.lightGray,
     zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 5,
   },
   
+  // Message header with recipient
+  messageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  
+  // Message recipient container
+  messageRecipient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  
+  // "To:" label
+  messageTo: {
+    fontSize: 16,
+    color: colors.darkGray,
+    fontWeight: '500',
+  },
+  
+  // Recipient name
+  messageRecipientName: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  
+  // Cancel button
+  cancelButton: {
+    padding: 5,
+  },
+  
+  // Message input field
   messageInput: {
     backgroundColor: colors.lightGray,
     borderRadius: 20,
     padding: 12,
     paddingHorizontal: 16,
+    paddingRight: 50, // Make room for the send button
     fontSize: 16,
     color: colors.text,
     maxHeight: 100,
+    minHeight: 50,
   },
   
+  // Send button
   sendButton: {
     position: 'absolute',
     right: 24,
@@ -184,5 +258,93 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  
+  // Disabled send button
+  sendButtonDisabled: {
+    backgroundColor: colors.lightGray,
+    borderWidth: 1,
+    borderColor: colors.mediumGray,
+  },
+
+  // Modal overlay for the message input
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+
+  // Message modal container
+  messageModal: {
+    backgroundColor: colors.background,
+    borderRadius: 15,
+    width: '90%',
+    maxWidth: 400,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+
+  // Message modal header
+  messageModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+
+  // Message modal title
+  messageModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+  },
+
+  // Close button for modal
+  closeButton: {
+    padding: 5,
+  },
+
+  // Message input in modal
+  messageModalInput: {
+    backgroundColor: colors.lightGray,
+    borderRadius: 15,
+    padding: 15,
+    fontSize: 16,
+    color: colors.text,
+    minHeight: 120,
+    maxHeight: 200,
+    textAlignVertical: 'top',
+    marginBottom: 15,
+  },
+
+  // Message modal footer
+  messageModalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+
+  // Send message button
+  sendMessageButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 25,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Send message button text
+  sendMessageButtonText: {
+    color: colors.background,
+    fontSize: 16,
+    fontWeight: '600',
+    marginRight: 5,
   },
 }); 
