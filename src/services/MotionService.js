@@ -1,14 +1,5 @@
-import { Accelerometer, Gyroscope, Magnetometer, DeviceMotion } from 'expo-sensors';
+import { Accelerometer, Gyroscope, Magnetometer, DeviceMotion, Pedometer } from 'expo-sensors';
 import { Platform } from 'react-native';
-
-// Try to import Pedometer, but don't fail if it's not available
-let Pedometer = null;
-try {
-  // Dynamically import the Pedometer to avoid the error when it's not available
-  Pedometer = require('expo-sensors').Pedometer;
-} catch (e) {
-  console.warn('Pedometer functionality not available:', e.message);
-}
 
 // Define activity types
 export const ActivityType = {
@@ -109,7 +100,7 @@ class MotionService {
       }
       
       try {
-        this.availableSensors.pedometer = Pedometer && await Pedometer.isAvailableAsync();
+        this.availableSensors.pedometer = await Pedometer.isAvailableAsync();
       } catch (e) {
         console.warn('Pedometer not available:', e.message);
         this.availableSensors.pedometer = false;
@@ -191,7 +182,7 @@ class MotionService {
       }
       
       // Subscribe to pedometer if available
-      if (this.availableSensors.pedometer && Pedometer) {
+      if (this.availableSensors.pedometer) {
         try {
           const end = new Date();
           const start = new Date();

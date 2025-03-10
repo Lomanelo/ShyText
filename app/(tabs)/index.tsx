@@ -10,8 +10,17 @@ import colors from '../../src/theme/colors';
 import LocationService from '../../src/services/LocationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Define ActivityType here as a fallback in case the import fails
-const FallbackActivityType = {
+// Define ActivityType interface
+interface ActivityTypeInterface {
+  STILL: string;
+  WALKING: string;
+  RUNNING: string;
+  VEHICLE: string;
+  UNKNOWN: string;
+}
+
+// Define ActivityType fallback
+const FallbackActivityType: ActivityTypeInterface = {
   STILL: 'still',
   WALKING: 'walking',
   RUNNING: 'running',
@@ -19,16 +28,14 @@ const FallbackActivityType = {
   UNKNOWN: 'unknown'
 };
 
-// Get ActivityType from LocationService if available
-let ActivityType = FallbackActivityType;
+// Get ActivityType from MotionService
+let ActivityType: ActivityTypeInterface;
 try {
-  // Try to access the ActivityType from the LocationService module
-  const motionModule = require('../../src/services/MotionService');
-  if (motionModule && motionModule.ActivityType) {
-    ActivityType = motionModule.ActivityType;
-  }
+  // Import the ActivityType from MotionService
+  ActivityType = require('../../src/services/MotionService').ActivityType;
 } catch (error) {
   console.warn('Failed to import ActivityType, using fallback:', error);
+  ActivityType = FallbackActivityType;
 }
 
 // Maximum distance for radar in meters
