@@ -399,7 +399,7 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
                 <TextInput
                   ref={inputRef}
                   style={styles.messageModalInput}
-                  placeholder={`Hey ${draggedUser?.display_name || 'there'}, was nice meeting you...`}
+                  placeholder={`Hey ${draggedUser?.display_name || 'there'}, i would like to chat...`}
                   placeholderTextColor="#BBBBBB"
                   value={message}
                   onChangeText={setMessage}

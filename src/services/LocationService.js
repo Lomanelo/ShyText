@@ -29,25 +29,16 @@ class LocationService {
   // Configuration presets for different activity types
   static locationConfigs = {
     [ActivityType.STILL]: {
-      distanceFilter: 50, // Meters
-      desiredAccuracy: {
-        ios: 'balanced',
-        android: 'balancedPowerAccuracy',
-      },
-      interval: 60000, // 1 minute
-      fastestInterval: 60000, // 1 minute
-    },
-    [ActivityType.WALKING]: {
-      distanceFilter: 10, // Meters
+      distanceFilter: 40, // Meters
       desiredAccuracy: {
         ios: 'best',
         android: 'highAccuracy',
       },
-      interval: 20000, // 20 seconds
-      fastestInterval: 15000, // 15 seconds
+      interval: 30000, // 30 seconds 
+      fastestInterval: 30000, // 30 seconds
     },
-    [ActivityType.RUNNING]: {
-      distanceFilter: 5, // Meters
+    [ActivityType.WALKING]: {
+      distanceFilter: 5, // Reduced from 10 to 5 meters for better accuracy
       desiredAccuracy: {
         ios: 'best',
         android: 'highAccuracy',
@@ -55,24 +46,33 @@ class LocationService {
       interval: 10000, // 10 seconds
       fastestInterval: 5000, // 5 seconds
     },
-    [ActivityType.VEHICLE]: {
-      distanceFilter: 25, // Meters
-      desiredAccuracy: {
-        ios: 'balanced',
-        android: 'balancedPowerAccuracy',
-      },
-      interval: 15000, // 15 seconds
-      fastestInterval: 10000, // 10 seconds
-    },
-    default: {
-      distanceFilter: 10, // Meters
+    [ActivityType.RUNNING]: {
+      distanceFilter: 3, // Reduced from 5 to 3 meters for better accuracy
       desiredAccuracy: {
         ios: 'best',
-        android: 'balancedPowerAccuracy',
+        android: 'highAccuracy',
       },
-      interval: 20000, // 20 seconds
-      fastestInterval: 30000, // 30 seconds
-      maxWaitTime: 30000, // 30 seconds
+      interval: 5000, // 5 seconds
+      fastestInterval: 3000, // 3 seconds
+    },
+    [ActivityType.VEHICLE]: {
+      distanceFilter: 15, // Meters
+      desiredAccuracy: {
+        ios: 'best',
+        android: 'highAccuracy',
+      },
+      interval: 10000, // 10 seconds
+      fastestInterval: 5000, // 5 seconds
+    },
+    default: {
+      distanceFilter: 5, // Reduced from 10 to 5 meters for better accuracy
+      desiredAccuracy: {
+        ios: 'best',
+        android: 'highAccuracy',
+      },
+      interval: 10000, // 10 seconds
+      fastestInterval: 10000, // 10 seconds
+      maxWaitTime: 15000, // 15 seconds
     }
   };
   

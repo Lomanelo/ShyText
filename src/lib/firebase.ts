@@ -349,14 +349,19 @@ export async function updateLocation(
 }
 
 // Find nearby users using geohash queries
-export async function findNearbyUsers(latitude: number, longitude: number, distanceInKm = 0.01) {
+export async function findNearbyUsers(latitude: number, longitude: number, distanceInKm = 0.01, includeCloseUsers = true) {
   const user = getCurrentUser();
   if (!user) {
     throw new Error('User not authenticated');
   }
   
+  // Ensure we're using a minimum search radius to account for GPS inaccuracy
+  // If phones are physically next to each other, they still need to find each other
+  const minimumRadiusInKm = 0.015; // 15 meters minimum search radius
+  const effectiveDistanceInKm = Math.max(distanceInKm, minimumRadiusInKm);
+  
   const center = [latitude, longitude];
-  const radiusInM = distanceInKm * 1000;
+  const radiusInM = effectiveDistanceInKm * 1000;
   
   try {
     // Each item in 'bounds' represents a geohash range to query for
@@ -386,71 +391,44 @@ export async function findNearbyUsers(latitude: number, longitude: number, dista
         // Skip the current user
         if (doc.id === user.uid) continue;
         
-        // We have to filter out some false positives due to the geohash algorithm
+        // If the user doesn't have location data, skip them
         const docLocation = userData.last_location;
-        if (docLocation) {
-          const distanceInM = geofirestore.distanceBetween(
-            [docLocation.latitude, docLocation.longitude] as [number, number],
-            center as [number, number]
-          ) * 1000;
+        if (!docLocation || !docLocation.latitude || !docLocation.longitude) continue;
+        
+        // Calculate the actual distance
+        const distanceInM = geofirestore.distanceBetween(
+          [docLocation.latitude, docLocation.longitude] as [number, number],
+          center as [number, number]
+        ) * 1000;
+        
+        // For very close users (within 20 meters), add a flag to indicate they're nearby
+        const isVeryClose = distanceInM <= 20;
+        
+        // Determine if we should include this user
+        // Either they're within the requested radius OR
+        // they're very close and we've been asked to include close users
+        if (distanceInM <= radiusInM || (isVeryClose && includeCloseUsers)) {
+          // Clean up the photo URL to ensure it's valid
+          let photoUrl = userData.photo_url || '';
           
-          if (distanceInM <= radiusInM) {
-            // Clean up the photo URL to ensure it's valid
-            let photoUrl = userData.photo_url || '';
-            
-            // Validate photo URL
-            if (photoUrl && typeof photoUrl === 'string') {
-              // Fix common issues with photo URLs
-              if (!photoUrl.startsWith('http://') && !photoUrl.startsWith('https://')) {
-                // For Firebase Storage URLs, add https:// if missing
-                if (photoUrl.startsWith('//firebasestorage.googleapis.com')) {
-                  photoUrl = 'https:' + photoUrl;
-                } else {
-                  // Invalid URL format
-                  console.warn(`Invalid photo URL format for user ${doc.id}: ${photoUrl}`);
-                }
-              }
-            } else {
-              photoUrl = '';
-            }
-            
-            // Additional URL validation
-            try {
-              if (photoUrl) {
-                // This will throw an error if URL is invalid
-                new URL(photoUrl);
-              }
-            } catch (error) {
-              console.warn(`Invalid photo URL for user ${doc.id}: ${photoUrl}`, error);
-              photoUrl = '';
-            }
-            
-            // Create a clean user profile object
-            const userProfile = {
-              id: doc.id,
-              display_name: userData.display_name || 'Anonymous',
-              photo_url: photoUrl,
-              birthdate: userData.birth_date || null,
-              bio: userData.bio || null,
-              distance: Math.round(distanceInM),
-              last_active: userData.last_active || null,
-              ...userData
-            };
-            
-            // Debug log
-            console.log(`Found nearby user: ${userProfile.id}, Display name: ${userProfile.display_name}, Photo: ${photoUrl ? 'YES' : 'NO'}`);
-            
-            matchingDocs.push(userProfile);
-          }
+          // Add additional info
+          const userWithDistance = {
+            id: doc.id,
+            distance: Math.round(distanceInM), // Round to nearest meter for UI display
+            isVeryClose: isVeryClose, // Add flag for UI highlighting if needed
+            ...userData
+          };
+          
+          matchingDocs.push(userWithDistance);
         }
       }
     }
     
-    // Sort by distance
+    // Sort by distance (closest first)
     return matchingDocs.sort((a, b) => a.distance - b.distance);
   } catch (error) {
-    console.error("Error finding nearby users:", error);
-    return []; // Return empty array on error rather than failing
+    console.error('Error finding nearby users:', error);
+    return [];
   }
 }
 
