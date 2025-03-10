@@ -26,9 +26,13 @@
         "UIBackgroundModes": [
           "location",
           "fetch",
+          "remote-notification",
+          "location",
+          "fetch",
           "remote-notification"
         ],
         "NSUserActivityTypes": [
+          "INSendMessageIntent",
           "INSendMessageIntent"
         ]
       }
@@ -40,6 +44,12 @@
         "backgroundColor": "#ffffff"
       },
       "permissions": [
+        "NOTIFICATIONS",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "VIBRATE",
         "NOTIFICATIONS",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
@@ -61,7 +71,9 @@
         {
           "icon": "./assets/notification-icon.png",
           "color": "#00ADAD",
-          "sounds": ["./assets/notification-sound.wav"]
+          "sounds": [
+            "./assets/notification-sound.wav"
+          ]
         }
       ]
     ],
@@ -76,6 +88,12 @@
         "projectId": "8eb807c3-b6cb-4ac8-8d94-63de6e0fda1a"
       }
     },
-    "owner": "rahimrady"
+    "owner": "rahimrady",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/8eb807c3-b6cb-4ac8-8d94-63de6e0fda1a"
+    }
   }
 }
