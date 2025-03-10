@@ -9,7 +9,8 @@ import {
   Platform,
   PanResponder,
   Animated,
-  Dimensions
+  Dimensions,
+  Easing
 } from 'react-native';
 import { styles } from './styles';
 import colors from '../../theme/colors';
@@ -59,6 +60,7 @@ const UserBubble = ({
   
   const pan = useRef(new Animated.ValueXY()).current;
   const scale = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(0)).current; // For pulse animation
   
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
   const screenCenterX = screenWidth / 2;
@@ -82,12 +84,31 @@ const UserBubble = ({
         // Use offset to maintain position between moves
         pan.extractOffset();
         
-        // Scale up slightly when dragging
+        // Scale up smoothly when dragging starts
         Animated.spring(scale, {
-          toValue: 1.1,
-          friction: 5,
+          toValue: 1.08, // Subtle scale increase
+          friction: 8,   // Higher friction for more control
+          tension: 40,   // Lower tension for more subtle effect
           useNativeDriver: true
         }).start();
+        
+        // Start pulse animation
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(pulseAnim, {
+              toValue: 1,
+              duration: 800,
+              easing: Easing.inOut(Easing.sin),
+              useNativeDriver: true
+            }),
+            Animated.timing(pulseAnim, {
+              toValue: 0,
+              duration: 800,
+              easing: Easing.inOut(Easing.sin),
+              useNativeDriver: true
+            })
+          ])
+        ).start();
         
         setIsDragging(true);
         
@@ -130,10 +151,15 @@ const UserBubble = ({
         pan.flattenOffset();
         setIsDragging(false);
         
+        // Stop the pulse animation
+        pulseAnim.stopAnimation();
+        pulseAnim.setValue(0);
+        
         // Restore original scale
         Animated.spring(scale, {
           toValue: 1,
-          friction: 5,
+          friction: 6,
+          tension: 40,
           useNativeDriver: true
         }).start();
         
@@ -263,49 +289,66 @@ const UserBubble = ({
     );
   };
 
-  // For draggable bubbles, use Animated.View
+  // If draggable, use Animated.View with PanResponder
   if (draggable) {
-    return (
+    // Create shadow style based on drag state
+    const shadowStyle = isDragging ? {
+      shadowColor: 'rgba(0,0,0,0.2)',
+      shadowOffset: {width: 0, height: 3},
+      shadowOpacity: 0.3,
+      shadowRadius: 5,
+      elevation: 5
+    } : {};
+
+  return (
       <Animated.View
         style={[
-          ...getBubbleStyles(),
+          styles.userBubble,
           {
+            width: size,
+            height: size,
+          },
+          shadowStyle,
+          style,
+          { 
+            zIndex: isDragging ? 100 : 5, // Bring to front while dragging
             transform: [
               { translateX: pan.x },
               { translateY: pan.y },
               { scale: scale }
-            ],
-            zIndex: isDragging ? 100 : 5 // Bring to front while dragging
+            ]
           }
         ]}
         {...panResponder.panHandlers}
       >
         {hasValidPhotoUrl() && !imageError ? (
           <>
-            <Image
-              source={{ uri: user.photo_url }}
-              style={[styles.userPhoto, { width: size, height: size }]}
+          <Image
+            source={{ uri: user.photo_url }}
+              style={styles.userPhoto}
               onLoadStart={handleImageLoadStart}
               onLoad={handleImageLoadSuccess}
               onError={handleImageLoadError}
             />
             {imageLoading && (
-              <ActivityIndicator 
-                size="small" 
-                color={colors.primary} 
-                style={styles.userPlaceholder} 
+              <ActivityIndicator
+                size="small"
+                color="#ffffff"
+                style={{ position: 'absolute' }}
               />
             )}
           </>
         ) : (
-          <View style={[styles.userPlaceholder, { width: size, height: size }]}>
+          <View style={styles.userPlaceholder}>
             <Text style={styles.userInitial}>{initial}</Text>
           </View>
         )}
-        {user.isCurrentUser && (
+      
+      {user.isCurrentUser && (
           <View style={styles.currentUserIndicator} />
         )}
-        {!isDropTarget && (
+        
+        {!isDropTarget && displayName && (
           <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
         )}
       </Animated.View>
@@ -320,35 +363,39 @@ const UserBubble = ({
       activeOpacity={0.7}
       disabled={isDropTarget}
     >
-      {hasValidPhotoUrl() && !imageError ? (
-        <>
-          <Image
-            source={{ uri: user.photo_url }}
-            style={[styles.userPhoto, { width: size, height: size }]}
-            onLoadStart={handleImageLoadStart}
-            onLoad={handleImageLoadSuccess}
-            onError={handleImageLoadError}
-          />
-          {imageLoading && (
-            <ActivityIndicator 
-              size="small" 
-              color={colors.primary} 
-              style={styles.userPlaceholder} 
-            />
-          )}
-        </>
-      ) : (
-        <View style={[styles.userPlaceholder, { width: size, height: size }]}>
-          <Text style={styles.userInitial}>{initial}</Text>
-        </View>
-      )}
-      {user.isCurrentUser && (
-        <View style={styles.currentUserIndicator} />
-      )}
       {isDropTarget ? (
         renderDropTarget()
       ) : (
-        <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
+        <>
+          {hasValidPhotoUrl() && !imageError ? (
+            <>
+              <Image
+                source={{ uri: user.photo_url }}
+                style={[styles.userPhoto, { width: size, height: size }]}
+                onLoadStart={handleImageLoadStart}
+                onLoad={handleImageLoadSuccess}
+                onError={handleImageLoadError}
+              />
+              {imageLoading && (
+                <ActivityIndicator 
+                  size="small" 
+                  color={colors.primary} 
+                  style={styles.userPlaceholder} 
+                />
+              )}
+            </>
+          ) : (
+            <View style={[styles.userPlaceholder, { width: size, height: size }]}>
+              <Text style={styles.userInitial}>{initial}</Text>
+        </View>
+          )}
+          {user.isCurrentUser && (
+            <View style={styles.currentUserIndicator} />
+          )}
+          {!isDropTarget && displayName && (
+            <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
+          )}
+        </>
       )}
     </TouchableOpacity>
   );

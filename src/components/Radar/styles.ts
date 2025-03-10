@@ -1,13 +1,14 @@
 import { StyleSheet } from 'react-native';
 import colors from '../../theme/colors';
 
-// New color palette
+// Refined color palette to match Dribbble reference
 const COLORS = {
-  cream: '#F9F1E7', // Light cream/beige
-  teal: '#1B93AD',  // Teal/turquoise
-  lightTeal: '#8ECADA', // Lighter teal for accents
-  darkCream: '#E5DDD3', // Darker cream for borders
+  background: '#F7F7F7',
+  teal: '#00BFD1',       // Brighter teal to match Dribbble
   white: '#FFFFFF',
+  lightGray: '#F0F0F0',
+  mediumGray: '#E5E5E5',
+  darkGray: '#888888',
   black: '#333333',
 };
 
@@ -262,15 +263,13 @@ export const styles = StyleSheet.create({
   
   // Disabled send button
   sendButtonDisabled: {
-    backgroundColor: colors.lightGray,
-    borderWidth: 1,
-    borderColor: colors.mediumGray,
+    opacity: 0.6,
   },
 
   // Modal overlay for the message input
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -278,47 +277,98 @@ export const styles = StyleSheet.create({
 
   // Message modal container
   messageModal: {
-    backgroundColor: colors.background,
-    borderRadius: 15,
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
     width: '90%',
     maxWidth: 400,
-    padding: 20,
+    paddingTop: 60, // Extra padding at top for the profile picture and name
+    paddingBottom: 20,
+    paddingHorizontal: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
     elevation: 5,
+    position: 'relative', // For absolute positioning of profile pic
   },
 
   // Message modal header
   messageModalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center', // Center the title
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 30,
+    position: 'relative', // For absolute positioning of X button
   },
 
   // Message modal title
   messageModalTitle: {
-    fontSize: 18,
+    fontSize: 24,
     fontWeight: '600',
-    color: colors.text,
+    color: COLORS.black,
+    textAlign: 'center',
   },
 
-  // Close button for modal
+  // Close button for modal - positioned at top right
   closeButton: {
-    padding: 5,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    padding: 8,
   },
 
-  // Message input in modal
+  // User profile picture in message modal
+  messageUserProfileContainer: {
+    position: 'absolute',
+    top: -40, // Negative value to position it partially outside
+    left: 20,
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    borderWidth: 4,
+    borderColor: COLORS.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 10,
+    backgroundColor: COLORS.white, // Fallback background
+    overflow: 'hidden',
+  },
+
+  // User profile image
+  messageUserProfile: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 35,
+  },
+
+  // User profile fallback (for when image is not available)
+  messageUserProfileFallback: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 35,
+    backgroundColor: COLORS.teal,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // User profile fallback text
+  messageUserProfileFallbackText: {
+    color: COLORS.white,
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+
+  // Message input in modal - light gray like in second image
   messageModalInput: {
-    backgroundColor: colors.lightGray,
-    borderRadius: 15,
-    padding: 15,
+    backgroundColor: '#F2F2F2',
+    borderRadius: 20,
+    padding: 18,
     fontSize: 16,
-    color: colors.text,
-    minHeight: 120,
-    maxHeight: 200,
+    color: COLORS.black,
+    minHeight: 100,
     textAlignVertical: 'top',
     marginBottom: 15,
   },
@@ -329,22 +379,19 @@ export const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
 
-  // Send message button
+  // Send message button - rounded with arrow
   sendMessageButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 25,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    flexDirection: 'row',
+    backgroundColor: '#F2F2F2',
+    borderRadius: 30,
+    width: 60, // Fixed width for a circular button
+    height: 60, // Fixed height for a circular button
     alignItems: 'center',
     justifyContent: 'center',
   },
 
-  // Send message button text
-  sendMessageButtonText: {
-    color: colors.background,
-    fontSize: 16,
-    fontWeight: '600',
-    marginRight: 5,
+  // Send arrow icon
+  sendArrow: {
+    fontSize: 24,
+    color: '#666',
   },
 }); 

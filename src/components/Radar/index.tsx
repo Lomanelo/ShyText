@@ -1,9 +1,16 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { View, Dimensions, Platform, Animated, TextInput, TouchableOpacity, Text, Modal } from 'react-native';
+import { View, Dimensions, Platform, Animated, TextInput, TouchableOpacity, Text, Modal, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import UserBubble from './UserBubble';
 import { styles } from './styles';
 import colors from '../../theme/colors';
+
+// Access the COLORS object from styles for consistency
+const { teal, white, darkGray } = {
+  teal: '#00BFD1',
+  white: '#FFFFFF',
+  darkGray: '#888888'
+};
 
 const { width, height } = Dimensions.get('window');
 const RADAR_SIZE = width * 0.9; // 90% of screen width
@@ -358,7 +365,7 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
         </View>
       </View>
       
-      {/* Message Input Modal - centered on screen like in the GIF */}
+      {/* Message Input Modal - centered on screen */}
       <Modal
         visible={showMessageInput}
         transparent={true}
@@ -367,22 +374,41 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
       >
         <View style={styles.modalOverlay}>
           <View style={styles.messageModal}>
+            {/* User Profile Image - Positioned to overlap from the left */}
+            {draggedUser && (
+              <View style={styles.messageUserProfileContainer}>
+                {draggedUser.photo_url ? (
+                  <Image
+                    source={{ uri: draggedUser.photo_url }}
+                    style={styles.messageUserProfile}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.messageUserProfileFallback}>
+                    <Text style={styles.messageUserProfileFallbackText}>
+                      {draggedUser.display_name?.charAt(0).toUpperCase() || '?'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+            
             <View style={styles.messageModalHeader}>
               {draggedUser && (
                 <Text style={styles.messageModalTitle}>
-                  Message to {draggedUser.display_name || 'User'}
+                  {draggedUser.display_name || 'User'}
                 </Text>
               )}
               <TouchableOpacity onPress={handleCancelMessage} style={styles.closeButton}>
-                <Ionicons name="close" size={20} color={colors.darkGray} />
+                <Ionicons name="close" size={24} color={'#666'} />
               </TouchableOpacity>
             </View>
 
             <TextInput
               ref={inputRef}
               style={styles.messageModalInput}
-              placeholder="Write your first message..."
-              placeholderTextColor={colors.darkGray}
+              placeholder={`Hey ${draggedUser?.display_name || 'there'}, was nice meeting you...`}
+              placeholderTextColor="#999"
               value={message}
               onChangeText={setMessage}
               multiline
@@ -399,11 +425,10 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
                 onPress={handleSendMessage}
                 disabled={message.trim() === ''}
               >
-                <Text style={styles.sendMessageButtonText}>Send</Text>
                 <Ionicons 
-                  name="send" 
-                  size={18} 
-                  color={message.trim() === '' ? colors.darkGray : colors.background} 
+                  name="arrow-forward" 
+                  size={24} 
+                  color={'#666'} 
                 />
               </TouchableOpacity>
             </View>
