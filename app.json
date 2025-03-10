@@ -26,13 +26,9 @@
         "UIBackgroundModes": [
           "location",
           "fetch",
-          "remote-notification",
-          "location",
-          "fetch",
           "remote-notification"
         ],
         "NSUserActivityTypes": [
-          "INSendMessageIntent",
           "INSendMessageIntent"
         ]
       }
@@ -44,12 +40,6 @@
         "backgroundColor": "#ffffff"
       },
       "permissions": [
-        "NOTIFICATIONS",
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_BACKGROUND_LOCATION",
-        "FOREGROUND_SERVICE",
-        "VIBRATE",
         "NOTIFICATIONS",
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
@@ -70,10 +60,7 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#00ADAD",
-          "sounds": [
-            "./assets/notification-sound.wav"
-          ]
+          "color": "#00ADAD"
         }
       ]
     ],
