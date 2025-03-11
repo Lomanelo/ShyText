@@ -4,7 +4,7 @@ import colors from '../../theme/colors';
 // Refined color palette to match Dribbble reference
 const COLORS = {
   background: '#F7F7F7',
-  teal: '#00BFD1',       // Brighter teal to match Dribbble
+  teal: '#333333',       // Brighter teal to match Dribbble
   white: '#FFFFFF',
   lightGray: '#F0F0F0',
   mediumGray: '#E5E5E5',
@@ -83,7 +83,7 @@ export const styles = StyleSheet.create({
   dropTargetIndicator: {
     position: 'absolute',
     bottom: -30,
-    backgroundColor: 'rgba(0, 173, 181, 0.9)',
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
     paddingVertical: 4,
     paddingHorizontal: 12,
     borderRadius: 20,
