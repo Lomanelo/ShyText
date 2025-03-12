@@ -323,56 +323,7 @@ export default function NearbyScreen() {
         scrollEnabled={!isDragging} // Disable scrolling during drag
       >
         <View style={styles.header}>
-          {motionData && (
-            <TouchableOpacity 
-              style={styles.activityIndicator}
-              onPress={toggleMotionData}
-            >
-              <Ionicons 
-                name={
-                  motionData.activity === ActivityType.STILL ? 'body' :
-                  motionData.activity === ActivityType.WALKING ? 'walk' :
-                  motionData.activity === ActivityType.RUNNING ? 'fitness' :
-                  motionData.activity === ActivityType.VEHICLE ? 'car' : 'help-circle'
-                } 
-                size={18} 
-                color={colors.primary} 
-              />
-              <Text style={styles.activityText}>
-                {getActivityName(motionData.activity)}
-              </Text>
-              <Ionicons 
-                name={showMotionData ? 'chevron-up' : 'chevron-down'} 
-                size={16} 
-                color={colors.darkGray} 
-              />
-            </TouchableOpacity>
-          )}
-          
-          {showMotionData && motionData && (
-            <View style={styles.motionDataContainer}>
-              <View style={styles.motionDataItem}>
-                <Ionicons name="compass" size={16} color={colors.darkGray} />
-                <Text style={styles.motionDataText}>
-                  Heading: {formatHeading(motionData.heading)}
-                </Text>
-              </View>
-              
-              <View style={styles.motionDataItem}>
-                <Ionicons name="speedometer" size={16} color={colors.darkGray} />
-                <Text style={styles.motionDataText}>
-                  Speed: {formatSpeed(motionData.speed)}
-                </Text>
-              </View>
-              
-              <View style={styles.motionDataItem}>
-                <Ionicons name="pulse" size={16} color={colors.darkGray} />
-                <Text style={styles.motionDataText}>
-                  Movement: {motionData.movementIntensity?.toFixed(2) || 'Unknown'}
-                </Text>
-              </View>
-            </View>
-          )}
+          {/* Activity indicator removed as requested */}
         </View>
         
         <View style={styles.radarContainer}>

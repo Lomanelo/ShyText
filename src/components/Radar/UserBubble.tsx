@@ -320,7 +320,7 @@ const UserBubble = ({
         <Text style={{ 
           fontSize: size * 0.5, 
           fontWeight: '700',
-          color: '#00BCD4', // Teal color matching the design
+          color: '#000000', // Changed from teal to black
           textAlign: 'center',
           marginTop: -2, // Adjust vertical alignment for the plus sign
         }}>+</Text>
