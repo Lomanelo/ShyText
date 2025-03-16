@@ -141,18 +141,8 @@ export const handleNotificationInteraction = (data: any) => {
 
   console.log('Handling notification interaction:', data);
 
-  // Type 1: First message notification (opens the chat request modal)
-  if (data.type === 'first_message') {
-    router.push({
-      pathname: '/chats',
-      params: { 
-        openConversationModal: 'true',
-        conversationId: data.conversationId
-      }
-    });
-  } 
-  // Type 2: Regular message notification (opens the chat screen)
-  else if (data.type === 'message') {
+  // Both first messages and regular messages now open the chat screen directly
+  if (data.type === 'first_message' || data.type === 'message') {
     router.push(`/chat/${data.conversationId}`);
   }
 };
@@ -169,48 +159,4 @@ export const sendLocalNotification = async (title: string, body: string, data?: 
     },
     trigger: null,
   });
-};
-
-// Test function to send a local notification for the first message
-export const testFirstMessageNotification = async (senderName: string = 'John', message: string = 'Hey there!', conversationId: string = 'test-conversation-id') => {
-  try {
-    console.log('Sending test first message notification...');
-    await sendLocalNotification(
-      `${senderName} sent you a message`,
-      message,
-      {
-        type: 'first_message',
-        conversationId,
-        senderId: 'test-sender-id',
-        timestamp: new Date().toISOString()
-      }
-    );
-    console.log('Test notification sent successfully');
-    return true;
-  } catch (error) {
-    console.error('Error sending test notification:', error);
-    return false;
-  }
-};
-
-// Test function to send a local notification for a regular message
-export const testRegularMessageNotification = async (senderName: string = 'John', message: string = 'How are you?', conversationId: string = 'test-conversation-id') => {
-  try {
-    console.log('Sending test regular message notification...');
-    await sendLocalNotification(
-      `Message from ${senderName}`,
-      message,
-      {
-        type: 'message',
-        conversationId,
-        senderId: 'test-sender-id',
-        timestamp: new Date().toISOString()
-      }
-    );
-    console.log('Test notification sent successfully');
-    return true;
-  } catch (error) {
-    console.error('Error sending test notification:', error);
-    return false;
-  }
 }; 

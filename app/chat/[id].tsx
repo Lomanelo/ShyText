@@ -11,10 +11,11 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Image,
-  StatusBar
+  StatusBar,
+  Alert
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { auth, sendMessage, subscribeToMessages, getProfile, getConversation } from '../../src/lib/firebase';
+import { auth, sendMessage, subscribeToMessages, getProfile, getConversation, respondToConversation } from '../../src/lib/firebase';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import colors from '../../src/theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -26,6 +27,13 @@ type Message = {
   sender_id: string;
 };
 
+interface Conversation {
+  id: string;
+  otherUserId: string;
+  status: string;
+  isInitiator: boolean;
+}
+
 export default function ChatScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -36,6 +44,9 @@ export default function ChatScreen() {
   const [otherUser, setOtherUser] = useState<any>(null);
   const flatListRef = useRef<FlatList>(null);
   const [otherUserId, setOtherUserId] = useState<string | null>(null);
+  const [conversationStatus, setConversationStatus] = useState<string>('');
+  const [isInitiator, setIsInitiator] = useState<boolean>(false);
+  const [isResponding, setIsResponding] = useState(false);
 
   useEffect(() => {
     fetchMessages();
@@ -64,8 +75,11 @@ export default function ChatScreen() {
       if (!id) return;
       
       const result = await getConversation(id as string);
-      if (result.success && result.conversation.otherUserId) {
-        setOtherUserId(result.conversation.otherUserId);
+      if (result.success && result.conversation) {
+        const conversation = result.conversation as Conversation;
+        setOtherUserId(conversation.otherUserId);
+        setConversationStatus(conversation.status);
+        setIsInitiator(conversation.isInitiator);
       }
     } catch (err) {
       console.error("Error fetching conversation details:", err);
@@ -107,6 +121,28 @@ export default function ChatScreen() {
       setNewMessage('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message');
+    }
+  };
+
+  const handleAcceptDecline = async (accept: boolean) => {
+    if (isResponding) return; // Prevent double-clicks
+    
+    try {
+      setIsResponding(true);
+      await respondToConversation(id as string, accept);
+      if (accept) {
+        setConversationStatus('accepted');
+      } else {
+        router.back();
+      }
+    } catch (error) {
+      console.error('Error responding to conversation:', error);
+      // Only show alert if it's not already accepted
+      if (error instanceof Error && error.message !== 'This conversation is no longer pending') {
+        Alert.alert('Error', 'Failed to respond to conversation request');
+      }
+    } finally {
+      setIsResponding(false);
     }
   };
 
@@ -178,21 +214,42 @@ export default function ChatScreen() {
   };
 
   const renderMessage = ({ item, index }: { item: Message, index: number }) => {
-    const isCurrentUser = item.sender_id === auth.currentUser?.uid;
+    // Check if this is a system message
+    const isSystemMessage = item.sender_id === 'system';
+    
+    // For non-system messages, handle as before
+    const isCurrentUser = !isSystemMessage && item.sender_id === auth.currentUser?.uid;
     
     // Determine if this is the first message in a sequence from this sender
+    // System messages always break the sequence
     const isFirstInSequence = index === 0 || 
-      messages[index - 1]?.sender_id !== item.sender_id;
+      messages[index - 1]?.sender_id !== item.sender_id ||
+      isSystemMessage || 
+      messages[index - 1]?.sender_id === 'system';
     
     // Determine if this is the last message in a sequence from this sender
+    // System messages always break the sequence
     const isLastInSequence = index === messages.length - 1 || 
-      messages[index + 1]?.sender_id !== item.sender_id;
+      messages[index + 1]?.sender_id !== item.sender_id ||
+      isSystemMessage || 
+      messages[index + 1]?.sender_id === 'system';
     
     // Show timestamp only for the last message in a sequence
     const showTimestamp = isLastInSequence;
     
-    console.log("Rendering message with otherUser:", otherUser?.photo_url, "isCurrentUser:", isCurrentUser);
+    // If it's a system message, render it differently
+    if (isSystemMessage) {
+      return (
+        <View style={styles.systemMessageContainer}>
+          <View style={styles.systemMessageBubble}>
+            <Text style={styles.systemMessageText}>{item.content}</Text>
+          </View>
+          <Text style={styles.systemMessageTime}>{formatTime(item.created_at)}</Text>
+        </View>
+      );
+    }
     
+    // For regular messages
     return (
       <View style={[
         styles.messageRow,
@@ -294,9 +351,9 @@ export default function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Stack.Screen 
+      <Stack.Screen
         options={{
-          headerShown: false // Hide the default header
+          headerTitle: otherUser?.display_name || 'Chat'
         }}
       />
       
@@ -305,47 +362,91 @@ export default function ChatScreen() {
       
       <KeyboardAvoidingView 
         style={styles.innerContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+        {conversationStatus === 'pending' && !isInitiator && (
+          <View style={styles.pendingBanner}>
+            <Text style={styles.pendingText}>Chat Request</Text>
+            <View style={styles.pendingActions}>
+              <TouchableOpacity
+                style={[
+                  styles.pendingButton, 
+                  styles.declineButton,
+                  isResponding && styles.disabledButton
+                ]}
+                onPress={() => handleAcceptDecline(false)}
+                disabled={isResponding}
+              >
+                {isResponding ? (
+                  <ActivityIndicator size="small" color={colors.error} />
+                ) : (
+                  <Text style={[styles.pendingButtonText, styles.declineButtonText]}>
+                    Decline
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.pendingButton, 
+                  styles.acceptButton,
+                  isResponding && styles.disabledButton
+                ]}
+                onPress={() => handleAcceptDecline(true)}
+                disabled={isResponding}
+              >
+                {isResponding ? (
+                  <ActivityIndicator size="small" color={colors.success} />
+                ) : (
+                  <Text style={[styles.pendingButtonText, styles.acceptButtonText]}>
+                    Accept
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         <FlatList
           ref={flatListRef}
           data={messages}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.messagesList}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
           ListHeaderComponent={renderHeader}
           showsVerticalScrollIndicator={false}
         />
 
-        <View style={styles.inputContainer}>
-          <View style={styles.inputWrapper}>
-            <TextInput
-              style={styles.input}
-              placeholder="Message"
-              placeholderTextColor={colors.darkGray}
-              value={newMessage}
-              onChangeText={setNewMessage}
-              multiline
-              maxLength={1000}
-            />
+        {(conversationStatus === 'accepted' || isInitiator) && (
+          <View style={styles.inputContainer}>
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                placeholder="Message"
+                placeholderTextColor={colors.darkGray}
+                value={newMessage}
+                onChangeText={setNewMessage}
+                multiline
+                maxLength={1000}
+              />
+            </View>
+            <TouchableOpacity 
+              style={[
+                styles.sendButton,
+                newMessage.trim().length === 0 && styles.sendButtonDisabled
+              ]}
+              onPress={handleSend}
+              disabled={newMessage.trim().length === 0}
+            >
+              <Ionicons 
+                name="send" 
+                size={20} 
+                color={newMessage.trim().length === 0 ? colors.darkGray : colors.background} 
+              />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity 
-            style={[
-              styles.sendButton,
-              newMessage.trim().length === 0 && styles.sendButtonDisabled
-            ]}
-            onPress={handleSend}
-            disabled={newMessage.trim().length === 0}
-          >
-            <Ionicons 
-              name="send" 
-              size={20} 
-              color={newMessage.trim().length === 0 ? colors.darkGray : colors.background} 
-            />
-          </TouchableOpacity>
-        </View>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -587,5 +688,72 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
     color: colors.text
+  },
+  pendingBanner: {
+    backgroundColor: colors.background,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
+    alignItems: 'center',
+  },
+  pendingText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 12,
+  },
+  pendingActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  pendingButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  pendingButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  declineButton: {
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    borderColor: colors.error,
+  },
+  declineButtonText: {
+    color: colors.error,
+  },
+  acceptButton: {
+    backgroundColor: 'rgba(52, 199, 89, 0.1)',
+    borderColor: colors.success,
+  },
+  acceptButtonText: {
+    color: colors.success,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  systemMessageContainer: {
+    alignItems: 'center',
+    marginVertical: 12,
+    paddingHorizontal: 16,
+  },
+  systemMessageBubble: {
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    maxWidth: '80%',
+  },
+  systemMessageText: {
+    fontSize: 14,
+    color: colors.darkGray,
+    textAlign: 'center',
+  },
+  systemMessageTime: {
+    fontSize: 10,
+    color: colors.darkGray,
+    marginTop: 4,
   },
 });

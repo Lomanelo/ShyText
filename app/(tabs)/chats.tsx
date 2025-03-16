@@ -9,216 +9,261 @@ import {
   RefreshControl,
   Alert,
   ActivityIndicator,
-  Modal,
   SafeAreaView,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { getUserConversations, respondToConversation, getFirstMessage } from '../../src/lib/firebase';
+import { db, auth } from '../../src/lib/firebase';
+import { collection, query, where, onSnapshot, orderBy, getDoc, doc, getDocs, limit } from 'firebase/firestore';
 import colors from '../../src/theme/colors';
 
 interface Conversation {
   id: string;
-  status: string;
-  last_message: string;
+  initiator_id: string;
+  receiver_id: string;
+  accepted?: boolean;
+  status?: string;
+  last_message?: string;
   last_message_time: string;
+  updated_at: string;
   isInitiator: boolean;
-  otherUser: {
+  otherUser?: {
     display_name: string;
     photo_url?: string;
+    deleted?: boolean;
   };
 }
 
 export default function ChatsScreen() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingConversation, setPendingConversation] = useState<{
-    id: string;
-    otherUser: { display_name: string; photo_url?: string };
-    firstMessage: string;
-  } | null>(null);
-  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadConversations = async () => {
+  const refreshConversations = useCallback(async () => {
+    if (!auth.currentUser) return;
+    setRefreshing(true);
     try {
-      const result = await getUserConversations();
-      // Transform the data to match the Conversation interface
-      const transformedConversations: Conversation[] = result.conversations.map((conv: any) => ({
-        id: conv.id,
-        status: conv.status || 'active',
-        last_message: conv.last_message?.content || 'No messages yet',
-        last_message_time: conv.last_message?.timestamp || conv.created_at,
-        isInitiator: conv.isInitiator,
-        otherUser: {
-          display_name: conv.otherUser?.display_name || 'Unknown User',
-          photo_url: conv.otherUser?.photo_url,
-        },
+      // Get fresh data immediately instead of clearing and waiting for listeners
+      const initiatorSnapshot = await getDocs(query(
+        collection(db, 'conversations'),
+        where('initiator_id', '==', auth.currentUser.uid),
+        orderBy('updated_at', 'desc'),
+        limit(50)
+      ));
+      
+      const receiverSnapshot = await getDocs(query(
+        collection(db, 'conversations'),
+        where('receiver_id', '==', auth.currentUser.uid),
+        orderBy('updated_at', 'desc'),
+        limit(50)
+      ));
+
+      const initiatorConvs = initiatorSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        isInitiator: true
       }));
-      setConversations(transformedConversations);
-      setError(null);
-    } catch (err) {
-      console.error('Error loading conversations:', err);
+
+      const receiverConvs = receiverSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        isInitiator: false
+      }));
+
+      // Update both sets of conversations
+      await Promise.all([
+        updateConversations(initiatorConvs, true),
+        updateConversations(receiverConvs, false)
+      ]);
+    } catch (error) {
+      console.error('Error refreshing conversations:', error);
+      setError('Failed to refresh conversations');
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    setLoading(true);
+    setError(null);
+
+    // Create queries for conversations where user is either initiator or receiver
+    const initiatorQuery = query(
+      collection(db, 'conversations'),
+      where('initiator_id', '==', auth.currentUser.uid),
+      orderBy('updated_at', 'desc'),
+      limit(50)
+    );
+
+    const receiverQuery = query(
+      collection(db, 'conversations'),
+      where('receiver_id', '==', auth.currentUser.uid),
+      orderBy('updated_at', 'desc'),
+      limit(50)
+    );
+
+    // Subscribe to both queries
+    const unsubscribeInitiator = onSnapshot(initiatorQuery, async (snapshot) => {
+      const convs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        isInitiator: true
+      }));
+      await updateConversations(convs, true);
+    }, error => {
+      console.error('Error in initiator subscription:', error);
       setError('Failed to load conversations');
+      setLoading(false);
+    });
+
+    const unsubscribeReceiver = onSnapshot(receiverQuery, async (snapshot) => {
+      const convs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        isInitiator: false
+      }));
+      await updateConversations(convs, false);
+    }, error => {
+      console.error('Error in receiver subscription:', error);
+      setError('Failed to load conversations');
+      setLoading(false);
+    });
+
+    return () => {
+      unsubscribeInitiator();
+      unsubscribeReceiver();
+    };
+  }, []);
+
+  const updateConversations = async (newConvs: any[], isInitiator: boolean) => {
+    try {
+      // Fetch profiles for all conversations
+      const conversationsWithProfiles = await Promise.all(
+        newConvs.map(async (conv) => {
+          // Determine which ID is the other user's
+          const otherUserId = isInitiator ? conv.receiver_id : conv.initiator_id;
+          
+          try {
+            // Get the other user's profile
+            const userDoc = await getDoc(doc(db, 'profiles', otherUserId));
+            const userData = userDoc.data();
+            
+            return {
+              ...conv,
+              otherUser: {
+                display_name: userData?.display_name || 'Deleted User',
+                photo_url: userData?.photo_url,
+                deleted: !userDoc.exists()
+              }
+            };
+          } catch (error) {
+            console.error(`Error fetching profile for user ${otherUserId}:`, error);
+            return {
+              ...conv,
+              otherUser: {
+                display_name: 'Deleted User',
+                deleted: true
+              }
+            };
+          }
+        })
+      );
+
+      setConversations(current => {
+        // Filter out conversations that match the new ones' IDs
+        const filtered = current.filter(conv => 
+          !conversationsWithProfiles.find(newConv => newConv.id === conv.id)
+        );
+        
+        // Combine and sort by updated_at time
+        const combined = [...filtered, ...conversationsWithProfiles].sort((a, b) => {
+          const timeA = a.updated_at || a.last_message_time;
+          const timeB = b.updated_at || b.last_message_time;
+          return new Date(timeB).getTime() - new Date(timeA).getTime();
+        });
+        return combined;
+      });
+    } catch (error) {
+      console.error('Error updating conversations:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadConversations();
-  }, []);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadConversations();
-    setRefreshing(false);
-  }, []);
-
-  const handleConversationPress = async (conversation: Conversation) => {
-    if (conversation.status === 'pending' && !conversation.isInitiator) {
-      try {
-        // Show loading indicator while fetching the first message
-        setLoading(true);
-        
-        // Get the first message of this conversation
-        const firstMessageResult = await getFirstMessage(conversation.id);
-        
-        setLoading(false);
-        
-        if (firstMessageResult.success && firstMessageResult.message) {
-          // Access the content safely with type assertion
-          const messageContent = (firstMessageResult.message as any).content || "No message content";
-          
-          // Show the custom request modal with the first message
-          setPendingConversation({
-            id: conversation.id,
-            otherUser: conversation.otherUser,
-            firstMessage: messageContent
-          });
-          setShowRequestModal(true);
-        } else {
-          // Fallback to the standard alert if we can't get the first message
-          Alert.alert(
-            'New Conversation Request',
-            `${conversation.otherUser.display_name} would like to chat with you. Would you like to accept?`,
-            [
-              {
-                text: 'Decline',
-                style: 'cancel',
-                onPress: () => handleConversationResponse(conversation.id, false),
-              },
-              {
-                text: 'Accept',
-                onPress: () => handleConversationResponse(conversation.id, true),
-              },
-            ]
-          );
-        }
-      } catch (error) {
-        setLoading(false);
-        console.error('Error getting first message:', error);
-        // Fallback to the old dialog if there's an error
-        Alert.alert(
-          'New Conversation Request',
-          `${conversation.otherUser.display_name} would like to chat with you. Would you like to accept?`,
-          [
-            {
-              text: 'Decline',
-              style: 'cancel',
-              onPress: () => handleConversationResponse(conversation.id, false),
-            },
-            {
-              text: 'Accept',
-              onPress: () => handleConversationResponse(conversation.id, true),
-            },
-          ]
-        );
-      }
-    } else {
-      // Navigate to chat screen
-      router.push(`/chat/${conversation.id}`);
-    }
-  };
-
-  const handleConversationResponse = async (conversationId: string, accept: boolean) => {
-    try {
-      await respondToConversation(conversationId, accept);
-      if (accept) {
-        router.push(`/chat/${conversationId}`);
-      } else {
-        // Refresh the conversations list
-        loadConversations();
-      }
-      // Hide the modal if it's open
-      setShowRequestModal(false);
-      setPendingConversation(null);
-    } catch (err) {
-      console.error('Error responding to conversation:', err);
-      Alert.alert('Error', 'Failed to respond to conversation request');
-    }
+  const handleConversationPress = (conversation: Conversation) => {
+    router.push(`/chat/${conversation.id}`);
   };
 
   const renderConversationItem = ({ item }: { item: Conversation }) => {
-    const isPending = item.status === 'pending';
-    const isRead = item.status !== 'unread';
-    
+    // Check for both status and accepted fields for compatibility
+    const isPending = (item.accepted === false || item.accepted === undefined) && 
+                      (item.status === 'pending' || item.status === undefined);
+    const isAccepted = item.accepted === true || item.status === 'accepted';
+    const isReceived = !item.isInitiator;
+    const otherUser = item.otherUser || {
+      display_name: 'Unknown User',
+      photo_url: undefined,
+      deleted: false
+    };
+    const isDeletedUser = otherUser.deleted || false;
+
     return (
-      <TouchableOpacity 
-        style={[styles.conversationItem, !isRead && styles.unreadConversationItem]}
+      <TouchableOpacity
+        style={styles.conversationItem}
         onPress={() => handleConversationPress(item)}
-        activeOpacity={0.7}
+        disabled={isDeletedUser && !isPending}
       >
-        <View style={styles.conversationAvatarContainer}>
-          {item.otherUser?.photo_url ? (
-            <Image 
-              source={{ uri: item.otherUser.photo_url }} 
-              style={styles.conversationAvatar} 
-            />
+        <View style={styles.avatarContainer}>
+          {otherUser.photo_url ? (
+            <Image source={{ uri: otherUser.photo_url }} style={styles.avatar} />
           ) : (
-            <View style={styles.conversationAvatarPlaceholder}>
-              <Text style={styles.conversationAvatarInitial}>
-                {item.otherUser?.display_name?.charAt(0).toUpperCase() || '?'}
+            <View style={[
+              styles.avatar, 
+              styles.avatarPlaceholder,
+              isDeletedUser && styles.deletedUserAvatar
+            ]}>
+              <Text style={[
+                styles.avatarText,
+                isDeletedUser && styles.deletedUserText
+              ]}>
+                {otherUser.display_name?.charAt(0)?.toUpperCase() || '?'}
               </Text>
             </View>
           )}
-          {isPending && !item.isInitiator && (
-            <View style={styles.pendingIndicator}>
-              <Ionicons name="time-outline" size={12} color={colors.background} />
-            </View>
-          )}
+          {isPending && isReceived && <View style={styles.notificationDot} />}
         </View>
-        
+
         <View style={styles.conversationDetails}>
-          <View style={styles.conversationHeader}>
+          <View style={styles.nameRow}>
             <Text style={[
-              styles.conversationName,
-              !isRead && styles.unreadConversationName
+              styles.name,
+              isDeletedUser && styles.deletedUserName
             ]} numberOfLines={1}>
-              {item.otherUser?.display_name || 'Unknown User'}
+              {otherUser.display_name}
             </Text>
-            <Text style={styles.conversationTime}>
-              {formatTime(item.last_message_time)}
+            <Text style={styles.time}>
+              {item.updated_at ? formatTime(item.updated_at) : ''}
             </Text>
           </View>
-          
-          <View style={styles.conversationPreview}>
-            {isPending && !item.isInitiator ? (
-              <Text style={styles.pendingText}>
-                Chat request pending...
+
+          <View style={styles.messageRow}>
+            {isPending ? (
+              <Text style={[
+                styles.status,
+                isDeletedUser ? styles.deletedUserStatus : (isReceived ? styles.pendingReceived : styles.pendingSent)
+              ]}>
+                {isReceived ? 'Chat Request Received' : 'Chat Request Sent'}
               </Text>
             ) : (
               <Text style={[
-                styles.conversationMessage,
-                !isRead && styles.unreadConversationMessage
+                styles.lastMessage,
+                isDeletedUser && styles.deletedUserMessage
               ]} numberOfLines={1}>
-                {item.last_message || 'No messages yet'}
+                {isDeletedUser ? 'User no longer available' : (item.last_message || 'No messages yet')}
               </Text>
-            )}
-            
-            {!isRead && (
-              <View style={styles.unreadIndicator} />
             )}
           </View>
         </View>
@@ -226,7 +271,7 @@ export default function ChatsScreen() {
     );
   };
 
-  if (loading && !refreshing) {
+  if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -239,7 +284,10 @@ export default function ChatsScreen() {
       <View style={styles.errorContainer}>
         <Ionicons name="alert-circle" size={60} color={colors.error} />
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={loadConversations}>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => setError(null)}
+        >
           <Text style={styles.retryText}>Retry</Text>
         </TouchableOpacity>
       </View>
@@ -247,17 +295,24 @@ export default function ChatsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Chats</Text>
+      </View>
       <FlatList
         data={conversations}
         renderItem={renderConversationItem}
         keyExtractor={(item) => item.id}
+        contentContainerStyle={[
+          styles.listContent,
+          conversations.length === 0 && styles.emptyListContent
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={[colors.primary]}
+            onRefresh={refreshConversations}
             tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
         ListEmptyComponent={
@@ -274,91 +329,7 @@ export default function ChatsScreen() {
           </View>
         }
       />
-
-      {/* Chat Request Modal */}
-      <Modal
-        visible={showRequestModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowRequestModal(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowRequestModal(false)}
-        >
-          <TouchableOpacity 
-            style={styles.modalContainer}
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Chat Request</Text>
-              <TouchableOpacity
-                onPress={() => setShowRequestModal(false)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              >
-                <Ionicons name="close" size={24} color={colors.darkGray} />
-              </TouchableOpacity>
-            </View>
-            
-            {pendingConversation && (
-              <View style={styles.modalContent}>
-                <View style={styles.profileImageContainer}>
-                  {pendingConversation.otherUser.photo_url ? (
-                    <Image
-                      source={{ uri: pendingConversation.otherUser.photo_url }}
-                      style={styles.profileImage}
-                    />
-                  ) : (
-                    <View style={styles.profileImagePlaceholder}>
-                      <Text style={styles.profileImageInitial}>
-                        {pendingConversation.otherUser.display_name.charAt(0).toUpperCase()}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                
-                <Text style={styles.requestUsername}>
-                  {pendingConversation.otherUser.display_name}
-                </Text>
-                
-                <View style={styles.messageContainer}>
-                  <Text style={styles.messageLabel}>First Message:</Text>
-                  <View style={styles.messageBubble}>
-                    <Text style={styles.messageText}>{pendingConversation.firstMessage}</Text>
-                  </View>
-                </View>
-                
-                <View style={styles.modalActions}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.rejectButton]}
-                    onPress={() => {
-                      handleConversationResponse(pendingConversation.id, false);
-                      setShowRequestModal(false);
-                    }}
-                  >
-                    <Ionicons name="close-circle" size={20} color={colors.error} style={styles.actionIcon} />
-                    <Text style={[styles.actionText, styles.rejectText]}>Decline</Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.acceptButton]}
-                    onPress={() => {
-                      handleConversationResponse(pendingConversation.id, true);
-                      setShowRequestModal(false);
-                    }}
-                  >
-                    <Ionicons name="checkmark-circle" size={20} color={colors.success} style={styles.actionIcon} />
-                    <Text style={[styles.actionText, styles.acceptText]}>Accept</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -393,6 +364,24 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  header: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  listContent: {
+    flexGrow: 1,
+  },
+  emptyListContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -412,115 +401,107 @@ const styles = StyleSheet.create({
   },
   retryButton: {
     marginTop: 20,
-    padding: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
     backgroundColor: colors.primary,
     borderRadius: 8,
   },
   retryText: {
     color: colors.background,
     fontSize: 16,
+    fontWeight: '600',
   },
   conversationItem: {
     flexDirection: 'row',
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    backgroundColor: 'white',
+    minHeight: 64,
   },
-  unreadConversationItem: {
-    backgroundColor: 'rgba(0, 173, 181, 0.04)', // Very subtle highlight for unread
-  },
-  conversationAvatarContainer: {
+  avatarContainer: {
     position: 'relative',
-    marginRight: 16,
-  },
-  conversationAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-  },
-  conversationAvatarPlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primaryLight,
+    marginRight: 12,
+    width: 50,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  conversationAvatarInitial: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: colors.primary,
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
-  pendingIndicator: {
+  avatarPlaceholder: {
+    backgroundColor: colors.lightGray,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 16,
+    color: colors.darkGray,
+    fontWeight: '500',
+  },
+  notificationDot: {
     position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+    right: 8,
+    top: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.warning,
     borderWidth: 2,
-    borderColor: colors.background,
+    borderColor: 'white',
   },
   conversationDetails: {
     flex: 1,
     justifyContent: 'center',
+    marginLeft: 4,
   },
-  conversationHeader: {
+  nameRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    alignItems: 'center',
+    marginBottom: 2,
   },
-  conversationName: {
-    fontSize: 16,
+  name: {
+    fontSize: 17,
     fontWeight: '500',
-    flex: 1,
     color: colors.text,
+    flex: 1,
     marginRight: 8,
   },
-  unreadConversationName: {
-    fontWeight: '700',
-  },
-  conversationTime: {
+  time: {
     fontSize: 14,
     color: colors.darkGray,
+    marginTop: 2,
   },
-  conversationPreview: {
+  messageRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  conversationMessage: {
+  lastMessage: {
     fontSize: 15,
     color: colors.darkGray,
     flex: 1,
-    marginRight: 8,
   },
-  unreadConversationMessage: {
-    color: colors.text,
-    fontWeight: '500',
-  },
-  pendingText: {
+  status: {
     fontSize: 15,
     fontStyle: 'italic',
-    color: colors.primary,
-    flex: 1,
   },
-  unreadIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.primary,
+  pendingReceived: {
+    color: colors.warning,
+    fontWeight: '500',
+  },
+  pendingSent: {
+    color: colors.darkGray,
   },
   emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    marginTop: 100,
   },
   emptyText: {
     fontSize: 18,
@@ -534,132 +515,22 @@ const styles = StyleSheet.create({
     marginTop: 8,
     textAlign: 'center',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContainer: {
-    width: '85%',
-    maxWidth: 340,
-    backgroundColor: colors.background,
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.lightGray,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  modalContent: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  profileImageContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginBottom: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  profileImage: {
-    width: '100%',
-    height: '100%',
-  },
-  profileImagePlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  profileImageInitial: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: colors.primary,
-  },
-  requestUsername: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: colors.text,
-    marginBottom: 20,
-  },
-  messageContainer: {
-    width: '100%',
-    marginBottom: 24,
-  },
-  messageLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.darkGray,
-    marginBottom: 8,
-  },
-  messageBubble: {
+  deletedUserAvatar: {
     backgroundColor: colors.lightGray,
-    padding: 16,
-    borderRadius: 12,
-    borderTopLeftRadius: 4,
   },
-  messageText: {
-    fontSize: 16,
-    color: colors.text,
-    lineHeight: 22,
+  deletedUserText: {
+    color: colors.mediumGray,
   },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
+  deletedUserName: {
+    color: colors.mediumGray,
+    fontStyle: 'italic',
   },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    flex: 1,
-    marginHorizontal: 5,
+  deletedUserMessage: {
+    color: colors.mediumGray,
+    fontStyle: 'italic',
   },
-  rejectButton: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 59, 48, 0.2)',
-  },
-  acceptButton: {
-    backgroundColor: 'rgba(52, 199, 89, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(52, 199, 89, 0.2)',
-  },
-  actionIcon: {
-    marginRight: 8,
-  },
-  actionText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  rejectText: {
-    color: colors.error,
-  },
-  acceptText: {
-    color: colors.success,
+  deletedUserStatus: {
+    color: colors.mediumGray,
+    fontStyle: 'italic',
   },
 });

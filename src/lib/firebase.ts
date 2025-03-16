@@ -260,11 +260,9 @@ export const uploadProfileImage = async (uri: string, userId: string) => {
       const blob = await response.blob();
       console.log(`Image blob size: ${blob.size} bytes`);
       
-      // Check if image is too large (Firebase Storage has a 5MB limit for most free plans)
-      if (blob.size > 5000000) {
-        console.error('Image too large:', blob.size);
-        return { success: false, error: 'Image too large. Please use a smaller image or lower quality.' };
-      }
+      // Note: Size limit check removed to allow larger images
+      // Firebase Storage has a default max size of 10MB for the free plan
+      // but we're removing the client-side check to allow larger uploads
       
       // Upload to Firebase Storage
       console.log('Uploading to Firebase Storage...');
@@ -283,7 +281,15 @@ export const uploadProfileImage = async (uri: string, userId: string) => {
       return { success: true, downloadURL };
     } catch (error) {
       console.error('Error during image upload:', error);
-      return { success: false, error: 'Failed to upload image. Please try again with a smaller image.' };
+      // Check if the error is related to size limits from Firebase
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('quota') || errorMessage.includes('limit')) {
+        return { 
+          success: false, 
+          error: 'The image exceeds Firebase Storage quota limits. Please use a smaller image (under 10MB).' 
+        };
+      }
+      return { success: false, error: 'Failed to upload image. Please try again.' };
     }
   } catch (error) {
     console.error('Error uploading profile image:', error);
