@@ -158,11 +158,31 @@ export default function NearbyScreen() {
     }
     
     try {
-      await startConversation(selectedUser.id, customMessage.trim());
-      router.push('/chats');
-    } catch (error) {
+      const result = await startConversation(selectedUser.id, customMessage.trim());
+      
+      // If we get a conversationId back, it means there's an existing active conversation
+      if (result?.conversationId) {
+        Alert.alert(
+          'Existing Conversation',
+          'You already have an active conversation with this user.',
+          [{ text: 'Go to Chat', onPress: () => router.push(`/chat/${result.conversationId}`) }]
+        );
+      } else {
+        router.push('/chats');
+      }
+    } catch (error: any) {
       console.error('Error starting conversation:', error);
-      Alert.alert('Error', 'Failed to start conversation. Please try again.');
+      if (error.message?.includes('already have a pending conversation')) {
+        Alert.alert(
+          'Pending Request',
+          'You already have a pending conversation request with this user.',
+          [{ text: 'Go to Chats', onPress: () => router.push('/chats') }]
+        );
+      } else if (error.message?.includes('declined your previous conversation')) {
+        Alert.alert('Request Declined', error.message);
+      } else {
+        Alert.alert('Error', 'Failed to start conversation. Please try again.');
+      }
     }
     
     setSelectedUser(null);
@@ -174,15 +194,35 @@ export default function NearbyScreen() {
   
   const handleSendMessage = async (userId: string, message: string) => {
     try {
-      await startConversation(userId, message);
-      Alert.alert(
-        'Message Sent',
-        'Your conversation request has been sent.',
-        [{ text: 'OK', onPress: () => router.push('/chats') }]
-      );
-    } catch (error) {
+      const result = await startConversation(userId, message);
+      
+      // If we get a conversationId back, it means there's an existing active conversation
+      if (result?.conversationId) {
+        Alert.alert(
+          'Existing Conversation',
+          'You already have an active conversation with this user.',
+          [{ text: 'Go to Chat', onPress: () => router.push(`/chat/${result.conversationId}`) }]
+        );
+      } else {
+        Alert.alert(
+          'Message Sent',
+          'Your conversation request has been sent.',
+          [{ text: 'OK', onPress: () => router.push('/chats') }]
+        );
+      }
+    } catch (error: any) {
       console.error('Error starting conversation:', error);
-      Alert.alert('Error', 'Failed to start conversation. Please try again.');
+      if (error.message?.includes('already have a pending conversation')) {
+        Alert.alert(
+          'Pending Request',
+          'You already have a pending conversation request with this user.',
+          [{ text: 'Go to Chats', onPress: () => router.push('/chats') }]
+        );
+      } else if (error.message?.includes('declined your previous conversation')) {
+        Alert.alert('Request Declined', error.message);
+      } else {
+        Alert.alert('Error', 'Failed to start conversation. Please try again.');
+      }
     }
   };
   
