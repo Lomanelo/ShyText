@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { findNearbyUsers, updateLocation, getCurrentUser, getProfile } from '../lib/firebase';
-import RNLocation from 'react-native-location';
+import RNLocation, { Subscription, Location } from 'react-native-location';
 import { Alert, Platform } from 'react-native';
 
 interface RadarUser {
@@ -21,7 +21,7 @@ interface CurrentUserProfile {
 
 export function useRadarUsers(maxDistance: number = 100) {
   const [users, setUsers] = useState<RadarUser[]>([]);
-  const [location, setLocation] = useState<RNLocation.Location | null>(null);
+  const [location, setLocation] = useState<Location | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentUserProfile, setCurrentUserProfile] = useState<CurrentUserProfile | null>(null);
@@ -57,7 +57,7 @@ export function useRadarUsers(maxDistance: number = 100) {
   }, []);
 
   // Function to update the list of nearby users
-  const updateNearbyUsers = useCallback(async (userLocation: RNLocation.Location) => {
+  const updateNearbyUsers = useCallback(async (userLocation: Location) => {
     try {
       // Generate some mock statuses
       const statuses = ['Open to chat', 'Chilling', 'Looking around', 'Just browsing'];
@@ -230,7 +230,7 @@ export function useRadarUsers(maxDistance: number = 100) {
   }, [location, updateNearbyUsers, fetchCurrentUserProfile, initializeLocationTracking]);
 
   useEffect(() => {
-    let locationSubscription: RNLocation.Subscription | null = null;
+    let locationSubscription: Subscription | null = null;
 
     async function setupLocationTracking() {
       try {
@@ -296,7 +296,7 @@ export function useRadarUsers(maxDistance: number = 100) {
     // Cleanup
     return () => {
       if (locationSubscription) {
-        RNLocation.unsubscribeFromLocationUpdates(locationSubscription);
+        locationSubscription(); // Directly call the subscription function to unsubscribe
       }
     };
   }, [maxDistance, updateNearbyUsers, fetchCurrentUserProfile, initializeLocationTracking]);
