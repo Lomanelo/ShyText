@@ -23,10 +23,14 @@
         "NSLocationWhenInUseUsageDescription": "ShyText needs your location to find other users nearby.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "ShyText needs your location to find other users nearby, even when the app is in the background.",
         "NSLocationAlwaysUsageDescription": "ShyText needs your location to find other users nearby, even when the app is in the background.",
+        "NSBluetoothAlwaysUsageDescription": "ShyText needs Bluetooth to find nearby users.",
+        "NSBluetoothPeripheralUsageDescription": "ShyText uses Bluetooth to send messages.",
         "UIBackgroundModes": [
           "location",
           "fetch",
-          "remote-notification"
+          "remote-notification",
+          "bluetooth-central",
+          "bluetooth-peripheral"
         ],
         "NSUserActivityTypes": [
           "INSendMessageIntent"
@@ -62,7 +66,8 @@
           "icon": "./assets/notification-icon.png",
           "color": "#00ADAD"
         }
-      ]
+      ],
+      "react-native-ble-plx"
     ],
     "experiments": {
       "typedRoutes": true
