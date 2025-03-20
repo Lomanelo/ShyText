@@ -236,46 +236,12 @@ class BleService {
         console.warn('Cannot start advertising: BLE Advertiser not initialized');
         return false;
       }
-
-      // Try to get the device UUID for advertising
-      let deviceUuid = '';
-      try {
-        // Import using require to avoid dynamic import TypeScript errors
-        const firebase = require('../lib/firebase');
-        const getCurrentUserDeviceUUID = firebase.getCurrentUserDeviceUUID;
-        
-        if (typeof getCurrentUserDeviceUUID === 'function') {
-          deviceUuid = await getCurrentUserDeviceUUID() || '';
-        } else {
-          console.warn('getCurrentUserDeviceUUID not found or not a function');
-        }
-        
-        if (!deviceUuid) {
-          // If UUID not yet stored, try to get it now and store it
-          const deviceUtils = require('../utils/deviceUtils');
-          const storeDeviceUUID = firebase.storeDeviceUUID;
-          
-          if (typeof deviceUtils.getDeviceUUID === 'function' && 
-              typeof storeDeviceUUID === 'function') {
-            deviceUuid = await deviceUtils.getDeviceUUID();
-            console.log('Generated device UUID for advertising:', deviceUuid);
-            
-            // Store it for future use
-            if (currentUser.uid && deviceUuid) {
-              await storeDeviceUUID(currentUser.uid, deviceUuid);
-            }
-          } else {
-            console.warn('getDeviceUUID or storeDeviceUUID not found or not a function');
-          }
-        }
-      } catch (error) {
-        console.warn('Could not get device UUID for advertising:', error);
-      }
       
-      // Construct identifier with both user ID and device UUID for better matching
-      const userIdentifier = deviceUuid 
-        ? `ShyText_${currentUser.uid}_${deviceUuid}`
-        : `ShyText_${currentUser.uid}`;
+      // Get username from auth user if available
+      const username = currentUser.displayName || currentUser.uid;
+      
+      // Simple identifier for advertising that contains only the username
+      const userIdentifier = `ShyText_${username}`;
       
       // Use more aggressive advertising settings 
       await BleAdvertiser.broadcast(userIdentifier, [this.companyId], {
@@ -344,20 +310,12 @@ class BleService {
       // Log all discovered devices
       console.log(`[${Platform.OS}] Device details:`, JSON.stringify(deviceInfo));
       
-      // Check if this might be a ShyText device using any available identifiers
+      // Get device name - this is the primary identifier now
       const deviceName = enhancedDevice.name || '';
       const localName = enhancedDevice.localName || '';
       
-      // Try to detect ShyText devices with any identifier
-      const isShyTextDevice = 
-        deviceName.includes('ShyText') || 
-        localName.includes('ShyText');
-      
-      // IMPORTANT: For now, consider ANY device with a name as a potential ShyText device
-      // This is a temporary solution for testing until we implement a proper identification mechanism
-      const shouldProcessDevice = deviceName || localName;
-      
-      if (!shouldProcessDevice) {
+      // Skip devices without a name since we need it for username matching
+      if (!deviceName && !localName) {
         return;
       }
       
@@ -369,12 +327,11 @@ class BleService {
       // Mark device as found
       this.foundDevices.add(enhancedDevice.id);
       
-      // Log found device
+      // Log found device with name for username matching
       console.log(`[${Platform.OS}] Found device that might be a user:`, deviceName || localName, 'with ID:', enhancedDevice.id, 'RSSI:', enhancedDevice.rssi);
       
-      // For ALL devices, try to process them as potential users
+      // Pass device to callback for user association
       if (this.onDeviceFoundCallback) {
-        // Pass device to callback for user association
         this.onDeviceFoundCallback(enhancedDevice);
       }
     } catch (error) {
@@ -565,6 +522,104 @@ class BleService {
       console.log('BLE service cleaned up successfully');
     } catch (error) {
       console.error('Error during BLE cleanup:', error);
+    }
+  }
+
+  // Authentication based on username (previously device name)
+  public async authenticateByUsername(username: string): Promise<{success: boolean, userId?: string, error?: string}> {
+    try {
+      console.log('Attempting authentication with username:', username);
+      
+      // Ensure username has @shytext suffix
+      let normalizedUsername = username.trim();
+      if (!normalizedUsername.includes('@shytext')) {
+        normalizedUsername = `${normalizedUsername}@shytext`;
+      }
+      
+      console.log('Normalized username for auth:', normalizedUsername);
+      
+      // Import Firebase modules
+      const { getFirestore, collection, query, where, getDocs } = require('firebase/firestore');
+      
+      // Query Firestore for a user with matching username
+      const db = getFirestore();
+      
+      // First try exact match
+      console.log('Trying exact match for username:', normalizedUsername);
+      let q = query(collection(db, 'profiles'), where('username', '==', normalizedUsername));
+      let querySnapshot = await getDocs(q);
+      
+      console.log(`Exact match query returned ${querySnapshot.docs.length} results`);
+      
+      // If exact match fails, try case-insensitive match
+      if (querySnapshot.empty) {
+        console.log('No exact match found, trying case-insensitive match');
+        
+        // Get all users and manually filter by case-insensitive match
+        q = query(collection(db, 'profiles'));
+        querySnapshot = await getDocs(q);
+        
+        console.log(`Found ${querySnapshot.docs.length} total user profiles to check`);
+        
+        const matchingDocs = querySnapshot.docs.filter((doc: any) => {
+          const docUsername = doc.data().username;
+          const match = docUsername && docUsername.toLowerCase() === normalizedUsername.toLowerCase();
+          console.log(`Checking ${docUsername} against ${normalizedUsername}: ${match ? 'MATCH' : 'NO MATCH'}`);
+          return match;
+        });
+        
+        if (matchingDocs.length > 0) {
+          // Found a case-insensitive match
+          const userDoc = matchingDocs[0];
+          const userId = userDoc.id;
+          
+          console.log('Found user via case-insensitive matching:', userId);
+          return { success: true, userId };
+        }
+        
+        console.log('No matching username found in database');
+        return { success: false, error: 'No account found with this username' };
+      }
+      
+      // Get the user ID from the exact match
+      const userDoc = querySnapshot.docs[0];
+      const userId = userDoc.id;
+      
+      console.log('Found user via exact username match:', userId);
+      return { success: true, userId };
+    } catch (error) {
+      console.error('Error in authenticateByUsername:', error);
+      return { success: false, error: String(error) };
+    }
+  }
+  
+  // Updated method to use device name for authentication by matching against usernames
+  public async authenticateByDeviceName(): Promise<{success: boolean, userId?: string, error?: string}> {
+    try {
+      // Get the device's name to match against usernames in the database
+      let deviceName = '';
+      
+      // Try to get the device name using DeviceInfo
+      try {
+        const DeviceInfo = require('react-native-device-info');
+        deviceName = await DeviceInfo.getDeviceName();
+        console.log('Got device name for authentication:', deviceName);
+      } catch (err) {
+        console.error('Error getting device name:', err);
+        return { success: false, error: 'Could not get device name for authentication' };
+      }
+      
+      if (!deviceName) {
+        console.error('No device name available for authentication');
+        return { success: false, error: 'No device name available for authentication' };
+      }
+      
+      // Now use the device name to authenticate by username
+      // Device name should already include @shytext suffix if user set it correctly
+      return await this.authenticateByUsername(deviceName);
+    } catch (error) {
+      console.error('Error in authenticateByDeviceName:', error);
+      return { success: false, error: String(error) };
     }
   }
 }

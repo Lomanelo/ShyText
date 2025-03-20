@@ -6,17 +6,39 @@ service cloud.firestore {
       return request.auth != null;
     }
     
-    // Profiles collection - allow all signed-in users to read and modify
+    // Allow all users (including unauthenticated) to check username availability
     match /profiles/{userId} {
-      allow read: if isSignedIn();
+      // Allow all users to read to check if username exists
+      allow read: if true;
+      // Only allow authenticated users to create/update their own profiles
+      allow write: if isSignedIn() && (request.auth.uid == userId || resource == null);
+    }
+
+    // Device UUIDs collection - allow broader read access for discovery
+    match /device_uuids/{docId} {
+      // Allow all reads for device UUID lookups
+      allow read: if true;
+      // Only allow the owner to write their own device UUID
+      allow write: if isSignedIn() && (request.auth.uid == docId);
+    }
+    
+    // Specific rule for querying device UUIDs by value
+    match /device_uuids_by_value/{docId} {
+      allow read: if true;
+      allow write: if isSignedIn();
+    }
+    
+    // User devices collection for BLE authentication
+    match /user_devices/{docId} {
+      allow read: if true;
       allow write: if isSignedIn();
     }
 
-    // Conversations collection - very permissive
+    // Conversations collection
     match /conversations/{conversationId} {
       allow read, write: if isSignedIn();
       
-      // Messages subcollection - also permissive
+      // Messages subcollection
       match /messages/{messageId} {
         allow read, write: if isSignedIn();
       }

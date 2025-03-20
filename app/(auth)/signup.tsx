@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -8,202 +8,437 @@ import {
   SafeAreaView, 
   ActivityIndicator,
   Alert,
-  Platform
+  Platform,
+  ScrollView,
+  Image,
+  Modal,
+  Clipboard,
+  Linking
 } from 'react-native';
 import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { getAuth, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc, getFirestore } from 'firebase/firestore';
+import { doc, setDoc, getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
 import colors from '../../src/theme/colors';
 import * as DeviceInfo from 'react-native-device-info';
-import { storeDeviceUUID } from '../../src/lib/firebase';
-
-// Define the getDeviceUUID function directly in this file to avoid import issues
-const getDeviceUUID = async (): Promise<string> => {
-  try {
-    if (Platform.OS === 'android') {
-      try {
-        const macAddress = await DeviceInfo.getMacAddress();
-        if (macAddress && macAddress !== '02:00:00:00:00:00') {
-          return `android-${macAddress.replace(/:/g, '')}`;
-        }
-      } catch (error) {
-        console.warn('Could not get MAC address:', error);
-      }
-    }
-    
-    try {
-      const uniqueId = await DeviceInfo.getUniqueId();
-      if (uniqueId) {
-        return `${Platform.OS}-${uniqueId}`;
-      }
-    } catch (error) {
-      console.warn('Could not get unique ID:', error);
-    }
-    
-    const deviceName = DeviceInfo.getDeviceNameSync();
-    const deviceId = DeviceInfo.getDeviceId();
-    
-    return `${Platform.OS}-${deviceName}-${deviceId}-${Date.now()}`;
-  } catch (error) {
-    console.error('Error getting device UUID:', error);
-    return `fallback-${Platform.OS}-${Math.random().toString(36).substring(2, 15)}`;
-  }
-};
+import BleService from '../../src/services/BleService';
 
 export default function SignupScreen() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [deviceName, setDeviceName] = useState('');
+  const [showDeviceNameModal, setShowDeviceNameModal] = useState(false);
+  const [fullUsername, setFullUsername] = useState('');
+  
+  // Get the device name on component mount
+  useEffect(() => {
+    const getDeviceName = async () => {
+      try {
+        const deviceName = await DeviceInfo.getDeviceName();
+        setDeviceName(deviceName);
+      } catch (err) {
+        console.error('Error getting device name:', err);
+      }
+    };
+    
+    getDeviceName();
+  }, []);
 
-  const handleBack = () => {
-    router.back();
+  // Update full username when username changes
+  useEffect(() => {
+    if (username.trim()) {
+      // Add @shytext suffix to username
+      setFullUsername(`${username.trim()}@shytext`);
+    } else {
+      setFullUsername('');
+    }
+  }, [username]);
+
+  // Handle username validation
+  const validateUsername = (username: string) => {
+    // Username should be alphanumeric and may include underscores
+    const regex = /^[a-zA-Z0-9_]+$/;
+    return regex.test(username);
   };
 
-  const handleSubmit = async () => {
+  // Open device name instructions modal
+  const openDeviceNameModal = () => {
+    setShowDeviceNameModal(true);
+  };
+
+  // Close device name instructions modal
+  const closeDeviceNameModal = () => {
+    setShowDeviceNameModal(false);
+  };
+
+  // Copy username to clipboard
+  const copyUsernameToClipboard = () => {
+    if (fullUsername) {
+      Clipboard.setString(fullUsername);
+      Alert.alert('Copied!', `"${fullUsername}" has been copied to clipboard.`);
+    }
+  };
+
+  // Navigate to device settings
+  const navigateToDeviceSettings = () => {
+    try {
+      // For iOS
+      if (Platform.OS === 'ios') {
+        // Try multiple URL formats for iOS
+        Promise.any([
+          Linking.openURL('App-prefs:Bluetooth'),
+          Linking.openURL('app-settings:'),
+          Linking.openURL('prefs:root=Bluetooth'),
+          Linking.openURL('prefs:root=General&path=About')
+        ]).catch(error => {
+          console.error('Could not open settings URLs:', error);
+          Alert.alert(
+            'Settings Navigation Failed',
+            'Please navigate manually to Settings > General > About > Name to change your device name.'
+          );
+        });
+      } 
+      // For Android
+      else {
+        Linking.openSettings();
+      }
+    } catch (error) {
+      console.error('Failed to open settings:', error);
+      Alert.alert(
+        'Settings Navigation Failed',
+        Platform.OS === 'ios' 
+          ? 'Please navigate manually to Settings > General > About > Name to change your device name.'
+          : 'Please navigate manually to Settings > About Phone > Device Name to change your device name.'
+      );
+    }
+    
+    // Close the modal after attempting to navigate
+    closeDeviceNameModal();
+  };
+
+  // Handle signup
+  const handleSignup = async () => {
     if (loading) return;
     
     try {
       setLoading(true);
-      setError(null);
+      setError('');
       
       // Validate inputs
-      if (!displayName.trim()) throw new Error('Please enter a display name');
-      if (!email.trim()) throw new Error('Please enter an email');
-      if (!password.trim()) throw new Error('Please enter a password');
-      if (password.length < 6) throw new Error('Password must be at least 6 characters');
+      if (!username.trim()) {
+        setError('Please enter a username');
+        setLoading(false);
+        return;
+      }
       
-      // Get device UUID before creating the account
-      const deviceUUID = await getDeviceUUID();
-      console.log('Device UUID for registration:', deviceUUID);
+      if (!validateUsername(username)) {
+        setError('Username can only contain letters, numbers, and underscores');
+        setLoading(false);
+        return;
+      }
       
-      // Create user
+      if (!password.trim()) {
+        setError('Please enter a password');
+        setLoading(false);
+        return;
+      }
+      
+      if (password.trim().length < 6) {
+        setError('Password must be at least 6 characters');
+        setLoading(false);
+        return;
+      }
+      
+      // Check if username is already taken
+      const db = getFirestore();
+      const usersRef = collection(db, 'profiles');
+      // Check for the username with @shytext suffix
+      const usernameWithSuffix = `${username.trim()}@shytext`;
+      const q = query(usersRef, where('username', '==', usernameWithSuffix));
+      const querySnapshot = await getDocs(q);
+      
+      if (!querySnapshot.empty) {
+        setError('Username is already taken');
+        setLoading(false);
+        return;
+      }
+      
+      // Create user account
+      await createUserAccount();
+      
+    } catch (err: any) {
+      console.error('Signup error:', err);
+      setError(err.message || 'Failed to sign up');
+      setLoading(false);
+    }
+  };
+
+  // Function to validate device name and create account
+  const validateAndCreateAccount = () => {
+    // We no longer verify the device name matches username
+    // Just open the modal to inform the user about device name requirements
+    openDeviceNameModal();
+  };
+
+  // Separate function to create the user account
+  const createUserAccount = async () => {
+    try {
+      setLoading(true);
+      
+      // Create temporary email using username with @shytext suffix (will not be shown to user or used for login)
+      const tempEmail = `${username.trim().toLowerCase()}@shytext.temp`;
+      
+      // Create user account in Firebase (required for authentication system)
       const userCredential = await createUserWithEmailAndPassword(
         getAuth(),
-        email.trim(),
+        tempEmail,
         password.trim()
       );
       
-      // Store user profile directly with Firestore instead of using setProfile
+      // Store user profile with username as primary identifier, including @shytext suffix
       const db = getFirestore();
       await setDoc(doc(db, 'profiles', userCredential.user.uid), {
-        display_name: displayName.trim(),
-        email: email.trim(),
-        device_uuid: deviceUUID,
+        username: `${username.trim()}@shytext`,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        last_active: new Date().toISOString(),
       });
       
-      // Also store device UUID in a separate collection for better querying
-      await storeDeviceUUID(userCredential.user.uid, deviceUUID);
-      
-      // Update the user's display name
+      // Update the user's display name to include @shytext suffix
       await updateProfile(userCredential.user, {
-        displayName: displayName.trim(),
+        displayName: `${username.trim()}@shytext`,
       });
       
-      console.log('User registered successfully with device UUID');
+      console.log('User registered successfully with username and @shytext suffix');
       router.replace('/(tabs)');
     } catch (err: any) {
-      console.error('Registration error:', err);
+      console.error('Account creation error:', err);
       setError(err.message || 'Failed to create account');
-    } finally {
       setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
-      
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Create Account</Text>
-        <View style={styles.placeholderView} />
-      </View>
-
-      <View style={styles.content}>
-        <Text style={styles.title}>Sign Up</Text>
-        <Text style={styles.subtitle}>Create a new account to use ShyText</Text>
-
-        {error && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
+    <LinearGradient
+      colors={['#0C0C0C', '#1E1E1E', '#2A2A2A']}
+      style={styles.gradientContainer}
+    >
+      <SafeAreaView style={styles.container}>
+        <StatusBar style="light" />
+        
+        {/* Device Name Instructions Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={showDeviceNameModal}
+          onRequestClose={closeDeviceNameModal}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <TouchableOpacity onPress={closeDeviceNameModal} style={styles.closeButton}>
+                  <Ionicons name="close" size={22} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+              
+              <View style={styles.modalBody}>
+                <Text style={styles.modalText}>
+                  Change device name to:
+                </Text>
+                
+                <View style={styles.usernameDisplay}>
+                  <Text style={styles.usernameText}>{fullUsername}</Text>
+                  <TouchableOpacity 
+                    style={styles.copyButton}
+                    onPress={copyUsernameToClipboard}
+                  >
+                    <Ionicons name="copy-outline" size={22} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+                
+                <Text style={styles.instructionTitle}>Quick steps:</Text>
+                
+                {Platform.OS === 'ios' ? (
+                  <View style={styles.instructionsContainer}>
+                    <View style={styles.instructionRow}>
+                      <View style={styles.instructionNumber}><Text style={styles.numberText}>1</Text></View>
+                      <Text style={styles.instructionText}>Settings → General → About → Name</Text>
+                    </View>
+                    <View style={styles.instructionRow}>
+                      <View style={styles.instructionNumber}><Text style={styles.numberText}>2</Text></View>
+                      <Text style={styles.instructionText}>Copy & paste your username</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.instructionsContainer}>
+                    <View style={styles.instructionRow}>
+                      <View style={styles.instructionNumber}><Text style={styles.numberText}>1</Text></View>
+                      <Text style={styles.instructionText}>Settings → About Phone → Device Name</Text>
+                    </View>
+                    <View style={styles.instructionRow}>
+                      <View style={styles.instructionNumber}><Text style={styles.numberText}>2</Text></View>
+                      <Text style={styles.instructionText}>Copy & paste your username</Text>
+                    </View>
+                  </View>
+                )}
+                
+                <TouchableOpacity
+                  style={styles.settingsButton}
+                  onPress={navigateToDeviceSettings}
+                >
+                  <LinearGradient
+                    colors={['#FF5E3A', '#FF2A68']}
+                    start={{x: 0, y: 0}}
+                    end={{x: 1, y: 0}}
+                    style={styles.gradientButton}
+                  >
+                    <Ionicons name="settings-outline" size={20} color="#FFFFFF" style={{marginRight: 8}} />
+                    <Text style={styles.settingsButtonText}>Go to Settings</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                
+                <View style={styles.modalDivider} />
+                
+                <TouchableOpacity
+                  style={styles.completeButton}
+                  onPress={() => {
+                    closeDeviceNameModal();
+                    handleSignup();
+                  }}
+                >
+                  <LinearGradient
+                    colors={['#4CAF50', '#388E3C']}
+                    start={{x: 0, y: 0}}
+                    end={{x: 1, y: 0}}
+                    style={styles.gradientButton}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" style={{marginRight: 8}} />
+                        <Text style={styles.completeButtonText}>Continue</Text>
+                      </>
+                    )}
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-        )}
-
-        <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Display Name</Text>
-            <TextInput
-              style={styles.input}
-              value={displayName}
-              onChangeText={setDisplayName}
-              placeholder="Enter your name"
-              autoCapitalize="words"
-              autoCorrect={false}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Enter your email"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter your password"
-              secureTextEntry
-            />
-          </View>
-
-          <TouchableOpacity
-            style={styles.button}
-            onPress={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.buttonText}>Sign Up</Text>
-            )}
+        </Modal>
+        
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.linkButton}
-            onPress={() => router.replace('/(auth)/login')}
-          >
-            <Text style={styles.linkText}>
-              Already have an account? <Text style={styles.linkTextBold}>Log In</Text>
-            </Text>
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Create Account</Text>
+          <View style={styles.placeholderView} />
         </View>
-      </View>
-    </SafeAreaView>
+
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.logoContainer}>
+            <Image 
+              source={require('../../assets/images/translogo.png')} 
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
+          
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Sign Up</Text>
+            
+            {error && (
+              <View style={styles.errorContainer}>
+                <Ionicons name="alert-circle" size={20} color="#FF6B6B" style={{marginRight: 8}} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Username</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="person-outline" size={20} color="rgba(255,255,255,0.6)" style={styles.inputIcon} />
+                <View style={styles.usernameInputContainer}>
+                  <TextInput
+                    style={styles.usernameInput}
+                    value={username}
+                    onChangeText={setUsername}
+                    placeholder="Choose username"
+                    placeholderTextColor="rgba(255,255,255,0.4)"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  <Text style={styles.usernameSuffix}>@shytext</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="lock-closed-outline" size={20} color="rgba(255,255,255,0.6)" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Choose a password"
+                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+            <View style={styles.noteContainer}>
+              <Ionicons name="information-circle-outline" size={16} color="rgba(255, 255, 255, 0.6)" style={{marginRight: 8, marginTop: 2}} />
+              <Text style={styles.noteText}>
+                Your device name must match your username@shytext
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                (!username || loading || !password.trim() || password.length < 6) && styles.disabledButton
+              ]}
+              onPress={validateAndCreateAccount}
+              disabled={!username || loading || !password.trim() || password.length < 6}
+            >
+              <LinearGradient
+                colors={['#FF5E3A', '#FF2A68']}
+                start={{x: 0, y: 0}}
+                end={{x: 1, y: 0}}
+                style={styles.gradientButton}
+              >
+                <Text style={styles.primaryButtonText}>Create Account</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={() => router.replace('/(auth)')}
+            >
+              <Text style={styles.loginText}>
+                Already have an account? <Text style={styles.loginTextBold}>Sign In</Text>
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
+  gradientContainer: {
+    flex: 1,
+  },
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -216,81 +451,354 @@ const styles = StyleSheet.create({
     padding: 5,
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: colors.text,
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
   },
   placeholderView: {
     width: 34, // to balance the back button width
   },
-  content: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingBottom: 20,
   },
-  title: {
+  logoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 20,
+  },
+  logo: {
+    width: 100,
+    height: 100,
+  },
+  card: {
+    backgroundColor: 'rgba(40, 40, 40, 0.6)',
+    borderRadius: 24,
+    padding: 24,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 94, 58, 0.2)',
+  },
+  cardTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: colors.darkGray,
-    marginBottom: 30,
+    color: '#FFFFFF',
+    marginBottom: 24,
+    textAlign: 'center',
+    letterSpacing: 0.5,
   },
   errorContainer: {
-    backgroundColor: '#FFEEEE', // Light red background for error
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 59, 48, 0.2)',
+    padding: 14,
+    borderRadius: 18,
+    marginBottom: 18,
   },
   errorText: {
-    color: colors.error,
+    color: '#FF6B6B',
     fontSize: 14,
-  },
-  form: {
-    width: '100%',
+    flex: 1,
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 18,
   },
   label: {
     fontSize: 16,
+    color: '#FFFFFF',
     marginBottom: 8,
-    color: colors.text,
+    fontWeight: '500',
+    letterSpacing: 0.3,
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(30, 30, 30, 0.8)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 94, 58, 0.3)',
+    overflow: 'hidden',
+  },
+  inputIcon: {
+    paddingHorizontal: 14,
   },
   input: {
-    borderWidth: 1,
-    borderColor: colors.mediumGray,
-    borderRadius: 10,
-    padding: 15,
+    flex: 1,
+    padding: 16,
     fontSize: 16,
-    backgroundColor: colors.background,
+    color: '#FFFFFF',
   },
-  button: {
-    backgroundColor: colors.primary,
-    paddingVertical: 15,
-    borderRadius: 10,
+  checkingText: {
+    marginTop: 8,
+    color: '#BBBBBB',
+    fontSize: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  availableText: {
+    marginTop: 8,
+    color: '#4CD964',
+    fontSize: 14,
+  },
+  unavailableText: {
+    marginTop: 8,
+    color: '#FF6B6B',
+    fontSize: 14,
+  },
+  noteContainer: {
+    flexDirection: 'row',
+    marginBottom: 24,
+    paddingHorizontal: 4,
+  },
+  noteText: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.7)',
+    lineHeight: 20,
+    flex: 1,
+  },
+  primaryButton: {
+    borderRadius: 22,
+    marginBottom: 16,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#FF5E3A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  gradientButton: {
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
+    flexDirection: 'row',
   },
-  buttonText: {
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    letterSpacing: 0.5,
+  },
+  secondaryButton: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(40, 40, 40, 0.6)',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#FF5E3A',
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  secondaryButtonText: {
+    color: '#FF5E3A',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginLeft: 8,
+  },
+  loginButton: {
+    padding: 10,
+    alignItems: 'center',
+  },
+  loginText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+  },
+  loginTextBold: {
+    fontWeight: 'bold',
+    color: '#FF5E3A',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '90%',
+    maxWidth: 380,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 94, 58, 0.3)',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 15,
+    elevation: 8,
+  },
+  modalHeader: {
+    alignItems: 'flex-end',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(40, 40, 40, 0.9)',
+  },
+  closeButton: {
+    padding: 6,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+  },
+  modalBody: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  modalText: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  usernameDisplay: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 12,
+    padding: 10,
+    marginVertical: 10,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 94, 58, 0.2)',
+  },
+  usernameText: {
+    color: '#FF5E3A',
+    fontSize: 20,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  copyButton: {
+    padding: 10,
+    backgroundColor: 'rgba(255, 94, 58, 0.3)',
+    borderRadius: 10,
+    marginLeft: 12,
+    height: 44,
+    width: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  instructionTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+    marginTop: 0,
+  },
+  instructionsContainer: {
+    width: '100%',
+    marginBottom: 12,
+  },
+  instructionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  instructionNumber: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255, 94, 58, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  numberText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+  },
+  instructionText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    flex: 1,
+  },
+  settingsButton: {
+    width: '100%',
+    height: 46,
+    borderRadius: 23,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  settingsButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },
-  linkButton: {
-    marginTop: 20,
+  usernamePreview: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  previewLabel: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 14,
+    marginRight: 5,
+  },
+  previewValue: {
+    color: '#FF5E3A',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    width: '100%',
+    marginVertical: 12,
+  },
+  completeText: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 18,
+    fontSize: 15,
+  },
+  completeButton: {
+    width: '100%',
+    height: 46,
+    borderRadius: 23,
+    overflow: 'hidden',
+    marginTop: 8,
+  },
+  completeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  helperText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 14,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  usernameInputContainer: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  linkText: {
-    color: colors.darkGray,
+  usernameInput: {
+    flex: 1,
+    padding: 16,
     fontSize: 16,
+    color: '#FFFFFF',
   },
-  linkTextBold: {
-    fontWeight: 'bold',
-    color: colors.primary,
+  usernameSuffix: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.6)',
+    paddingRight: 16,
   },
 }); 

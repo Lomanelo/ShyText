@@ -792,8 +792,10 @@ export async function getUserConversations() {
     }
     
     // Sort by updated_at (most recent first)
-    conversations.sort((a, b) => {
-      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+    conversations.sort((a: any, b: any) => {
+      const timeA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+      const timeB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+      return timeB - timeA;
     });
     
     return { success: true, conversations };
@@ -955,6 +957,7 @@ export async function listAllUsers() {
       const data = doc.data();
       return {
         id: doc.id,
+        username: data.username || '',
         display_name: data.display_name || '',
         photo_url: data.photo_url || '',
         status: data.status || 'Available',
@@ -970,69 +973,153 @@ export async function listAllUsers() {
 }
 
 // New functions for device UUID management
-export const storeDeviceUUID = async (userId: string, uuid: string): Promise<boolean> => {
+export const storeDeviceUUID = async (uid: string, deviceUUID: string) => {
   try {
-    const db = getFirestore();
-    await setDoc(doc(db, 'user_devices', userId), {
-      device_uuid: uuid,
-      last_updated: serverTimestamp()
-    }, { merge: true });
+    const devicesRef = collection(db, 'devices');
     
-    // Also update the user's profile with this UUID
-    await updateDoc(doc(db, 'users', userId), {
-      device_uuid: uuid,
-      last_updated: serverTimestamp()
+    // First create a query to check if this user already has a device entry
+    const q = query(devicesRef, where('user_id', '==', uid));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      // User already has a device entry, update it
+      const deviceDoc = querySnapshot.docs[0];
+      await updateDoc(doc(db, 'devices', deviceDoc.id), {
+        device_uuid: deviceUUID,
+        updated_at: new Date().toISOString()
+      });
+    } else {
+      // Create a new device entry
+      await addDoc(devicesRef, {
+        user_id: uid,
+        device_uuid: deviceUUID,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+    }
+    
+    // Also update the user's profile with their device UUID
+    await updateDoc(doc(db, 'profiles', uid), {
+      device_uuid: deviceUUID,
+      updated_at: new Date().toISOString()
     });
     
-    console.log(`Stored device UUID ${uuid} for user ${userId}`);
-    return true;
+    return { success: true };
   } catch (error) {
     console.error('Error storing device UUID:', error);
-    return false;
+    return { success: false, error };
   }
 };
 
-// Function to get user by device UUID
-export const getUserByDeviceUUID = async (uuid: string): Promise<any | null> => {
+// Get user by device UUID
+export const getUserByDeviceUUID = async (deviceUUID: string) => {
   try {
-    const db = getFirestore();
-    const q = query(collection(db, 'users'), where('device_uuid', '==', uuid));
+    // Try profiles directly first - this is the simplest approach
+    const profilesRef = collection(db, 'profiles');
+    const profileQuery = query(profilesRef, where('device_uuid', '==', deviceUUID));
+    const profileSnapshot = await getDocs(profileQuery);
+    
+    if (!profileSnapshot.empty) {
+      const profileDoc = profileSnapshot.docs[0];
+      return { 
+        id: profileDoc.id, 
+        ...profileDoc.data(),
+        device_uuid: deviceUUID
+      };
+    }
+    
+    // If not found in profiles, try device_uuids collection as backup
+    const deviceUuidsRef = collection(db, 'device_uuids');
+    const deviceQuery = query(deviceUuidsRef, where('device_uuid', '==', deviceUUID));
+    const deviceSnapshot = await getDocs(deviceQuery);
+    
+    if (!deviceSnapshot.empty) {
+      const deviceDoc = deviceSnapshot.docs[0];
+      const userId = deviceDoc.id; // The document ID is the user ID
+      
+      // Get the user profile
+      const profileDoc = await getDoc(doc(db, 'profiles', userId));
+      if (profileDoc.exists()) {
+        return { 
+          id: userId, 
+          ...profileDoc.data(),
+          device_uuid: deviceUUID 
+        };
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting user by device UUID:', error);
+    return null;
+  }
+};
+
+// Get user by username (which matches device name in our new approach)
+export const getUserByUsername = async (username: string) => {
+  try {
+    const profilesRef = collection(db, 'profiles');
+    const q = query(profilesRef, where('username', '==', username));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const profileDoc = querySnapshot.docs[0];
+      return { 
+        id: profileDoc.id, 
+        ...profileDoc.data() 
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting user by username:', error);
+    return null;
+  }
+};
+
+// Authenticate by username 
+export const authenticateByDeviceName = async (username: string) => {
+  try {
+    // Find user profile by username directly
+    const profilesRef = collection(db, 'profiles');
+    const q = query(profilesRef, where('username', '==', username.trim()));
     const querySnapshot = await getDocs(q);
     
     if (querySnapshot.empty) {
-      console.log('No user found with device UUID:', uuid);
-      return null;
+      // Try case-insensitive search if exact match fails
+      const allProfilesQuery = query(profilesRef);
+      const allProfiles = await getDocs(allProfilesQuery);
+      
+      const matchingDocs = allProfiles.docs.filter(doc => {
+        const data = doc.data();
+        return data.username && data.username.toLowerCase() === username.toLowerCase();
+      });
+      
+      if (matchingDocs.length === 0) {
+        console.log('No user found with this username');
+        return { success: false, error: 'No user found with this username' };
+      }
+      
+      const userDoc = matchingDocs[0];
+      const userData = userDoc.data();
+      
+      return {
+        success: true,
+        userId: userDoc.id,
+        username: userData.username
+      };
     }
     
-    // Return the first matching user
-    const userData = querySnapshot.docs[0].data();
+    const userDoc = querySnapshot.docs[0];
+    const userData = userDoc.data();
+    
     return {
-      id: querySnapshot.docs[0].id,
-      ...userData
+      success: true,
+      userId: userDoc.id,
+      username: userData.username
     };
   } catch (error) {
-    console.error('Error finding user by device UUID:', error);
-    return null;
-  }
-};
-
-// Function to get user's device UUID
-export const getCurrentUserDeviceUUID = async (): Promise<string | null> => {
-  try {
-    const currentUser = getCurrentUser();
-    if (!currentUser) return null;
-    
-    const db = getFirestore();
-    const docRef = doc(db, 'user_devices', currentUser.uid);
-    const docSnap = await getDoc(docRef);
-    
-    if (docSnap.exists()) {
-      return docSnap.data().device_uuid || null;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error getting current user device UUID:', error);
-    return null;
+    console.error('Error in authenticateByUsername:', error);
+    return { success: false, error: 'Authentication failed' };
   }
 }; 

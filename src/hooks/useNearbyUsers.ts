@@ -170,7 +170,7 @@ export function useNearbyUsers() {
     }
   }, [isScanning, updateUsersList]);
 
-  // Function to handle found devices - now matches against UUIDs instead of names
+  // Function to handle found devices - matches device names against usernames only
   const handleDeviceFound = useCallback(async (device: Device) => {
     try {
       // Skip devices with very weak signals (likely too far away)
@@ -187,8 +187,17 @@ export function useNearbyUsers() {
       // Calculate approximate distance
       const distance = device.rssi ? rssiToDistance(device.rssi) : Infinity;
       
+      // Get device name which should match username
+      const deviceName = device.name || device.localName || '';
+      
+      // Skip devices without a name - we need it for username matching
+      if (!deviceName) {
+        console.log('Skipping device without name:', device.id);
+        return;
+      }
+      
       // Log processing with distance info
-      console.log(`Processing device: ${device.id}, Name: ${device.name || device.localName || 'unnamed'}, RSSI: ${device.rssi}, ~${distance}m`);
+      console.log(`Processing device: ${device.id}, Name: ${deviceName}, RSSI: ${device.rssi}, ~${distance}m`);
       
       // Check if we already have this device mapped to a user
       const existingUser = users.find(user => user.deviceId === device.id);
@@ -212,90 +221,45 @@ export function useNearbyUsers() {
       let usersList = allUsers;
       if (usersList.length === 0) {
         usersList = await fetchAllUsers();
+        console.log('Fetched users for matching:', usersList.map(u => ({ id: u.id, username: u.username })));
       }
       
-      // Try to match the device by UUID using the device identifier
-      // We'll try multiple approaches since device IDs can vary by platform
+      // Match by device name directly against username
+      console.log(`Attempting to match device name "${deviceName}" against usernames in database`);
       try {
-        // 1. First try direct device.id match
-        const { getUserByDeviceUUID } = require('../lib/firebase');
+        // Find a user with username matching the device name
+        const matchedUserByName = usersList.find(
+          user => {
+            const match = (user.username || '').toLowerCase() === deviceName.toLowerCase();
+            console.log(`Checking user ${user.username} against device name ${deviceName}: ${match ? 'MATCH' : 'NO MATCH'}`);
+            return match;
+          }
+        );
         
-        // Try to find a user with this device ID
-        const matchedUser = await getUserByDeviceUUID(device.id);
-        
-        if (matchedUser) {
-          console.log(`Found user with matching device UUID: ${matchedUser.display_name}`);
+        if (matchedUserByName) {
+          console.log(`Found user with matching device name: ${matchedUserByName.username}`);
           
           // Check if we already have this user in our list
-          if (users.some(user => user.id === matchedUser.id)) {
-            console.log('User already in nearby list:', matchedUser.display_name);
+          if (users.some(user => user.id === matchedUserByName.id)) {
+            console.log('User already in nearby list:', matchedUserByName.username);
             return;
           }
           
           // Add the user to our list with device info
           setUsers(prevUsers => [...prevUsers, {
-            ...matchedUser,
+            ...matchedUserByName,
             deviceId: device.id,
             rssi: device.rssi,
             distance: distance,
             lastActive: new Date().toISOString()
           }]);
           return;
-        }
-        
-        // 2. Try with platform prefixes
-        const platformId = `${Platform.OS}-${device.id}`;
-        const matchedUserWithPlatform = await getUserByDeviceUUID(platformId);
-        
-        if (matchedUserWithPlatform) {
-          console.log(`Found user with platform-prefixed UUID: ${matchedUserWithPlatform.display_name}`);
-          
-          // Check if we already have this user in our list
-          if (users.some(user => user.id === matchedUserWithPlatform.id)) {
-            console.log('User already in nearby list:', matchedUserWithPlatform.display_name);
-            return;
-          }
-          
-          // Add the user to our list with device info
-          setUsers(prevUsers => [...prevUsers, {
-            ...matchedUserWithPlatform,
-            deviceId: device.id,
-            rssi: device.rssi,
-            distance: distance,
-            lastActive: new Date().toISOString()
-          }]);
-          return;
-        }
-        
-        // 3. Try variations of the device ID
-        // Some devices report UUIDs in different formats
-        const normalizedId = device.id.replace(/[-:]/g, '').toLowerCase();
-        const matchedUserNormalized = await getUserByDeviceUUID(normalizedId);
-        
-        if (matchedUserNormalized) {
-          console.log(`Found user with normalized UUID: ${matchedUserNormalized.display_name}`);
-          
-          // Check if we already have this user in our list
-          if (users.some(user => user.id === matchedUserNormalized.id)) {
-            console.log('User already in nearby list:', matchedUserNormalized.display_name);
-            return;
-          }
-          
-          // Add the user to our list with device info
-          setUsers(prevUsers => [...prevUsers, {
-            ...matchedUserNormalized,
-            deviceId: device.id,
-            rssi: device.rssi,
-            distance: distance,
-            lastActive: new Date().toISOString()
-          }]);
-          return;
+        } else {
+          console.log(`No username match found for device name: ${deviceName}`);
         }
       } catch (err) {
-        console.error('Error looking up user by device UUID:', err);
+        console.error('Error matching user by device name:', err);
       }
-      
-      console.log('No matching user found for device:', device.id);
     } catch (err) {
       console.error('Error processing found device:', err);
     }

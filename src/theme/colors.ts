@@ -1,25 +1,26 @@
 // App color palette
 const colors = {
   // Primary colors
-  primary: '#00ADB5', // Black (replacing Teal accent color)
-  background: '#FFFFFF', // White
-  text: '#222831', // Black
+  primary: '#FF5E3A', // Flame color (replacing black)
+  primaryGradientEnd: '#FF2A68', // End color for gradients
+  background: '#121212', // Dark background
+  text: '#FFFFFF', // White text for dark mode
   
   // Secondary/utility colors
-  lightGray: '#F1F1F1', // For backgrounds, cards, etc.
-  mediumGray: '#CCCCCC', // For borders, dividers
+  lightGray: '#2A2A2A', // For backgrounds, cards, etc.
+  mediumGray: '#555555', // For borders, dividers
   darkGray: '#999999', // For secondary text
-  error: '#FF3B30', // For error messages (dark red)
-  success: '#34C759', // For success messages (dark green)
-  warning: '#FF9500', // For warning messages
+  error: '#FF6B6B', // For error messages (bright red)
+  success: '#4CD964', // For success messages (bright green)
+  warning: '#FFCC00', // For warning messages
   
   // Variants of the primary color
-  primaryLight: '#E6F7F8', // Lighter version of black
-  primaryDark: '#008C93', // Darker version remains black
+  primaryLight: '#FF7E5A', // Lighter version of flame
+  primaryDark: '#E24929', // Darker version of flame
   
   // Transparent versions for overlays
-  transparentBlack: 'rgba(0, 0, 0, 0.5)',
-  transparentPrimary: 'rgba(0, 173, 181, 0.1)',
+  transparentBlack: 'rgba(0, 0, 0, 0.7)',
+  transparentPrimary: 'rgba(255, 94, 58, 0.2)',
 };
 
 export default colors; 
