@@ -18,6 +18,7 @@ export default function SettingsScreen() {
   const [showProfileDetails, setShowProfileDetails] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [showProfileImageModal, setShowProfileImageModal] = useState(false);
 
   const fetchUserProfile = async () => {
     const currentUser = getCurrentUser();
@@ -113,6 +114,12 @@ export default function SettingsScreen() {
 
   const handleProfilePress = () => {
     setShowProfileDetails(true);
+  };
+
+  const handleProfileImagePress = () => {
+    if (user?.photo_url || authUser?.photoURL) {
+      setShowProfileImageModal(true);
+    }
   };
 
   const handleChangeProfileImage = async () => {
@@ -245,7 +252,10 @@ export default function SettingsScreen() {
 
       {/* Profile Section */}
       <TouchableOpacity style={styles.profileSection} onPress={handleProfilePress}>
-        <View style={styles.profileImageContainer}>
+        <TouchableOpacity 
+          style={styles.profileImageContainer}
+          onPress={handleProfileImagePress}
+        >
           {(user?.photo_url || authUser?.photoURL) ? (
             <Image
               source={{ uri: user?.photo_url || authUser?.photoURL }}
@@ -266,7 +276,7 @@ export default function SettingsScreen() {
           >
             <Ionicons name="camera" size={16} color="#FFFFFF" />
           </TouchableOpacity>
-        </View>
+        </TouchableOpacity>
         
         <View style={styles.profileInfo}>
           <Text style={styles.profileName}>{user?.display_name || authUser?.displayName || 'User'}</Text>
@@ -328,78 +338,97 @@ export default function SettingsScreen() {
         animationType="slide"
         onRequestClose={() => setShowProfileDetails(false)}
       >
-        <View style={styles.modalOverlay}>
+        <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Profile</Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setShowProfileDetails(false)}
-              >
-                <Ionicons name="close" size={24} color={colors.text} />
+              <TouchableOpacity onPress={() => setShowProfileDetails(false)}>
+                <Ionicons name="close" size={28} color={colors.text} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.profileDetailsContainer}>
+            {/* Full Profile Image Card */}
+            <View style={styles.fullProfileCard}>
               <TouchableOpacity 
-                style={styles.profileImageLarge}
-                onPress={handleChangeProfileImage}
-                disabled={uploadingImage}
+                style={styles.fullProfileImageContainer}
+                onPress={handleProfileImagePress}
               >
-                {uploadingImage ? (
-                  <View style={styles.uploadingOverlay}>
-                    <ActivityIndicator size="large" color={colors.background} />
-                  </View>
-                ) : null}
-                
-                {user?.photo_url ? (
-                  <>
-                    <Image
-                      source={{ uri: user.photo_url }}
-                      style={styles.profileImageLargeImg}
-                    />
-                    <View style={styles.changePhotoOverlay}>
-                      <Ionicons name="camera" size={24} color={colors.background} />
-                    </View>
-                  </>
+                {(user?.photo_url || authUser?.photoURL) ? (
+                  <Image
+                    source={{ uri: user?.photo_url || authUser?.photoURL }}
+                    style={styles.fullProfileImage}
+                    resizeMode="cover"
+                  />
                 ) : (
-                  <View style={styles.profileImageLargePlaceholder}>
-                    <Text style={styles.profileInitialLarge}>
-                      {user?.display_name ? user.display_name.charAt(0).toUpperCase() : '?'}
-                    </Text>
-                    <View style={styles.changePhotoOverlay}>
-                      <Ionicons name="camera" size={24} color={colors.background} />
-                    </View>
+                  <View style={styles.fullProfileImagePlaceholder}>
+                    <Ionicons name="person" size={80} color="#888888" />
                   </View>
                 )}
               </TouchableOpacity>
-
-              {uploadError && (
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorText}>{uploadError}</Text>
-                </View>
-              )}
-
-              <Text style={styles.profileNameLarge}>{user?.display_name || 'User'}</Text>
-              {user?.age && <Text style={styles.profileSubtitle}>{user.age} years old</Text>}
               
-              <View style={styles.profileDetail}>
-                <Ionicons name="mail-outline" size={24} color={colors.primary} />
-                <Text style={styles.profileDetailText}>{user?.email || 'No email available'}</Text>
-              </View>
-
-              <View style={styles.profileDetail}>
-                <Ionicons name="calendar-outline" size={24} color={colors.primary} />
-                <Text style={styles.profileDetailText}>
-                  {user?.formattedBirthDate || 'No birthdate available'}
+              <View style={styles.profileDetailsOverlay}>
+                <Text style={styles.fullProfileName}>
+                  {user?.display_name || authUser?.displayName || 'User'}
+                  {user?.age ? `, ${user.age}` : ''}
                 </Text>
               </View>
+            </View>
 
-              <TouchableOpacity style={styles.editProfileButton}>
-                <Text style={styles.editProfileButtonText}>Edit Profile</Text>
-              </TouchableOpacity>
-            </ScrollView>
+            <Text style={styles.sectionTitle}>Profile Details</Text>
+            <View style={styles.profileDetailItem}>
+              <Ionicons name="mail" size={24} color={colors.primary} style={styles.detailIcon} />
+              <Text style={styles.detailLabel}>Email:</Text>
+              <Text style={styles.detailValue}>{user?.email || 'No email available'}</Text>
+            </View>
+
+            <View style={styles.profileDetailItem}>
+              <Ionicons name="calendar" size={24} color={colors.primary} style={styles.detailIcon} />
+              <Text style={styles.detailLabel}>Birth Date:</Text>
+              <Text style={styles.detailValue}>{user?.formattedBirthDate || 'Not available'}</Text>
+            </View>
+
+            <View style={styles.profileDetailItem}>
+              <Ionicons name="time" size={24} color={colors.primary} style={styles.detailIcon} />
+              <Text style={styles.detailLabel}>Member Since:</Text>
+              <Text style={styles.detailValue}>
+                {user?.created_at 
+                  ? new Date(user.created_at).toLocaleDateString() 
+                  : 'Not available'}
+              </Text>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.editProfileButton}
+              onPress={() => {
+                setShowProfileDetails(false);
+                // Add functionality to navigate to edit profile screen
+              }}
+            >
+              <Text style={styles.editProfileButtonText}>Edit Profile</Text>
+            </TouchableOpacity>
           </View>
+        </View>
+      </Modal>
+
+      {/* Full screen profile image modal */}
+      <Modal
+        visible={showProfileImageModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowProfileImageModal(false)}
+      >
+        <View style={styles.fullScreenModalContainer}>
+          <TouchableOpacity 
+            style={styles.fullScreenCloseButton}
+            onPress={() => setShowProfileImageModal(false)}
+          >
+            <Ionicons name="close-circle" size={36} color="#FFFFFF" />
+          </TouchableOpacity>
+          <Image 
+            source={{ uri: user?.photo_url || authUser?.photoURL || '' }}
+            style={styles.fullScreenImage}
+            resizeMode="contain"
+          />
         </View>
       </Modal>
     </ScrollView>
@@ -431,15 +460,16 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.lightGray,
   },
   profileImageContainer: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
     marginRight: 15,
     position: 'relative',
   },
   profileImage: {
     width: '100%',
     height: '100%',
+    borderRadius: 45,
   },
   profileImagePlaceholder: {
     width: '100%',
@@ -501,10 +531,10 @@ const styles = StyleSheet.create({
     color: colors.error,
   },
   // Modal styles
-  modalOverlay: {
+  modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
   },
   modalContent: {
     backgroundColor: colors.background,
@@ -526,102 +556,99 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
   },
-  closeButton: {
-    padding: 5,
-  },
-  profileDetailsContainer: {
-    alignItems: 'center',
-    padding: 20,
-  },
-  profileImageLarge: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+  fullProfileCard: {
+    width: '100%',
+    height: 400,
+    borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 20,
     position: 'relative',
+    backgroundColor: '#2A2A2A',
   },
-  profileImageLargeImg: {
+  fullProfileImageContainer: {
     width: '100%',
     height: '100%',
-  },
-  profileImageLargePlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: colors.primary,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  profileInitialLarge: {
-    color: colors.background,
-    fontSize: 40,
-    fontWeight: 'bold',
+  fullProfileImage: {
+    width: '100%',
+    height: '100%',
   },
-  profileNameLarge: {
+  fullProfileImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#2A2A2A',
+  },
+  profileDetailsOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: 16,
+  },
+  fullProfileName: {
+    color: '#FFFFFF',
     fontSize: 24,
     fontWeight: 'bold',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
     color: colors.text,
-    marginBottom: 5,
+    marginBottom: 12,
+    marginTop: 8,
   },
-  profileSubtitle: {
-    fontSize: 16,
-    color: colors.darkGray,
-    marginBottom: 20,
-  },
-  profileDetail: {
+  profileDetailItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '100%',
-    marginBottom: 15,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
   },
-  profileDetailText: {
+  detailIcon: {
+    marginRight: 12,
+  },
+  detailLabel: {
+    fontSize: 16,
+    color: colors.darkGray,
+    width: 100,
+  },
+  detailValue: {
+    flex: 1,
     fontSize: 16,
     color: colors.text,
-    marginLeft: 15,
   },
   editProfileButton: {
     backgroundColor: colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 25,
-    marginTop: 20,
+    borderRadius: 30,
+    padding: 16,
+    alignItems: 'center',
+    marginTop: 24,
   },
   editProfileButtonText: {
-    color: colors.background,
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
-  changePhotoOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    height: 40,
-    alignItems: 'center',
+  fullScreenModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
     justifyContent: 'center',
-  },
-  uploadingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 10,
   },
-  errorContainer: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 15,
+  fullScreenImage: {
     width: '100%',
+    height: '90%',
   },
-  errorText: {
-    color: colors.error,
-    textAlign: 'center',
+  fullScreenCloseButton: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    zIndex: 10,
   },
   editProfileImageButton: {
     position: 'absolute',
