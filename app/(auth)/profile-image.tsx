@@ -5,16 +5,19 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { completeRegistration, getRegistrationData, auth, getCurrentUser, uploadProfileImage } from '../../src/lib/firebase';
-import { signOut as firebaseSignOut } from 'firebase/auth';
-import colors from '../../src/theme/colors';
-import { registerForPushNotifications } from '../../src/lib/notifications';
+import { launchImageLibraryAsync, launchCameraAsync, MediaTypeOptions } from 'expo-image-picker';
+import { getAuth, updateProfile } from 'firebase/auth';
+import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
+import { getFirestore, doc, updateDoc, setDoc } from 'firebase/firestore';
 
 export default function ProfileImageScreen() {
-  const [image, setImage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  // State for image selection and upload
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [error, setError] = useState<string>('');
+  const [completed, setCompleted] = useState(false);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     // Request permission for image library
@@ -27,503 +30,524 @@ export default function ProfileImageScreen() {
       }
     })();
     
-    // Verify that registration data exists
-    const regData = getRegistrationData();
-    if (!regData) {
-      // No registration in progress, redirect to start
+    // Check if user is authenticated
+    const auth = getAuth();
+    if (!auth.currentUser) {
       Alert.alert(
         'Error',
-        'Registration data not found. Please start the registration process again.',
-        [{ text: 'OK', onPress: () => router.replace('/(auth)' as any) }]
+        'You must be logged in to upload a profile picture.',
+        [{ text: 'OK', onPress: () => router.replace('/(auth)') }]
       );
     }
   }, []);
 
-  const handleBack = () => {
-    router.back();
-  };
-
   const pickImage = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      const result = await launchImageLibraryAsync({
+        mediaTypes: MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.7,
       });
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setImage(result.assets[0].uri);
-        setError(null);
+        setSelectedImage(result.assets[0].uri);
+        setError('');
       }
-    } catch (err) {
-      console.error('Error picking image:', err);
-      setError('Error selecting image. Please try again.');
+    } catch (error) {
+      console.error('Error picking image:', error);
+      setError('Failed to pick image');
     }
   };
 
   const takePicture = async () => {
     try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Sorry, we need camera permissions to take a picture!');
-        return;
-      }
-      
-      const result = await ImagePicker.launchCameraAsync({
+      const result = await launchCameraAsync({
+        mediaTypes: MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8,
+        quality: 0.7,
       });
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        setImage(result.assets[0].uri);
-        setError(null);
+        setSelectedImage(result.assets[0].uri);
+        setError('');
       }
-    } catch (err) {
-      console.error('Error taking picture:', err);
-      setError('Error taking picture. Please try again.');
+    } catch (error) {
+      console.error('Error taking picture:', error);
+      setError('Failed to take picture');
+    }
+  };
+
+  const uploadProfileImage = async (imageUri: string, userId: string): Promise<{ success: boolean, url?: string, error?: any }> => {
+    try {
+      console.log('Starting profile image upload for user:', userId);
+      
+      // Convert image URI to blob
+      const response = await fetch(imageUri);
+      const blob = await response.blob();
+      
+      // File size limit check removed - accepting any file size
+      console.log('Image size:', blob.size / (1024 * 1024), 'MB');
+      
+      // Upload to Firebase Storage
+      const storage = getStorage();
+      const storageRef = ref(storage, `profile_images/${userId}`);
+      
+      console.log('Uploading image to Firebase Storage');
+      // Use uploadBytesResumable to track progress
+      const uploadTask = uploadBytesResumable(storageRef, blob);
+      
+      return new Promise((resolve) => {
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            // Get upload progress
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(Math.round(progress));
+            console.log('Upload progress:', Math.round(progress), '%');
+          },
+          (error) => {
+            // Handle errors
+            console.error('Upload error:', error);
+            resolve({ success: false, error });
+          },
+          async () => {
+            // Upload completed successfully
+            try {
+              console.log('Upload completed, getting download URL');
+              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              console.log('Got download URL:', downloadURL);
+              
+              // Update user profile with photo URL
+              const auth = getAuth();
+              if (auth.currentUser) {
+                console.log('Updating user auth profile with photo URL');
+                await updateProfile(auth.currentUser, {
+                  photoURL: downloadURL,
+                });
+                
+                // Also update user document in Firestore
+                try {
+                  const db = getFirestore();
+                  
+                  // Try to update in both profile collections for compatibility
+                  try {
+                    console.log('Updating Firestore profiles collection with photo URL');
+                    await updateDoc(doc(db, 'profiles', userId), {
+                      photoURL: downloadURL,
+                      updated_at: new Date().toISOString()
+                    });
+                  } catch (profileError) {
+                    console.log('Failed to update profiles collection:', profileError);
+                    // Ignore if this fails - might not exist
+                  }
+                  
+                  try {
+                    console.log('Updating Firestore users collection with photo URL');
+                    await updateDoc(doc(db, 'users', userId), {
+                      photoURL: downloadURL,
+                      updatedAt: new Date().toISOString()
+                    });
+                  } catch (userError) {
+                    console.log('Failed to update users collection:', userError);
+                    // Ignore if this fails - might not exist
+                  }
+                  
+                  console.log('Profile image successfully saved to user profile');
+                } catch (firestoreError) {
+                  console.error('Error updating Firestore document:', firestoreError);
+                  // Continue anyway since the auth profile was updated
+                }
+              } else {
+                console.error('No authenticated user found when trying to update profile');
+              }
+              
+              resolve({ success: true, url: downloadURL });
+            } catch (finalizeError) {
+              console.error('Error in final stage of upload:', finalizeError);
+              resolve({ success: false, error: finalizeError });
+            }
+          }
+        );
+      });
+    } catch (error) {
+      console.error('Error in uploadProfileImage:', error);
+      return { success: false, error };
     }
   };
 
   const handleUpload = async () => {
+    if (!selectedImage) {
+      setError('Please select an image first');
+      return;
+    }
+    
     try {
-      setLoading(true);
-      setError(null);
-      setUploadProgress(10); // Start progress
+      setUploading(true);
+      setError('');
       
-      // Get registration data
-      const regData = getRegistrationData();
-      if (!regData || !regData.email || !regData.password) {
-        setError('Missing registration data');
-        setLoading(false);
-        setUploadProgress(0);
+      const auth = getAuth();
+      const user = auth.currentUser;
+      
+      if (!user) {
+        setError('User not authenticated');
+        setUploading(false);
         return;
       }
       
-      setUploadProgress(30); // Account creation starting
-      console.log('Creating user account first...');
-      // First complete registration to create the user account
-      const registrationResult = await completeRegistration();
-      if (!registrationResult.success) {
-        setError(`Failed to create account: ${registrationResult.error}`);
-        setLoading(false);
-        setUploadProgress(0);
-        return;
-      }
+      console.log('Starting image upload for user:', user.uid);
       
-      setUploadProgress(60); // Account created
+      const uploadResult = await uploadProfileImage(selectedImage, user.uid);
       
-      // Get the newly created user
-      const currentUser = getCurrentUser();
-      if (!currentUser) {
-        setError('Failed to get current user after registration');
-        setLoading(false);
-        setUploadProgress(0);
-        return;
-      }
+      setUploading(false);
       
-      const userId = currentUser.uid;
-      console.log(`Account created successfully with ID: ${userId}`);
-      
-      // If we have an image, try to upload it
-      if (image) {
-        setUploadProgress(70); // Image upload starting
-        console.log('Now uploading profile image...');
-        const uploadResult = await uploadProfileImage(image, userId);
+      if (uploadResult.success && uploadResult.url) {
+        console.log('Image upload successful, URL:', uploadResult.url);
         
-        if (!uploadResult.success) {
-          console.warn(`Image upload failed but account was created: ${uploadResult.error}`);
-          
-          // Check if it's an image size error
-          if (uploadResult.error && uploadResult.error.toString().includes('too large')) {
-            setError('Image is too large. Please try a smaller image.');
-            setUploadProgress(0);
-            return; // Don't navigate away yet so user can try another image
-          } else {
-            // For other errors, continue with navigation
-            Alert.alert(
-              'Account Created',
-              'Your account was created successfully, but we had trouble uploading your profile image. You can try again in settings.',
-              [{ text: 'OK' }]
-            );
-          }
+        // Verify the URL is accessible
+        const isAccessible = await verifyUploadedImage(uploadResult.url);
+        if (isAccessible) {
+          console.log('Verified image URL is accessible');
+          setUploadedImageUrl(uploadResult.url);
         } else {
-          console.log('Profile image uploaded successfully');
-          setUploadProgress(100); // Complete
+          console.warn('Image URL is not accessible:', uploadResult.url);
         }
+        
+        setCompleted(true);
+        
+        // Verify the profile was updated
+        const updatedUser = auth.currentUser;
+        if (updatedUser && updatedUser.photoURL) {
+          console.log('User profile successfully updated with photo URL');
+        } else {
+          console.warn('Photo URL not updated in user profile after upload');
+        }
+        
+        // Wait a moment to show completion before redirecting
+        setTimeout(() => {
+          router.replace('/(tabs)');
+        }, 2000);
       } else {
-        setUploadProgress(100); // Complete without image
+        console.error('Upload failed with result:', uploadResult);
+        let errorMessage = 'Failed to upload image';
+        
+        if (uploadResult.error) {
+          if (typeof uploadResult.error === 'object' && uploadResult.error.message) {
+            errorMessage = uploadResult.error.message;
+          } else if (typeof uploadResult.error === 'string') {
+            errorMessage = uploadResult.error;
+          }
+        }
+        
+        setError(errorMessage);
+        
+        // Show alert for better visibility of the error
+        Alert.alert(
+          'Upload Failed',
+          `We couldn't upload your profile picture: ${errorMessage}`,
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Unexpected error in handleUpload:', error);
+      setUploading(false);
+      
+      let errorMessage = 'An unexpected error occurred';
+      if (error instanceof Error) {
+        errorMessage = error.message;
       }
       
-      // Request notification permissions now that registration is complete
-      try {
-        console.log('Requesting notification permissions after registration...');
-        await registerForPushNotifications();
-      } catch (notificationError) {
-        console.warn('Failed to register for notifications:', notificationError);
-        // Continue with registration completion even if notification registration fails
-      }
-      
-      // Regardless of image upload result (unless it's a size error that we caught above), proceed to main app
-      setTimeout(() => {
-        router.replace('/(tabs)');
-      }, 500); // Small delay to show completed progress
-    } catch (err: any) {
-      console.error('Error during signup:', err);
-      setError(`Failed to sign up: ${err.message || 'Unknown error'}`);
-      setUploadProgress(0);
-    } finally {
-      setLoading(false);
+      setError(errorMessage);
+      Alert.alert('Error', errorMessage);
     }
   };
 
   const handleSkip = () => {
-    // Skip image upload but still complete registration
-    handleUpload();
+    // Navigate directly to the main app without requiring a profile image
+    router.replace('/(tabs)');
   };
-  
-  const handleSignOut = async () => {
+
+  // Function to verify uploaded image is accessible
+  const verifyUploadedImage = async (url: string): Promise<boolean> => {
     try {
-      await firebaseSignOut(auth);
-      router.push('/(auth)' as any);
+      console.log('Verifying image URL is accessible:', url);
+      const response = await fetch(url, { method: 'HEAD' });
+      return response.ok;
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('Error verifying image URL:', error);
+      return false;
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
-      
-      <LinearGradient
-        colors={[colors.background, colors.lightGray]}
-        style={styles.background}
-      />
-      
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={handleBack}
-            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Profile Picture</Text>
-          <Text style={styles.subtitle}>Add a photo so others can recognize you</Text>
-        </View>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar style="light" />
         
-        <View style={styles.formContainer}>
-          <View style={styles.stepIndicator}>
-            <View style={styles.stepComplete}><Ionicons name="checkmark" size={16} color={colors.background} /></View>
-            <View style={styles.stepDivider} />
-            <View style={styles.stepComplete}><Ionicons name="checkmark" size={16} color={colors.background} /></View>
-            <View style={styles.stepDivider} />
-            <View style={styles.stepComplete}><Ionicons name="checkmark" size={16} color={colors.background} /></View>
-            <View style={styles.stepDivider} />
-            <View style={styles.stepComplete}><Ionicons name="checkmark" size={16} color={colors.background} /></View>
-            <View style={styles.stepDivider} />
-            <View style={styles.stepActive}><Text style={styles.stepText}>5</Text></View>
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Add Profile Pic</Text>
+            <Text style={styles.subtitle}>Show others who you are! You can change this anytime.</Text>
           </View>
           
-          <View style={styles.completeText}>
-            <Ionicons name="checkmark-circle" size={24} color={colors.success} />
-            <Text style={styles.completeLabel}>Last step - almost done!</Text>
-          </View>
-            
           <TouchableOpacity 
             style={styles.imageContainer} 
             onPress={pickImage}
-            disabled={loading}>
-            {image ? (
-              <Image source={{ uri: image }} style={styles.image} />
+            disabled={uploading}>
+            {selectedImage ? (
+              <Image source={{ uri: selectedImage }} style={styles.image} />
             ) : (
               <View style={styles.placeholderContainer}>
-                <Ionicons name="person" size={48} color={colors.darkGray} />
+                <Ionicons name="person" size={64} color="#AAAAAA" style={styles.placeholderIcon} />
                 <Text style={styles.placeholderText}>Tap to select</Text>
               </View>
             )}
           </TouchableOpacity>
-          
-          <View style={styles.imageButtons}>
+           
+          <View style={styles.photoButtonsContainer}>
             <TouchableOpacity 
-              style={styles.imageButton}
+              style={styles.photoButton} 
               onPress={pickImage}
-              disabled={loading}>
-              <Ionicons name="images" size={20} color={colors.text} />
-              <Text style={styles.imageButtonText}>Gallery</Text>
+              disabled={uploading}>
+              <Ionicons name="images" size={24} color="#FFFFFF" />
+              <Text style={styles.buttonText}>Gallery</Text>
             </TouchableOpacity>
             
             <TouchableOpacity 
-              style={styles.imageButton}
+              style={styles.photoButton} 
               onPress={takePicture}
-              disabled={loading}>
-              <Ionicons name="camera" size={20} color={colors.text} />
-              <Text style={styles.imageButtonText}>Camera</Text>
+              disabled={uploading}>
+              <Ionicons name="camera" size={24} color="#FFFFFF" />
+              <Text style={styles.buttonText}>Camera</Text>
             </TouchableOpacity>
           </View>
           
-          {error && (
-            <View style={styles.errorContainer}>
-              <Ionicons name="alert-circle" size={18} color={colors.error} />
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          )}
-          
-          {loading && (
+          {uploading && (
             <View style={styles.progressContainer}>
-              <View style={[styles.progressBar, { width: `${uploadProgress}%` }]} />
-              <Text style={styles.progressText}>{`${uploadProgress}%`}</Text>
+              <View style={styles.progressBar}>
+                <View style={[styles.progressFill, { width: `${uploadProgress}%` }]} />
+              </View>
+              <Text style={styles.progressText}>Uploading... {uploadProgress}%</Text>
             </View>
           )}
           
-          <TouchableOpacity 
-            style={[styles.button, loading && styles.buttonDisabled]} 
-            onPress={handleUpload}
-            disabled={loading}>
-            <LinearGradient
-              colors={[colors.primary, colors.primaryDark]}
-              style={styles.gradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}>
-              {loading ? (
-                <ActivityIndicator color={colors.background} />
-              ) : (
-                <Text style={styles.buttonText}>
-                  {image ? 'Complete Signup' : 'Skip for now'}
-                </Text>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
+          {error ? (
+            <Text style={styles.errorText}>{error}</Text>
+          ) : null}
           
-          {!loading && (
-            <TouchableOpacity 
-              style={styles.signOutLink}
-              onPress={handleSignOut}>
-              <Text style={styles.signOutText}>Cancel registration</Text>
-            </TouchableOpacity>
+          {completed ? (
+            <View style={styles.completeContainer}>
+              <View style={styles.uploadedImageContainer}>
+                {uploadedImageUrl ? (
+                  <Image 
+                    source={{ uri: uploadedImageUrl }} 
+                    style={styles.uploadedImage}
+                    onError={() => console.error('Error loading uploaded image')} 
+                  />
+                ) : (
+                  <Ionicons name="person" size={64} color="#4CD964" style={styles.completeIcon} />
+                )}
+              </View>
+              <Ionicons name="checkmark-circle" size={64} color="#4CD964" style={styles.completeIcon} />
+              <Text style={styles.completeText}>Profile picture uploaded!</Text>
+            </View>
+          ) : (
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={styles.skipButton}
+                onPress={handleSkip}
+                disabled={uploading}>
+                <Text style={styles.skipText}>Skip for now</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.continueButton, !selectedImage && styles.disabledButton]}
+                onPress={handleUpload}
+                disabled={uploading || !selectedImage}>
+                <LinearGradient
+                  colors={['#FF5E3A', '#FF2A68']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.gradientButton}
+                >
+                  {uploading ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={styles.continueText}>Upload Photo</Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
           )}
         </View>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: '#121212', // Dark background
   },
-  background: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
+  safeArea: {
+    flex: 1,
   },
   content: {
     flex: 1,
-    padding: 20,
+    padding: 24,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   header: {
-    marginBottom: 30,
-    position: 'relative',
-  },
-  backButton: {
-    position: 'absolute',
-    left: 0,
-    top: 8,
-    zIndex: 10,
+    marginBottom: 24,
+    alignItems: 'center',
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: 10,
+    color: '#FFFFFF',
+    marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: colors.darkGray,
+    color: '#BBBBBB',
     textAlign: 'center',
-  },
-  formContainer: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    padding: 24,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.mediumGray,
-  },
-  stepIndicator: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  stepActive: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepComplete: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.success,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepInactive: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.mediumGray,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepText: {
-    color: colors.background,
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  stepDivider: {
-    width: 20,
-    height: 1,
-    backgroundColor: colors.mediumGray,
-    marginHorizontal: 5,
-  },
-  completeText: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  completeLabel: {
-    color: colors.success,
-    fontSize: 16,
-    fontWeight: '600',
-    marginLeft: 8,
+    marginBottom: 36,
   },
   imageContainer: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: colors.lightGray,
-    alignSelf: 'center',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: '#2A2A2A',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.mediumGray,
-  },
-  image: {
-    width: '100%',
-    height: '100%',
+    borderWidth: 3,
+    borderColor: '#FF5E3A',
   },
   placeholderContainer: {
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  placeholderIcon: {
+    marginBottom: 8,
   },
   placeholderText: {
-    color: colors.darkGray,
-    marginTop: 8,
-    fontSize: 14,
-  },
-  imageButtons: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  imageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.lightGray,
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginHorizontal: 8,
-    borderWidth: 1,
-    borderColor: colors.mediumGray,
-  },
-  imageButtonText: {
-    color: colors.text,
-    marginLeft: 8,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 12,
-    padding: 12,
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
-    borderRadius: 8,
-  },
-  errorText: {
-    color: colors.error,
-    marginLeft: 8,
-    fontSize: 14,
-  },
-  progressContainer: {
-    height: 20,
-    backgroundColor: colors.lightGray,
-    borderRadius: 10,
-    marginVertical: 16,
-    overflow: 'hidden',
-    position: 'relative',
-    borderWidth: 1,
-    borderColor: colors.mediumGray,
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: colors.success,
-    borderRadius: 10,
-    position: 'absolute',
-    left: 0,
-    top: 0,
-  },
-  progressText: {
-    position: 'absolute',
-    width: '100%',
+    fontSize: 16,
+    color: '#BBBBBB',
     textAlign: 'center',
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: colors.text,
-    lineHeight: 18,
   },
-  button: {
-    height: 54,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginTop: 10,
+  image: {
+    width: 180,
+    height: 180,
+    borderRadius: 90,
   },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  gradient: {
-    flex: 1,
+  photoButtonsContainer: {
+    flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 36,
+  },
+  photoButton: {
+    backgroundColor: '#2A2A2A',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 25,
+    marginHorizontal: 8,
+    flexDirection: 'row',
     alignItems: 'center',
   },
   buttonText: {
-    color: colors.background,
-    fontSize: 18,
+    color: '#FFFFFF',
+    marginLeft: 8,
+    fontSize: 16,
     fontWeight: '600',
   },
-  signOutLink: {
-    alignItems: 'center',
-    marginTop: 16,
-    padding: 8,
+  progressContainer: {
+    width: '100%',
+    marginBottom: 32,
   },
-  signOutText: {
-    color: colors.darkGray,
+  progressBar: {
+    height: 8,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#FF5E3A',
+  },
+  progressText: {
+    color: '#BBBBBB',
     fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  buttonContainer: {
+    width: '100%',
+  },
+  skipButton: {
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  skipText: {
+    color: '#BBBBBB',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  continueButton: {
+    borderRadius: 30,
+    overflow: 'hidden',
+    marginBottom: 24,
+  },
+  gradientButton: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  continueText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  errorText: {
+    color: '#FF453A',
+    fontSize: 16,
+    marginTop: 16,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  completeContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  completeIcon: {
+    marginBottom: 16,
+  },
+  completeText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  uploadedImageContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 3,
+    borderColor: '#4CD964',
+  },
+  uploadedImage: {
+    width: '100%',
+    height: '100%',
   },
 });

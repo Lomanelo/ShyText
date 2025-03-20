@@ -1,8 +1,8 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User, updateProfile } from 'firebase/auth';
 import { getFirestore, GeoPoint, collection, doc, setDoc, updateDoc, getDoc, query, where, getDocs, addDoc, orderBy, limit, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import * as geofirestore from 'geofire-common';
 import { Platform } from 'react-native';
 
@@ -282,16 +282,26 @@ export const uploadProfileImage = async (uri: string, userId: string) => {
       const blob = await response.blob();
       console.log(`Image blob size: ${blob.size} bytes`);
       
-      // Note: Size limit check removed to allow larger images
-      // Firebase Storage has a default max size of 10MB for the free plan
-      // but we're removing the client-side check to allow larger uploads
+      // File size limit check completely removed - allowing uploads of any size
       
       // Upload to Firebase Storage
       console.log('Uploading to Firebase Storage...');
-      await uploadBytes(storageRef, blob);
-      const downloadURL = await getDownloadURL(storageRef);
+      const uploadTask = uploadBytesResumable(storageRef, blob);
       
-      console.log('Successfully uploaded to Firebase Storage:', downloadURL);
+      // Wait for the upload to complete
+      console.log('Waiting for upload to complete...');
+      await uploadTask;
+      
+      // Get the download URL
+      console.log('Getting download URL...');
+      const downloadURL = await getDownloadURL(storageRef);
+      console.log(`Download URL: ${downloadURL}`);
+      
+      // Update the user's photoURL in Authentication
+      await updateProfile(currentUser, {
+        photoURL: downloadURL
+      });
+      console.log('User authentication profile updated with new photo URL');
       
       // Update user profile with the download URL
       const profileRef = doc(db, 'profiles', userId);

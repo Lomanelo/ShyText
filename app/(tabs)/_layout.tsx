@@ -1,8 +1,42 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Tabs, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import colors from '../../src/theme/colors';
 import { getCurrentUser } from '../../src/lib/firebase';
+import { useAuth } from '../../src/hooks/useAuth';
+import { useColorScheme, Image, StyleSheet } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+
+function TabBarIcon(props: {
+  name: React.ComponentProps<typeof Ionicons>['name'];
+  color: string;
+  focused?: boolean;
+  isProfile?: boolean;
+}) {
+  const { user } = useAuth();
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  
+  useEffect(() => {
+    if (props.isProfile && user?.photoURL) {
+      setPhotoUrl(user.photoURL);
+    }
+  }, [user?.photoURL, props.isProfile]);
+
+  if (props.isProfile && photoUrl) {
+    return (
+      <Image 
+        source={{ uri: photoUrl }} 
+        style={[
+          styles.profileImage, 
+          { borderColor: props.focused ? props.color : 'transparent' }
+        ]}
+        onError={() => console.log('Error loading profile image')}
+      />
+    );
+  }
+  
+  return <Ionicons size={28} style={{ marginBottom: -3 }} {...props} />;
+}
 
 export default function TabLayout() {
   const router = useRouter();
@@ -55,29 +89,34 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Nearby',
-          tabBarIcon: ({ size, color }) => (
-            <Ionicons name="map" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <TabBarIcon name="map" color={color} />,
         }}
       />
       <Tabs.Screen
         name="chats"
         options={{
           title: 'Chats',
-          tabBarIcon: ({ size, color }) => (
-            <Ionicons name="chatbubbles" size={size} color={color} />
-          ),
+          tabBarIcon: ({ color }) => <TabBarIcon name="chatbubbles" color={color} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ size, color }) => (
-            <Ionicons name="settings" size={size} color={color} />
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name="person-circle" color={color} isProfile={true} focused={focused} />
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  profileImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2,
+  },
+});

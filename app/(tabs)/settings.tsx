@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Alert, Image, Modal, ScrollView, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Alert, Image, Modal, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import colors from '../../src/theme/colors';
 import { auth, getCurrentUser, getProfile, uploadProfileImage } from '../../src/lib/firebase';
-import { signOut } from 'firebase/auth';
+import { signOut, getAuth } from 'firebase/auth';
 import * as ImagePicker from 'expo-image-picker';
 import { Platform } from 'react-native';
 import { sendLocalNotification } from '../../src/utils/notifications';
+import { useAuth } from '../../src/hooks/useAuth';
 
 export default function SettingsScreen() {
+  const { user: authUser, loading: authLoading } = useAuth();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [showProfileDetails, setShowProfileDetails] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -51,8 +54,12 @@ export default function SettingsScreen() {
             }
           }
           
+          // Prefer the auth profile photoURL because it's always the most current
+          const photoUrl = authUser?.photoURL || profile.photo_url;
+          
           setUser({
             ...profile,
+            photo_url: photoUrl,
             age,
             formattedBirthDate
           });
@@ -62,11 +69,20 @@ export default function SettingsScreen() {
       }
     }
     setLoading(false);
+    setRefreshing(false);
   };
 
   useEffect(() => {
     fetchUserProfile();
-  }, []);
+  }, [authUser]); // Refetch when authUser changes
+  
+  const onRefresh = async () => {
+    setRefreshing(true);
+    // Force refresh the auth object to get the latest photoURL
+    const auth = getAuth();
+    await auth.currentUser?.reload();
+    fetchUserProfile();
+  };
 
   const handleSignOut = async () => {
     Alert.alert(
@@ -212,7 +228,17 @@ export default function SettingsScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[colors.primary]}
+          tintColor={colors.primary}
+        />
+      }
+    >
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Settings</Text>
       </View>
@@ -220,10 +246,11 @@ export default function SettingsScreen() {
       {/* Profile Section */}
       <TouchableOpacity style={styles.profileSection} onPress={handleProfilePress}>
         <View style={styles.profileImageContainer}>
-          {user?.photo_url ? (
+          {(user?.photo_url || authUser?.photoURL) ? (
             <Image
-              source={{ uri: user.photo_url }}
+              source={{ uri: user?.photo_url || authUser?.photoURL }}
               style={styles.profileImage}
+              onError={() => console.log('Failed to load profile image')}
             />
           ) : (
             <View style={styles.profileImagePlaceholder}>
@@ -232,9 +259,17 @@ export default function SettingsScreen() {
               </Text>
             </View>
           )}
+          
+          <TouchableOpacity 
+            style={styles.editProfileImageButton}
+            onPress={handleChangeProfileImage}
+          >
+            <Ionicons name="camera" size={16} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
+        
         <View style={styles.profileInfo}>
-          <Text style={styles.profileName}>{user?.display_name || 'User'}</Text>
+          <Text style={styles.profileName}>{user?.display_name || authUser?.displayName || 'User'}</Text>
           {user?.age && <Text style={styles.profileAge}>{user.age} years old</Text>}
         </View>
         <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
@@ -367,7 +402,7 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -396,11 +431,11 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.lightGray,
   },
   profileImageContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    overflow: 'hidden',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
     marginRight: 15,
+    position: 'relative',
   },
   profileImage: {
     width: '100%',
@@ -587,5 +622,18 @@ const styles = StyleSheet.create({
   errorText: {
     color: colors.error,
     textAlign: 'center',
+  },
+  editProfileImageButton: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: colors.primary,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
 });

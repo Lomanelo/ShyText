@@ -214,7 +214,8 @@ export default function SignupScreen() {
       });
       
       console.log('User registered successfully with username and @shytext suffix');
-      router.replace('/(tabs)');
+      // Redirect to profile picture upload instead of tabs
+      router.replace('/(auth)/profile-image');
     } catch (err: any) {
       console.error('Account creation error:', err);
       setError(err.message || 'Failed to create account');
