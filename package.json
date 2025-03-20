@@ -44,6 +44,7 @@
     "react-native": "0.76.7",
     "react-native-ble-advertiser": "^0.0.17",
     "react-native-ble-plx": "^3.5.0",
+    "react-native-device-info": "^14.0.4",
     "react-native-gesture-handler": "~2.20.2",
     "react-native-location": "^2.5.0",
     "react-native-maps": "1.18.0",

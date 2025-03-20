@@ -67,7 +67,14 @@
           "color": "#00ADAD"
         }
       ],
-      "react-native-ble-plx"
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": true,
+          "modes": ["peripheral", "central"],
+          "bluetoothAlwaysPermission": "Allow ShyText to use Bluetooth for finding nearby users"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

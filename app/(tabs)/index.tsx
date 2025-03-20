@@ -1,42 +1,14 @@
-import { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Modal, ActivityIndicator, SafeAreaView, Image, RefreshControl, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView as RNScrollView } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Radar from '../../src/components/Radar';
-import { useRadarUsers } from '../../src/hooks/useRadarUsers';
+import { useNearbyUsers } from '../../src/hooks/useNearbyUsers';
 import { startConversation, getCurrentUser } from '../../src/lib/firebase';
 import colors from '../../src/theme/colors';
-import LocationService from '../../src/services/LocationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Define ActivityType interface
-interface ActivityTypeInterface {
-  STILL: string;
-  WALKING: string;
-  RUNNING: string;
-  VEHICLE: string;
-  UNKNOWN: string;
-}
-
-// Define ActivityType fallback
-const FallbackActivityType: ActivityTypeInterface = {
-  STILL: 'still',
-  WALKING: 'walking',
-  RUNNING: 'running',
-  VEHICLE: 'vehicle',
-  UNKNOWN: 'unknown'
-};
-
-// Get ActivityType from MotionService
-let ActivityType: ActivityTypeInterface;
-try {
-  // Import the ActivityType from MotionService
-  ActivityType = require('../../src/services/MotionService').ActivityType;
-} catch (error) {
-  console.warn('Failed to import ActivityType, using fallback:', error);
-  ActivityType = FallbackActivityType;
-}
+import BleService from '../../src/services/BleService';
 
 // Maximum distance for radar in meters
 const MAX_RADAR_DISTANCE = 10;
@@ -47,16 +19,9 @@ export default function NearbyScreen() {
   const [viewingFullProfile, setViewingFullProfile] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [authError, setAuthError] = useState<boolean>(false);
-  const [motionData, setMotionData] = useState<{ 
-    activity: string; 
-    heading?: number;
-    speed?: number;
-    movementIntensity?: number;
-  } | null>(null);
-  const [showMotionData, setShowMotionData] = useState(false);
   const [customMessage, setCustomMessage] = useState('');
   const [showMessageInput, setShowMessageInput] = useState(false);
-  const { users, location, loading, error, currentUser, refreshUsers } = useRadarUsers(MAX_RADAR_DISTANCE);
+  const { users, loading, error, isScanning, btEnabled, refreshUsers, startScanning, stopScanning, setUsers } = useNearbyUsers();
   const [isDragging, setIsDragging] = useState(false);
 
   // Check authentication on component mount
@@ -65,75 +30,80 @@ export default function NearbyScreen() {
     if (!user) {
       setAuthError(true);
       // We let the TabLayout handle the redirect
+    } else {
+      // For existing users, check and update device UUID if needed
+      (async () => {
+        try {
+          const { storeDeviceUUID, getCurrentUserDeviceUUID } = require('../../src/lib/firebase');
+          
+          // Define getDeviceUUID inline to avoid import issues
+          const getDeviceUUID = async () => {
+            try {
+              const DeviceInfo = require('react-native-device-info');
+              if (Platform.OS === 'android') {
+                try {
+                  const macAddress = await DeviceInfo.getMacAddress();
+                  if (macAddress && macAddress !== '02:00:00:00:00:00') {
+                    return `android-${macAddress.replace(/:/g, '')}`;
+                  }
+                } catch (error) {
+                  console.warn('Could not get MAC address:', error);
+                }
+              }
+              
+              try {
+                const uniqueId = await DeviceInfo.getUniqueId();
+                if (uniqueId) {
+                  return `${Platform.OS}-${uniqueId}`;
+                }
+              } catch (error) {
+                console.warn('Could not get unique ID:', error);
+              }
+              
+              const deviceName = DeviceInfo.getDeviceNameSync();
+              const deviceId = DeviceInfo.getDeviceId();
+              
+              return `${Platform.OS}-${deviceName}-${deviceId}-${Date.now()}`;
+            } catch (error) {
+              console.warn('Error getting device UUID:', error);
+              return `fallback-${Platform.OS}-${Math.random().toString(36).substring(2, 15)}`;
+            }
+          };
+          
+          // Check if this user already has a device UUID stored
+          const storedUUID = await getCurrentUserDeviceUUID();
+          
+          if (!storedUUID) {
+            console.log('No device UUID found for current user, generating and storing one...');
+            // Generate and store a device UUID
+            const deviceUUID = await getDeviceUUID();
+            await storeDeviceUUID(user.uid, deviceUUID);
+            console.log('Stored new device UUID for existing user:', deviceUUID);
+          } else {
+            console.log('User already has device UUID:', storedUUID);
+          }
+        } catch (error) {
+          console.warn('Error checking/updating device UUID:', error);
+        }
+      })();
     }
   }, []);
 
-  // Initialize the background location service
+  // Start scanning when component is visible and Bluetooth is enabled
   useEffect(() => {
-    const initBackgroundLocation = async () => {
-      // Only initialize background tracking if user is logged in
-      const user = getCurrentUser();
-      if (!user) return;
-      
-      try {
-        const success = await LocationService.startBackgroundTracking();
-        if (success) {
-          console.log('Background location tracking initialized successfully');
-          
-          // Set up a timer to periodically update motion data
-          const intervalId = setInterval(() => {
-            try {
-              const data = LocationService.getLocationAndMotionData();
-              if (data.motionData) {
-                setMotionData({
-                  activity: data.activity || ActivityType.UNKNOWN,
-                  heading: data.motionData.heading,
-                  speed: data.motionData.speed,
-                  movementIntensity: data.motionData.movementIntensity
-                });
-              }
-            } catch (error) {
-              console.warn('Error updating motion data in interval:', error);
-            }
-          }, 2000); // Update every 2 seconds
-          
-          return () => clearInterval(intervalId);
-        } else {
-          console.warn('Failed to initialize background location tracking');
-          // We'll show a banner only once to avoid annoying the user
-          const hasShownPermissionAlert = await AsyncStorage.getItem('hasShownLocationPermissionAlert');
-          if (!hasShownPermissionAlert) {
-            Alert.alert(
-              'Background Location',
-              'To discover nearby users even when the app is closed, please allow ShyText to access your location "Always" in your device settings.',
-              [
-                { text: 'Later', style: 'cancel' },
-                { 
-                  text: 'Settings', 
-                  onPress: () => {
-                    // This would typically open settings
-                    // For simplicity, we're just marking that we showed the alert
-                    AsyncStorage.setItem('hasShownLocationPermissionAlert', 'true')
-                      .catch(err => console.error('Error saving alert preference:', err));
-                  }
-                }
-              ]
-            );
-          }
-        }
-      } catch (error) {
-        console.error('Error initializing background location:', error);
-      }
-    };
-    
-    initBackgroundLocation();
-    
+    if (btEnabled) {
+      console.log('Bluetooth enabled, starting scanning...');
+      startScanning();
+    }
+
     // Cleanup
     return () => {
-      // Note: We're intentionally NOT stopping background tracking 
-      // when component unmounts, as we want it to continue in the background
+      if (isScanning) {
+        console.log('Component unmounting, stopping scanning...');
+        stopScanning();
+      }
     };
-  }, []);
+  }, [btEnabled, startScanning, stopScanning, isScanning]);
 
   const handleUserPress = (userId: string) => {
     const user = users.find(u => u.id === userId);
@@ -242,13 +212,63 @@ export default function NearbyScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      await refreshUsers();
+      // Show a confirmation dialog for a force refresh
+      Alert.alert(
+        'Refresh Options',
+        'Choose refresh type:',
+        [
+          { 
+            text: 'Standard Refresh', 
+            onPress: async () => {
+              try {
+                await refreshUsers();
+              } finally {
+                setRefreshing(false);
+              }
+            }
+          },
+          { 
+            text: 'Force Refresh (Clear All)', 
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                // Stop scanning
+                stopScanning();
+                
+                // Wait a moment for scanning to fully stop
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Clear the users array
+                setUsers([]);
+                
+                // Reset BLE completely by restarting the scan system
+                const bleService = BleService.getInstance();
+                await bleService.cleanUp();
+                
+                // Wait a moment for cleanup to finish
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                // Start scanning again to completely reset the state
+                await refreshUsers();
+                
+                console.log('Performed force refresh - all BLE caches cleared');
+              } finally {
+                setRefreshing(false);
+              }
+            }
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => setRefreshing(false)
+          }
+        ]
+      );
     } catch (error) {
       console.error('Error refreshing nearby users:', error);
-    } finally {
       setRefreshing(false);
     }
-  }, [refreshUsers]);
+  }, [refreshUsers, stopScanning, setUsers]);
 
   const renderProfileStat = (label: string, value: string | number) => (
     <View style={styles.profileStat}>
@@ -256,51 +276,6 @@ export default function NearbyScreen() {
       <Text style={styles.profileStatLabel}>{label}</Text>
     </View>
   );
-
-  // Helper function to get a human-readable activity name
-  const getActivityName = (activity: string) => {
-    try {
-      switch (activity) {
-        case ActivityType.STILL: return 'Still';
-        case ActivityType.WALKING: return 'Walking';
-        case ActivityType.RUNNING: return 'Running';
-        case ActivityType.VEHICLE: return 'In Vehicle';
-        default: return 'Unknown';
-      }
-    } catch (error) {
-      console.warn('Error getting activity name:', error);
-      return 'Unknown';
-    }
-  };
-
-  // Helper function to format heading as a direction
-  const formatHeading = (heading?: number) => {
-    try {
-      if (heading === undefined) return 'Unknown';
-      
-      const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW', 'N'];
-      return directions[Math.round(heading / 45)];
-    } catch (error) {
-      console.warn('Error formatting heading:', error);
-      return 'Unknown';
-    }
-  };
-
-  // Helper function to format speed
-  const formatSpeed = (speed?: number) => {
-    try {
-      if (speed === undefined) return 'Unknown';
-      return `${(speed * 3.6).toFixed(1)} km/h`; // Convert to km/h and format
-    } catch (error) {
-      console.warn('Error formatting speed:', error);
-      return 'Unknown';
-    }
-  };
-
-  // Toggle motion data display
-  const toggleMotionData = () => {
-    setShowMotionData(!showMotionData);
-  };
 
   // Handler to be passed to Radar to set drag state
   const handleDragStateChange = (dragging: boolean) => {
@@ -348,7 +323,7 @@ export default function NearbyScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       
       <RNScrollView
         contentContainerStyle={styles.scrollContainer}
@@ -367,24 +342,112 @@ export default function NearbyScreen() {
         </View>
         
         <View style={styles.radarContainer}>
-          {users.length > 0 && currentUser ? (
-            <Radar
-              users={users}
-              currentUser={{
-                id: currentUser.id,
-                photo_url: currentUser.photo_url,
-                display_name: currentUser.display_name
-              }}
-              maxDistance={MAX_RADAR_DISTANCE}
-              onUserPress={handleUserPress}
-              onMessageSend={handleSendMessage}
-              onDragStateChange={handleDragStateChange}
-            />
-          ) : (
-            <View style={styles.emptyRadar}>
-              <Ionicons name="people" size={60} color={colors.mediumGray} />
-              <Text style={styles.emptyRadarText}>Keep the app open to discover people nearby</Text>
+          {!btEnabled && !loading && Platform.OS === 'android' && (
+            <View style={styles.noUsersContainer}>
+              <Text style={styles.noUsersText}>
+                Bluetooth is disabled. Please enable Bluetooth to discover nearby users.
+              </Text>
+              <TouchableOpacity 
+                style={styles.retryButton}
+                onPress={() => refreshUsers()}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
             </View>
+          )}
+
+          {!btEnabled && !loading && Platform.OS === 'ios' && (
+            <View style={styles.noUsersContainer}>
+              <Text style={styles.noUsersText}>
+                Make sure Bluetooth is enabled in your iOS settings.
+              </Text>
+              <TouchableOpacity 
+                style={styles.retryButton}
+                onPress={() => refreshUsers()}
+              >
+                <Text style={styles.retryButtonText}>Force Start Scanning</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {btEnabled && loading && (
+            <View style={styles.noUsersContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.noUsersText}>Initializing Bluetooth...</Text>
+            </View>
+          )}
+
+          {btEnabled && !loading && users.length === 0 && (
+            <View style={styles.noUsersContainer}>
+              <Text style={styles.noUsersText}>
+                {isScanning ? 'Scanning for nearby devices...' : 'No users found nearby'}
+              </Text>
+              <Text style={styles.debugText}>
+                State: {isScanning ? 'Scanning' : 'Not scanning'} | Platform: {Platform.OS}
+              </Text>
+              {!isScanning ? (
+                <TouchableOpacity 
+                  style={styles.retryButton}
+                  onPress={() => startScanning()}
+                >
+                  <Text style={styles.retryButtonText}>Start Scanning</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity 
+                  style={[styles.retryButton, { backgroundColor: colors.error }]}
+                  onPress={() => {
+                    stopScanning();
+                    setTimeout(() => startScanning(), 1000);
+                  }}
+                >
+                  <Text style={styles.retryButtonText}>Restart Scan</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          {btEnabled && !loading && users.length > 0 && (
+            <>
+              <View style={styles.deviceInfoHeader}>
+                <Text style={styles.deviceInfoHeaderText}>
+                  Found {users.length} nearby device{users.length !== 1 ? 's' : ''}
+                </Text>
+                <View style={styles.deviceHeaderControls}>
+                  <TouchableOpacity 
+                    style={styles.iconButton}
+                    onPress={() => {
+                      Alert.alert(
+                        'Device Information',
+                        users.map(user => 
+                          `${user.display_name}: ${user.distance}m, Last seen: ${new Date(user.lastActive || '').toLocaleTimeString()}`
+                        ).join('\n\n'),
+                        [{ text: 'OK' }]
+                      );
+                    }}
+                  >
+                    <Ionicons name="information-circle" size={24} color={colors.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.iconButton}
+                    onPress={onRefresh}
+                  >
+                    <Ionicons name="refresh" size={24} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+              <Radar
+                users={users}
+                currentUser={{
+                  id: getCurrentUser()?.uid || '',
+                  photo_url: getCurrentUser()?.photoURL || '',
+                  display_name: getCurrentUser()?.displayName || ''
+                }}
+                maxDistance={MAX_RADAR_DISTANCE}
+                onUserPress={handleUserPress}
+                onMessageSend={handleSendMessage}
+                onDragStateChange={handleDragStateChange}
+              />
+            </>
           )}
         </View>
       </RNScrollView>
@@ -540,12 +603,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  emptyRadar: {
+  noUsersContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
   },
-  emptyRadarText: {
+  noUsersText: {
     color: colors.darkGray,
     textAlign: 'center',
     marginTop: 10,
@@ -760,37 +823,43 @@ const styles = StyleSheet.create({
     maxHeight: 150,
     textAlignVertical: 'top',
   },
-  activityIndicator: {
+  deviceInfoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.mediumGray,
+  },
+  deviceInfoHeaderText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
+  },
+  deviceHeaderControls: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.lightGray,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+  },
+  iconButton: {
+    padding: 5,
+  },
+  refreshButton: {
+    padding: 5,
+  },
+  debugText: {
+    marginTop: 10,
+    fontSize: 12,
+    color: colors.darkGray,
+  },
+  retryButton: {
+    marginTop: 15,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: colors.primary,
     borderRadius: 20,
-    marginTop: 8,
-    alignSelf: 'center',
   },
-  activityText: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '500',
-    marginHorizontal: 6,
-  },
-  motionDataContainer: {
-    backgroundColor: colors.lightGray,
-    padding: 12,
-    borderRadius: 10,
-    marginTop: 8,
-    width: '100%',
-  },
-  motionDataItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  motionDataText: {
-    color: colors.text,
-    fontSize: 14,
-    marginLeft: 8,
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 });

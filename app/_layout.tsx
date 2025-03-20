@@ -1,11 +1,11 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AppState, AppStateStatus, Platform } from 'react-native';
-import LocationService from '../src/services/LocationService';
 import { getCurrentUser } from '../src/lib/firebase';
 import * as Notifications from 'expo-notifications';
 import { defineNotificationChannels, setupNotificationListeners } from '../src/lib/notifications';
+import { startScanning, stopScanning } from '../src/hooks/useNearbyUsers';
 
 // Configure how notifications appear when the app is in the foreground
 Notifications.setNotificationHandler({
@@ -19,6 +19,12 @@ Notifications.setNotificationHandler({
 export default function RootLayout() {
   // Reference to notification listener cleanup function
   const notificationListeners = useRef<{ unsubscribe: () => void } | null>(null);
+  
+  // State for BLE scanning
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanningError, setScanningError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [nearbyUsers, setNearbyUsers] = useState<any[]>([]);
 
   // Initialize notifications
   useEffect(() => {
@@ -46,41 +52,28 @@ export default function RootLayout() {
     };
   }, []);
 
-  // Initialize background location service and handle app state changes
+  // Handle BLE scanning based on app state
   useEffect(() => {
-    // Initialize the service
-    LocationService.initialize().then(() => {
-      console.log('Location service initialized in root layout');
-      
-      // Start background tracking if user is logged in
-      const currentUser = getCurrentUser();
-      if (currentUser) {
-        LocationService.startBackgroundTracking().then(success => {
-          if (success) {
-            console.log('Background location tracking started from root layout');
-          } else {
-            console.warn('Failed to start background location tracking from root layout');
-          }
-        });
-      }
-    });
+    // Start scanning when app starts
+    const currentUser = getCurrentUser();
+    if (currentUser) {
+      startScanning(setIsLoading, setScanningError, setIsScanning, setNearbyUsers);
+      console.log('BLE scanning started from root layout');
+    }
     
-    // Handle app state changes to ensure background tracking continues
+    // Handle app state changes to manage BLE scanning
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       const currentUser = getCurrentUser();
       if (!currentUser) return;
       
       if (nextAppState === 'active') {
         // App came to foreground
-        console.log('App is now active, checking location services');
-        LocationService.startBackgroundTracking().catch(console.error);
+        console.log('App is now active, starting BLE scanning');
+        startScanning(setIsLoading, setScanningError, setIsScanning, setNearbyUsers);
       } else if (nextAppState === 'background') {
         // App went to background
-        console.log('App is now in background, ensuring location tracking continues');
-        // For Android, make sure the service keeps running
-        if (Platform.OS === 'android') {
-          LocationService.startBackgroundTracking().catch(console.error);
-        }
+        console.log('App is now in background, stopping BLE scanning');
+        stopScanning(setIsScanning, setIsLoading);
       }
     };
     
@@ -88,9 +81,9 @@ export default function RootLayout() {
     const subscription = AppState.addEventListener('change', handleAppStateChange);
     
     return () => {
-      // Clean up the subscription when the component unmounts
+      // Clean up the subscription and stop scanning when the component unmounts
       subscription.remove();
-      // Note: We intentionally do NOT stop the location service when the app unmounts
+      stopScanning(setIsScanning, setIsLoading);
     };
   }, []);
   

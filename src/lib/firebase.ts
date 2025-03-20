@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User } from 'firebase/auth';
-import { getFirestore, GeoPoint, collection, doc, setDoc, updateDoc, getDoc, query, where, getDocs, addDoc, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { getFirestore, GeoPoint, collection, doc, setDoc, updateDoc, getDoc, query, where, getDocs, addDoc, orderBy, limit, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import * as geofirestore from 'geofire-common';
@@ -85,19 +85,32 @@ export const completeRegistration = async (photoURL?: string) => {
     
     const { email, password, displayName, birthDate } = registrationData;
     
+    // Get device UUID before creating the account
+    let deviceUUID = '';
+    try {
+      // Import dynamically to avoid issues with circular imports
+      const { getDeviceUUID } = require('../utils/deviceUtils');
+      deviceUUID = await getDeviceUUID();
+      console.log('Device UUID for registration:', deviceUUID);
+    } catch (error) {
+      console.warn('Could not get device UUID:', error);
+      // Continue with registration even if we can't get the UUID
+      // We'll attempt to get it later
+    }
+    
     console.log('Creating Firebase auth account...');
     // Create Firebase authentication account
     const credential = await createUserWithEmailAndPassword(auth, email, password);
     const user = credential.user;
     console.log(`User created with ID: ${user.uid}`);
     
-    // Create Firestore profile without photo initially
-    // Photo will be added separately after upload
+    // Create Firestore profile including device UUID
     const profileData = {
       email,
       display_name: displayName || '',
       birth_date: birthDate || '',
       photo_url: '',
+      device_uuid: deviceUUID,  // Store the device UUID
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       last_active: new Date().toISOString(),
@@ -107,6 +120,15 @@ export const completeRegistration = async (photoURL?: string) => {
     console.log('Creating user profile in Firestore...');
     await setDoc(doc(db, 'profiles', user.uid), profileData);
     console.log('Firestore profile created successfully');
+    
+    // Also store device UUID in a separate collection for better querying
+    if (deviceUUID) {
+      await setDoc(doc(db, 'user_devices', user.uid), {
+        device_uuid: deviceUUID,
+        last_updated: new Date().toISOString()
+      });
+      console.log('Device UUID stored in user_devices collection');
+    }
     
     // Clear registration data
     clearRegistrationData();
@@ -918,4 +940,99 @@ export async function updatePushToken(userId: string, token: string) {
     // Don't throw the error, just return failure
     return { success: false, error };
   }
-} 
+}
+
+// Add this function after the getProfile function
+
+export async function listAllUsers() {
+  try {
+    // Get all profiles from Firestore
+    const profilesRef = collection(db, 'profiles');
+    const profilesSnapshot = await getDocs(profilesRef);
+    
+    // Convert to array of user objects
+    const users = profilesSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        display_name: data.display_name || '',
+        photo_url: data.photo_url || '',
+        status: data.status || 'Available',
+        last_active: data.last_active || new Date().toISOString()
+      };
+    });
+    
+    return users;
+  } catch (error) {
+    console.error('Error listing all users:', error);
+    return [];
+  }
+}
+
+// New functions for device UUID management
+export const storeDeviceUUID = async (userId: string, uuid: string): Promise<boolean> => {
+  try {
+    const db = getFirestore();
+    await setDoc(doc(db, 'user_devices', userId), {
+      device_uuid: uuid,
+      last_updated: serverTimestamp()
+    }, { merge: true });
+    
+    // Also update the user's profile with this UUID
+    await updateDoc(doc(db, 'users', userId), {
+      device_uuid: uuid,
+      last_updated: serverTimestamp()
+    });
+    
+    console.log(`Stored device UUID ${uuid} for user ${userId}`);
+    return true;
+  } catch (error) {
+    console.error('Error storing device UUID:', error);
+    return false;
+  }
+};
+
+// Function to get user by device UUID
+export const getUserByDeviceUUID = async (uuid: string): Promise<any | null> => {
+  try {
+    const db = getFirestore();
+    const q = query(collection(db, 'users'), where('device_uuid', '==', uuid));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      console.log('No user found with device UUID:', uuid);
+      return null;
+    }
+    
+    // Return the first matching user
+    const userData = querySnapshot.docs[0].data();
+    return {
+      id: querySnapshot.docs[0].id,
+      ...userData
+    };
+  } catch (error) {
+    console.error('Error finding user by device UUID:', error);
+    return null;
+  }
+};
+
+// Function to get user's device UUID
+export const getCurrentUserDeviceUUID = async (): Promise<string | null> => {
+  try {
+    const currentUser = getCurrentUser();
+    if (!currentUser) return null;
+    
+    const db = getFirestore();
+    const docRef = doc(db, 'user_devices', currentUser.uid);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+      return docSnap.data().device_uuid || null;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting current user device UUID:', error);
+    return null;
+  }
+}; 

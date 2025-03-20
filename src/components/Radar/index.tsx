@@ -23,9 +23,10 @@ const DRAG_THRESHOLD = 120; // Distance from center to trigger a successful drop
 interface RadarProps {
   users: Array<{
     id: string;
-    distance: number;
     display_name?: string;
     photo_url?: string;
+    status?: string;
+    lastActive?: string;
     [key: string]: any;
   }>;
   currentUser: {
@@ -112,10 +113,14 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
     return slots;
   };
   
-  // Calculate positions for each user with sorting by distance
+  // Calculate positions for each user with sorting by lastActive
   const calculatePositions = (): UserPositions => {
-    // Sort users by distance (closest first)
-    const sortedUsers = [...users].sort((a, b) => a.distance - b.distance);
+    // Sort users by lastActive (most recent first)
+    const sortedUsers = [...users].sort((a, b) => {
+      const timeA = a.lastActive ? new Date(a.lastActive).getTime() : 0;
+      const timeB = b.lastActive ? new Date(b.lastActive).getTime() : 0;
+      return timeB - timeA;
+    });
     
     // Limit to 10 users maximum (the number of available slots)
     const usersToDisplay = sortedUsers.slice(0, 10);
@@ -123,7 +128,7 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
     // Get the fixed slot positions
     const fixedSlots = getFixedSlotPositions();
     
-    // Assign users to slots based on proximity
+    // Assign users to slots based on recency
     const positions: UserPositions = {};
     
     usersToDisplay.forEach((user, index) => {
