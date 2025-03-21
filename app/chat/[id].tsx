@@ -49,6 +49,7 @@ export default function ChatScreen() {
   const [isInitiator, setIsInitiator] = useState<boolean>(false);
   const [isResponding, setIsResponding] = useState(false);
   const { refreshUnreadCount } = useUnreadMessages();
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   useEffect(() => {
     fetchMessages();
@@ -101,6 +102,22 @@ export default function ChatScreen() {
       fetchOtherUser();
     }
   }, [otherUserId]);
+
+  useEffect(() => {
+    // Scroll to top when keyboard appears or disappears (in inverted list this is the most recent message)
+    if (flatListRef.current && messages.length > 0) {
+      setTimeout(() => {
+        try {
+          flatListRef.current?.scrollToIndex({ 
+            index: 0,
+            animated: true
+          });
+        } catch (error) {
+          console.log("Scroll error:", error);
+        }
+      }, 100);
+    }
+  }, [isInputFocused, messages.length]);
 
   const fetchConversationDetails = async () => {
     try {
@@ -407,7 +424,7 @@ export default function ChatScreen() {
       <KeyboardAvoidingView 
         style={styles.innerContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+        keyboardVerticalOffset={0}>
         {conversationStatus === 'pending' && !isInitiator && (
           <View style={styles.pendingBanner}>
             <Text style={styles.pendingText}>Chat Request</Text>
@@ -455,9 +472,11 @@ export default function ChatScreen() {
           data={messages}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.messagesList}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
-          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
+          style={styles.messagesList}
+          contentContainerStyle={{
+            paddingBottom: isInputFocused ? 10 : 20,
+          }}
+          inverted
           ListHeaderComponent={renderHeader}
           showsVerticalScrollIndicator={false}
         />
@@ -473,6 +492,8 @@ export default function ChatScreen() {
                 onChangeText={setNewMessage}
                 multiline
                 maxLength={1000}
+                onFocus={() => setIsInputFocused(true)}
+                onBlur={() => setIsInputFocused(false)}
               />
             </View>
             <TouchableOpacity 
@@ -541,7 +562,7 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingBottom: 8,
   },
   dayDivider: {
     alignItems: 'center',
@@ -641,7 +662,9 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 8,
     borderTopWidth: 1,
     borderTopColor: colors.mediumGray,
     backgroundColor: colors.background,
@@ -652,7 +675,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.lightGray,
     borderRadius: 24,
     paddingHorizontal: 16,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 4,
+    paddingVertical: Platform.OS === 'ios' ? 8 : 4,
     marginRight: 10,
     alignItems: 'center',
   },
