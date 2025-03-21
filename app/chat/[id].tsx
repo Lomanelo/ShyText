@@ -12,7 +12,9 @@ import {
   ActivityIndicator,
   Image,
   StatusBar,
-  Alert
+  Alert,
+  Modal,
+  TouchableWithoutFeedback
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { auth, sendMessage, subscribeToMessages, getProfile, getConversation, respondToConversation, markMessagesAsRead } from '../../src/lib/firebase';
@@ -50,6 +52,7 @@ export default function ChatScreen() {
   const [isResponding, setIsResponding] = useState(false);
   const { refreshUnreadCount } = useUnreadMessages();
   const [isInputFocused, setIsInputFocused] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   useEffect(() => {
     fetchMessages();
@@ -243,24 +246,28 @@ export default function ChatScreen() {
         </TouchableOpacity>
         
         <View style={styles.headerProfile}>
-          {otherUser?.photo_url ? (
-            <Image 
-              source={{ uri: otherUser.photo_url }} 
-              style={styles.headerAvatar} 
-              onError={(e) => console.error("Error loading header avatar:", e.nativeEvent.error)}
-            />
-          ) : (
-            <View style={styles.headerAvatarPlaceholder}>
-              <Text style={styles.headerAvatarInitial}>
-                {otherUser?.display_name?.charAt(0) || '?'}
-              </Text>
-            </View>
-          )}
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerName} numberOfLines={1}>
-              {otherUser?.display_name || 'User'}
-            </Text>
-          </View>
+          <TouchableOpacity 
+            onPress={() => {
+              // Show profile modal when tapped
+              if (otherUser) {
+                setShowProfileModal(true);
+              }
+            }}
+          >
+            {otherUser?.photo_url ? (
+              <Image 
+                source={{ uri: otherUser.photo_url }} 
+                style={styles.headerAvatar} 
+                onError={(e) => console.error("Error loading header avatar:", e.nativeEvent.error)}
+              />
+            ) : (
+              <View style={styles.headerAvatarPlaceholder}>
+                <Text style={styles.headerAvatarInitial}>
+                  {otherUser?.display_name?.charAt(0) || '?'}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -386,6 +393,50 @@ export default function ChatScreen() {
     );
   };
 
+  const renderPendingBanner = () => {
+    return (
+      <View style={styles.pendingBanner}>
+        <Text style={styles.pendingText}>Chat Request</Text>
+        <View style={styles.pendingActions}>
+          <TouchableOpacity
+            style={[
+              styles.pendingButton, 
+              styles.declineButton,
+              isResponding && styles.disabledButton
+            ]}
+            onPress={() => handleAcceptDecline(false)}
+            disabled={isResponding}
+          >
+            {isResponding ? (
+              <ActivityIndicator size="small" color={colors.error} />
+            ) : (
+              <Text style={[styles.pendingButtonText, styles.declineButtonText]}>
+                Decline
+              </Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.pendingButton, 
+              styles.acceptButton,
+              isResponding && styles.disabledButton
+            ]}
+            onPress={() => handleAcceptDecline(true)}
+            disabled={isResponding}
+          >
+            {isResponding ? (
+              <ActivityIndicator size="small" color={colors.success} />
+            ) : (
+              <Text style={[styles.pendingButtonText, styles.acceptButtonText]}>
+                Accept
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
@@ -414,84 +465,40 @@ export default function ChatScreen() {
     <SafeAreaView style={styles.container}>
       <Stack.Screen
         options={{
-          headerTitle: otherUser?.display_name || 'Chat'
+          headerShown: false
         }}
       />
+      <StatusBar barStyle="dark-content" />
       
-      {/* Custom header */}
       {renderCustomHeader()}
       
-      <KeyboardAvoidingView 
-        style={styles.innerContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}>
-        {conversationStatus === 'pending' && !isInitiator && (
-          <View style={styles.pendingBanner}>
-            <Text style={styles.pendingText}>Chat Request</Text>
-            <View style={styles.pendingActions}>
-              <TouchableOpacity
-                style={[
-                  styles.pendingButton, 
-                  styles.declineButton,
-                  isResponding && styles.disabledButton
-                ]}
-                onPress={() => handleAcceptDecline(false)}
-                disabled={isResponding}
-              >
-                {isResponding ? (
-                  <ActivityIndicator size="small" color={colors.error} />
-                ) : (
-                  <Text style={[styles.pendingButtonText, styles.declineButtonText]}>
-                    Decline
-                  </Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.pendingButton, 
-                  styles.acceptButton,
-                  isResponding && styles.disabledButton
-                ]}
-                onPress={() => handleAcceptDecline(true)}
-                disabled={isResponding}
-              >
-                {isResponding ? (
-                  <ActivityIndicator size="small" color={colors.success} />
-                ) : (
-                  <Text style={[styles.pendingButtonText, styles.acceptButtonText]}>
-                    Accept
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
+      {conversationStatus === 'pending' && !isInitiator && renderPendingBanner()}
+      
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardAvoidView}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
         <FlatList
           ref={flatListRef}
           data={messages}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
-          style={styles.messagesList}
-          contentContainerStyle={{
-            paddingBottom: isInputFocused ? 10 : 20,
-          }}
+          contentContainerStyle={styles.listContent}
           inverted
           ListHeaderComponent={renderHeader}
-          showsVerticalScrollIndicator={false}
         />
-
+        
         {(conversationStatus === 'accepted' || isInitiator) && (
           <View style={styles.inputContainer}>
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
-                placeholder="Message"
-                placeholderTextColor={colors.darkGray}
+                placeholder="Type a message..."
                 value={newMessage}
                 onChangeText={setNewMessage}
                 multiline
-                maxLength={1000}
+                placeholderTextColor={colors.darkGray}
                 onFocus={() => setIsInputFocused(true)}
                 onBlur={() => setIsInputFocused(false)}
               />
@@ -499,20 +506,65 @@ export default function ChatScreen() {
             <TouchableOpacity 
               style={[
                 styles.sendButton,
-                newMessage.trim().length === 0 && styles.sendButtonDisabled
-              ]}
+                (!newMessage.trim() && { opacity: 0.5 })
+              ]} 
               onPress={handleSend}
-              disabled={newMessage.trim().length === 0}
+              disabled={!newMessage.trim()}
             >
-              <Ionicons 
-                name="send" 
-                size={20} 
-                color={newMessage.trim().length === 0 ? colors.darkGray : colors.background} 
-              />
+              <Ionicons name="send" size={20} color="#fff" />
             </TouchableOpacity>
           </View>
         )}
       </KeyboardAvoidingView>
+      
+      {/* Profile Modal */}
+      <Modal
+        visible={showProfileModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowProfileModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowProfileModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.profileModalContainer}>
+              <TouchableOpacity 
+                style={styles.closeModalButton}
+                onPress={() => setShowProfileModal(false)}
+              >
+                <Ionicons name="close" size={24} color="white" />
+              </TouchableOpacity>
+              
+              {otherUser?.photo_url ? (
+                <Image 
+                  source={{ uri: otherUser.photo_url }} 
+                  style={styles.profileImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.profileImagePlaceholder}>
+                  <Text style={styles.profileImageText}>
+                    {otherUser?.display_name?.charAt(0) || '?'}
+                  </Text>
+                </View>
+              )}
+              
+              <View style={styles.profileInfo}>
+                {otherUser?.display_name && (
+                  <Text style={styles.profileName}>
+                    {otherUser.display_name}
+                  </Text>
+                )}
+
+                {otherUser?.age && (
+                  <View style={styles.ageContainer}>
+                    <Text style={styles.ageText}>{otherUser.age}</Text>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -664,7 +716,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingTop: 8,
-    paddingBottom: 8,
+    paddingBottom: Platform.OS === 'ios' ? 2 : 8,
     borderTopWidth: 1,
     borderTopColor: colors.mediumGray,
     backgroundColor: colors.background,
@@ -705,7 +757,6 @@ const styles = StyleSheet.create({
   headerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
     paddingHorizontal: 12,
     width: '100%',
     height: 52,
@@ -717,21 +768,26 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'absolute',
+    left: 12,
+    zIndex: 10,
   },
   headerProfile: {
-    flexDirection: 'row',
-    alignItems: 'center',
     flex: 1,
-  },
-  headerTextContainer: {
     justifyContent: 'center',
-    flex: 1,
+    alignItems: 'center',
+  },
+  headerAvatarContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.lightGray,
   },
   headerAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    marginRight: 12,
     borderWidth: 1,
     borderColor: colors.lightGray,
   },
@@ -739,7 +795,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    marginRight: 12,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
@@ -750,6 +805,10 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  headerTextContainer: {
+    justifyContent: 'center',
+    flex: 1,
   },
   headerName: {
     fontSize: 17,
@@ -822,5 +881,104 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.darkGray,
     marginTop: 4,
+  },
+  keyboardAvoidView: {
+    flex: 1,
+  },
+  listContent: {
+    paddingBottom: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileModalContainer: {
+    width: '90%',
+    backgroundColor: 'transparent',
+    borderRadius: 24,
+    padding: 0,
+    overflow: 'hidden',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 10,
+  },
+  closeModalButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 10,
+    padding: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+  },
+  profileImage: {
+    width: '100%',
+    height: undefined,
+    aspectRatio: 0.75, // Portrait mode - taller than wide
+    borderRadius: 24,
+  },
+  profileImagePlaceholder: {
+    width: '100%',
+    height: undefined,
+    aspectRatio: 0.75, // Portrait mode - taller than wide
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 24,
+  },
+  profileImageText: {
+    color: colors.background,
+    fontSize: 80,
+    fontWeight: 'bold',
+  },
+  profileInfo: {
+    padding: 0,
+    width: '100%',
+    alignItems: 'center',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0)',
+  },
+  profileName: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: 'white',
+    textShadowColor: 'rgba(0, 0, 0, 0.75)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    marginBottom: 8,
+  },
+  ageContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 15,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginBottom: 20,
+  },
+  ageText: {
+    fontSize: 15,
+    color: 'white',
+    fontWeight: '500',
+  },
+  verifiedBadge: {
+    backgroundColor: 'rgba(52, 199, 89, 0.1)',
+    borderRadius: 10,
+    padding: 2,
+    paddingHorizontal: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  verifiedText: {
+    color: colors.success,
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User, updateProfile, initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import { getFirestore, GeoPoint, collection, doc, setDoc, updateDoc, getDoc, query, where, getDocs, addDoc, orderBy, limit, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { getFirestore, GeoPoint, collection, doc, setDoc, updateDoc, getDoc, query, where, getDocs, addDoc, orderBy, limit, onSnapshot, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import * as geofirestore from 'geofire-common';
@@ -495,15 +495,55 @@ export async function startConversation(receiverId: string, message: string) {
     
     // If there's an existing conversation, check its status
     if (!existingConvSnapshot.empty) {
-      const existingConv = existingConvSnapshot.docs[0].data();
-      if (existingConv.status === 'declined' && existingConv.initiator_id === user.uid) {
+      const existingConvDoc = existingConvSnapshot.docs[0];
+      const existingConv = existingConvDoc.data();
+      const existingConvId = existingConvDoc.id;
+      
+      // Check who initiated the existing conversation
+      const userIsInitiator = existingConv.initiator_id === user.uid;
+      
+      // If the conversation exists but is in an invalid state (corrupt data, etc.)
+      // or it's extremely old, recreate it
+      try {
+        // If the conversation is very old (>30 days), we can create a new one
+        const updatedAt = existingConv.updated_at ? new Date(existingConv.updated_at) : null;
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        
+        if (updatedAt && updatedAt < thirtyDaysAgo) {
+          // Delete the old conversation and create a new one
+          console.log("Conversation is over 30 days old, creating a new one");
+          await deleteDoc(doc(db, 'conversations', existingConvId));
+          throw new Error("Creating new conversation"); // This will skip to the creation code
+        }
+      } catch (error) {
+        // If we got here due to our own throw, continue to create a new conversation
+        if (error instanceof Error && error.message === "Creating new conversation") {
+          // Continue to the conversation creation code
+          console.log("Proceeding to create a new conversation");
+        } else {
+          // For any other errors, throw normally
+          throw error;
+        }
+      }
+      
+      if (existingConv.status === 'declined' && userIsInitiator) {
         throw new Error('This user has declined your previous conversation request');
       }
+      
       if (existingConv.status === 'pending') {
-        throw new Error('You already have a pending conversation with this user');
+        // If the user is the initiator, they should be redirected to the existing chat
+        if (userIsInitiator) {
+          return { success: true, conversationId: existingConvId };
+        }
+        // If they're the receiver, tell them they already have a request from this user
+        else {
+          throw new Error('This user has already sent you a conversation request');
+        }
       }
+      
       if (existingConv.status === 'accepted') {
-        return { success: true, conversationId: existingConvSnapshot.docs[0].id };
+        return { success: true, conversationId: existingConvId };
       }
     }
     
@@ -915,12 +955,15 @@ export async function getConversation(conversationId: string) {
       ? conversationData.receiver_id 
       : conversationData.initiator_id;
     
+    const isInitiator = conversationData.initiator_id === user.uid;
+    
     return { 
       success: true, 
       conversation: {
         ...conversationData,
         id: conversationId,
-        otherUserId
+        otherUserId,
+        isInitiator
       } 
     };
   } catch (error) {
@@ -1504,5 +1547,51 @@ export async function markMessagesAsRead(conversationId: string) {
   } catch (error) {
     console.error('Error marking messages as read:', error);
     return 0;
+  }
+}
+
+// Delete a conversation and its messages
+export async function deleteConversation(conversationId: string) {
+  const user = getCurrentUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+  
+  try {
+    // Check if the conversation exists and user has permission
+    const conversationRef = doc(db, 'conversations', conversationId);
+    const conversationSnap = await getDoc(conversationRef);
+    
+    if (!conversationSnap.exists()) {
+      return { success: true, message: 'Conversation already deleted' };
+    }
+    
+    const conversationData = conversationSnap.data();
+    
+    // Check if user is part of the conversation
+    if (conversationData.initiator_id !== user.uid && conversationData.receiver_id !== user.uid) {
+      throw new Error('Not authorized to delete this conversation');
+    }
+    
+    // Get all messages in the conversation
+    const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+    const messagesSnap = await getDocs(messagesRef);
+    
+    // Batch delete all messages
+    const batch = writeBatch(db);
+    messagesSnap.forEach(messageDoc => {
+      batch.delete(doc(db, 'conversations', conversationId, 'messages', messageDoc.id));
+    });
+    
+    // Delete the conversation document itself
+    batch.delete(conversationRef);
+    
+    // Commit the batch
+    await batch.commit();
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+    throw error;
   }
 } 

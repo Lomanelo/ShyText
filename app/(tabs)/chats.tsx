@@ -167,7 +167,7 @@ export default function ChatsScreen() {
             return {
               ...conv,
               otherUser: {
-                display_name: userData?.display_name || 'Deleted User',
+                display_name: userData?.display_name || '',
                 photo_url: userData?.photo_url,
                 deleted: !userDoc.exists()
               }
@@ -177,7 +177,7 @@ export default function ChatsScreen() {
             return {
               ...conv,
               otherUser: {
-                display_name: 'Deleted User',
+                display_name: '',
                 deleted: true
               }
             };
@@ -244,7 +244,7 @@ export default function ChatsScreen() {
     const isAccepted = item.accepted === true || item.status === 'accepted';
     const isReceived = !item.isInitiator;
     const otherUser = item.otherUser || {
-      display_name: 'Unknown User',
+      display_name: '',
       photo_url: undefined,
       deleted: false
     };
@@ -287,7 +287,7 @@ export default function ChatsScreen() {
               isDeletedUser ? styles.deletedUserName : null,
               hasUnread ? styles.unreadName : null
             ]} numberOfLines={1}>
-              {otherUser.display_name}
+              {isDeletedUser ? '' : otherUser.display_name}
             </Text>
             <Text style={styles.time}>
               {item.updated_at ? formatTime(item.updated_at) : ''}
@@ -308,7 +308,7 @@ export default function ChatsScreen() {
                 isDeletedUser ? styles.deletedUserMessage : null,
                 hasUnread ? styles.unreadMessage : null
               ]} numberOfLines={1}>
-                {isDeletedUser ? 'User no longer available' : (item.last_message || 'No messages yet')}
+                {isDeletedUser ? '' : (item.last_message || 'No messages yet')}
               </Text>
             )}
           </View>
