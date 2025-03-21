@@ -1,10 +1,11 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User, updateProfile } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User, updateProfile, initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore, GeoPoint, collection, doc, setDoc, updateDoc, getDoc, query, where, getDocs, addDoc, orderBy, limit, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import * as geofirestore from 'geofire-common';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -25,8 +26,13 @@ const app = initializeApp(firebaseConfig);
 let analytics = null;
 isSupported().then(yes => yes && (analytics = getAnalytics(app))).catch(console.error);
 
-// Use standard auth initialization - we'll handle persistence separately
-export const auth = getAuth(app);
+// Initialize Firebase Auth with AsyncStorage persistence
+export const auth = Platform.OS === 'web' 
+  ? getAuth(app)
+  : initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage)
+    });
+
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 
@@ -1271,4 +1277,183 @@ export const isUserVerified = async (userId: string): Promise<boolean> => {
     console.error('Error checking user verification:', error);
     return false;
   }
-}; 
+};
+
+// Get unread message count for the current user
+export async function getUnreadMessageCount() {
+  const user = getCurrentUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+  
+  try {
+    // Query conversations where the user is either the initiator or receiver
+    const q1 = query(
+      collection(db, 'conversations'),
+      where('initiator_id', '==', user.uid)
+    );
+    
+    const q2 = query(
+      collection(db, 'conversations'),
+      where('receiver_id', '==', user.uid)
+    );
+    
+    const [initiatedSnapshots, receivedSnapshots] = await Promise.all([
+      getDocs(q1),
+      getDocs(q2)
+    ]);
+    
+    let totalUnread = 0;
+    
+    // Function to process each conversation
+    const processConversation = async (doc: any) => {
+      const conversationId = doc.id;
+      const conversationData = doc.data();
+      
+      // Skip declined conversations
+      if (conversationData.status === 'declined') {
+        return 0;
+      }
+      
+      // For each conversation, check if there are any unread messages
+      // Get all messages in this conversation
+      const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+      const messagesSnap = await getDocs(messagesRef);
+      
+      // Count unread messages not sent by current user
+      let unreadCount = 0;
+      messagesSnap.forEach(messageDoc => {
+        const messageData = messageDoc.data();
+        if (!messageData.read && messageData.sender_id !== user.uid) {
+          unreadCount++;
+        }
+      });
+      
+      return unreadCount;
+    };
+    
+    // Process all conversations
+    const conversationDocs = [...initiatedSnapshots.docs, ...receivedSnapshots.docs];
+    const unreadCounts = await Promise.all(conversationDocs.map(processConversation));
+    
+    // Sum all unread counts
+    totalUnread = unreadCounts.reduce((sum, count) => sum + count, 0);
+    
+    return totalUnread;
+  } catch (error) {
+    console.error('Error getting unread message count:', error);
+    return 0; // Return 0 on error
+  }
+}
+
+// Subscribe to unread message count in real-time
+export function subscribeToUnreadMessageCount(callback: (count: number) => void) {
+  const user = getCurrentUser();
+  if (!user) {
+    callback(0);
+    return () => {};
+  }
+  
+  // Keep track of all conversation subscriptions
+  const subscriptions: (() => void)[] = [];
+  
+  // Function to count unread messages in a conversation
+  const countUnreadInConversation = (messages: any[]) => {
+    return messages.filter(msg => !msg.read && msg.sender_id !== user.uid).length;
+  };
+  
+  // First, subscribe to all conversations
+  const conversationsListener = () => {
+    // Clean up any existing message subscriptions
+    subscriptions.forEach(unsub => unsub());
+    subscriptions.length = 0;
+    
+    // Query for user's conversations
+    const q1 = query(
+      collection(db, 'conversations'),
+      where('initiator_id', '==', user.uid)
+    );
+    
+    const q2 = query(
+      collection(db, 'conversations'),
+      where('receiver_id', '==', user.uid)
+    );
+    
+    // Listen to conversations where user is initiator
+    const unsubInitiator = onSnapshot(q1, initiatorSnapshot => {
+      processConversationChanges(initiatorSnapshot.docs);
+    }, error => {
+      console.error('Error in unread initiator subscription:', error);
+    });
+    
+    // Listen to conversations where user is receiver
+    const unsubReceiver = onSnapshot(q2, receiverSnapshot => {
+      processConversationChanges(receiverSnapshot.docs);
+    }, error => {
+      console.error('Error in unread receiver subscription:', error);
+    });
+    
+    // Process conversation changes by setting up message listeners
+    const processConversationChanges = (conversationDocs: any[]) => {
+      conversationDocs.forEach(conversationDoc => {
+        const conversationId = conversationDoc.id;
+        const conversationData = conversationDoc.data();
+        
+        // Skip declined conversations
+        if (conversationData.status === 'declined') {
+          return;
+        }
+        
+        // Subscribe to messages in this conversation
+        const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+        const messagesQuery = query(messagesRef, orderBy('timestamp', 'asc'));
+        
+        const unsubMessages = onSnapshot(messagesQuery, messagesSnapshot => {
+          // Count unread messages across all conversations
+          let totalUnread = 0;
+          
+          // Get all messages from this conversation
+          const messages = messagesSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          
+          // Update total unread count
+          const unreadInThisConversation = countUnreadInConversation(messages);
+          updateTotalUnreadCount();
+        }, error => {
+          console.error(`Error in messages subscription for ${conversationId}:`, error);
+        });
+        
+        // Store the unsubscribe function
+        subscriptions.push(unsubMessages);
+      });
+    };
+    
+    return () => {
+      unsubInitiator();
+      unsubReceiver();
+      // Clean up all message subscriptions
+      subscriptions.forEach(unsub => unsub());
+    };
+  };
+  
+  // Start listening
+  const unsubscribe = conversationsListener();
+  
+  // Function to update the total unread count by querying all conversations
+  const updateTotalUnreadCount = async () => {
+    try {
+      const count = await getUnreadMessageCount();
+      callback(count);
+    } catch (error) {
+      console.error('Error updating unread count:', error);
+    }
+  };
+  
+  // Initial count
+  updateTotalUnreadCount();
+  
+  // Return unsubscribe function
+  return unsubscribe;
+} 

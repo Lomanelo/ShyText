@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { View, Dimensions, Platform, Animated, TextInput, TouchableOpacity, Text, Modal, Image, Keyboard, TouchableWithoutFeedback } from 'react-native';
+import { View, Dimensions, Platform, Animated, TextInput, TouchableOpacity, Text, Modal, Image, Keyboard, TouchableWithoutFeedback, GestureResponderEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import UserBubble from './UserBubble';
 import { styles } from './styles';
@@ -72,6 +72,12 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
   
   // Clear states when users change
   useEffect(() => {
+    // Only reset these states when users array actually changes identity
+    // Don't reset during normal rerenders
+    if (draggedUserId) {
+      return; // Don't reset if we're currently showing the modal
+    }
+    
     setDraggedUserId(null);
     setShowMessageInput(false);
     setMessage('');
@@ -148,10 +154,13 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
   };
   
   // Calculate user positions once when users array changes or window resizes
+  // Memoize the positions to prevent unnecessary recalculations
+  const memoizedPositions = useMemo(() => calculatePositions(), [users, width, height]);
+  
+  // Use a state update only when the memoized positions change
   useEffect(() => {
-    const newPositions = calculatePositions();
-    setUserPositions(newPositions);
-  }, [users, width, height]);
+    setUserPositions(memoizedPositions);
+  }, [memoizedPositions]);
   
   // Define the center point for dragging to
   const dropCenterPoint = useMemo(() => ({
@@ -170,13 +179,18 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
       const user = users.find(u => u.id === userId);
       setDraggedUser(user);
       setDraggedUserId(userId);
-      setShowMessageInput(true);
       
-      // Focus the input after a small delay to ensure the UI has updated
+      // Delay showing the message input to avoid immediate dismissal
+      // This helps prevent touch events from propagating and closing the modal
       setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.focus();
-        }
+        setShowMessageInput(true);
+        
+        // Focus the input after a small delay to ensure the UI has updated
+        setTimeout(() => {
+          if (inputRef.current) {
+            inputRef.current.focus();
+          }
+        }, 150);
       }, 100);
     } else {
       console.log("Drop was NOT successful, NOT showing message input");
@@ -201,82 +215,73 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
     }
   };
   
-  // Handle sending a message
+  // Handle send message button
   const handleSendMessage = () => {
-    if (draggedUserId && message.trim() !== '' && onMessageSend) {
+    if (message.trim() !== '' && draggedUserId && onMessageSend) {
       onMessageSend(draggedUserId, message);
+      setMessage('');
       setShowMessageInput(false);
       setDraggedUserId(null);
-      setMessage('');
       setDraggedUser(null);
     }
   };
   
-  // Handle canceling message input
+  // Handle cancel message
   const handleCancelMessage = () => {
     setShowMessageInput(false);
-    setDraggedUserId(null);
     setMessage('');
+    setDraggedUserId(null);
     setDraggedUser(null);
   };
   
-  // Handle background tap
-  const handleBackgroundTap = () => {
+  // Handle background tap (dismiss if tapped outside the modal)
+  const handleBackgroundTap = (event: GestureResponderEvent) => {
+    // Don't dismiss if keyboard is visible or if we just opened the modal
     if (isKeyboardVisible) {
-      Keyboard.dismiss();
-    } else {
+      return;
+    }
+    
+    // Small delay to prevent accidental dismissal right after opening
+    if (Date.now() - modalOpenTime < 300) {
+      return;
+    }
+    
+    // Only cancel if we actually have a modal showing
+    if (showMessageInput) {
       handleCancelMessage();
     }
   };
   
-  // Draw concentric circles to indicate distance
-  const renderConcentricCircles = () => {
-    const circles = [];
-    const numCircles = 3; // Number of concentric circles
-    
-    for (let i = 1; i <= numCircles; i++) {
-      const size = (RADAR_SIZE * i) / numCircles;
-      circles.push(
-        <View
-          key={`circle-${i}`}
-          style={[
-            styles.radarCircle,
-            {
-              width: size,
-              height: size,
-              left: (RADAR_SIZE - size) / 2,
-              top: (RADAR_SIZE - size) / 2,
-            },
-          ]}
-        />
-      );
-    }
-    
-    return circles;
-  };
+  // Track when the modal was opened
+  const [modalOpenTime, setModalOpenTime] = useState(0);
   
-  // Add a special effect to preserve modal state during user/location updates
+  // Update modal open time when showing the modal
   useEffect(() => {
-    // Only update the users data if we're not currently showing the message input
-    // This prevents the modal from closing when location updates occur
-    if (!showMessageInput) {
-      // If draggedUser exists, find and preserve it in the updated users array
-      if (draggedUser && draggedUserId) {
-        const updatedDraggedUser = users.find(u => u.id === draggedUserId);
-        if (updatedDraggedUser) {
-          setDraggedUser(updatedDraggedUser);
-        }
-      }
+    if (showMessageInput) {
+      setModalOpenTime(Date.now());
     }
-  }, [users, showMessageInput]);
+  }, [showMessageInput]);
   
   return (
     <View style={styles.container}>
+      {/* Current User (Top) */}
+      <View style={styles.currentUserSection}>
+        <UserBubble
+          user={{
+            id: currentUser.id,
+            display_name: currentUser.display_name || 'You',
+            photo_url: currentUser.photo_url,
+            isCurrentUser: true,
+            is_verified: currentUser.is_verified
+          }}
+          onPress={() => {}}
+          size={BUBBLE_SIZE * 1.4} // Make the bubble significantly bigger
+        />
+      </View>
+      
+      {/* Radar Area - simplified without concentric circles */}
       <View style={[styles.radarBackground, { width: RADAR_SIZE, height: RADAR_SIZE }]}>
-        {/* Concentric circles for distance visualization */}
-        {renderConcentricCircles()}
-        
-        {/* Drop target in center - make it more visible */}
+        {/* Drop target in center */}
         <View style={styles.currentUserContainer}>
           <UserBubble
             user={{
@@ -319,48 +324,6 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
             />
           );
         })}
-        
-        {/* Current User (Top) */}
-        <View 
-          style={{
-            position: 'absolute',
-            top: -BUBBLE_SIZE * 2.5, // Position it much higher above the radar
-            alignItems: 'center',
-            width: '100%',
-            marginBottom: 25, // Add margin at the bottom to increase distance from radar
-          }}
-        >
-          <UserBubble
-            user={{
-              id: currentUser.id,
-              display_name: currentUser.display_name || 'You',
-              photo_url: currentUser.photo_url,
-              isCurrentUser: true,
-            }}
-            onPress={() => {}}
-            size={BUBBLE_SIZE * 1.4} // Make the bubble significantly bigger
-          />
-          <Text style={{
-            marginTop: 12,
-            fontSize: 16,
-            fontWeight: '600',
-            color: '#333',
-            letterSpacing: 0.3,
-            textAlign: 'center',
-            paddingHorizontal: 14,
-            paddingVertical: 6,
-            backgroundColor: 'rgba(255, 255, 255, 0.9)',
-            borderRadius: 18,
-            overflow: 'hidden',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.15,
-            shadowRadius: 3,
-            elevation: 3,
-          }}>
-            People around me
-          </Text>
-        </View>
       </View>
       
       {/* Message Input Modal - centered on screen */}
@@ -396,10 +359,14 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
                 <View style={styles.messageModalHeader}>
                   {draggedUser && (
                     <Text style={styles.messageModalTitle}>
-                      {draggedUser.display_name || 'User'}
+                      {draggedUser.display_name || ''}
                     </Text>
                   )}
-                  <TouchableOpacity onPress={handleCancelMessage} style={styles.closeButton}>
+                  <TouchableOpacity 
+                    onPress={handleCancelMessage} 
+                    style={styles.closeButton}
+                    hitSlop={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                  >
                     <Text style={{fontSize: 20, color: '#999', fontWeight: '300'}}>×</Text>
                   </TouchableOpacity>
                 </View>
@@ -407,7 +374,7 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
                 <TextInput
                   ref={inputRef}
                   style={styles.messageModalInput}
-                  placeholder={`Hey ${draggedUser?.display_name || 'there'}, i would like to chat...`}
+                  placeholder={`Hey ${draggedUser?.display_name || 'there'}, I would like to chat...`}
                   placeholderTextColor="#BBBBBB"
                   value={message}
                   onChangeText={setMessage}
@@ -422,6 +389,23 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
                     }
                   }}
                 />
+
+                {/* Add Send Button for better UX */}
+                <TouchableOpacity 
+                  style={[
+                    styles.modalSendButton,
+                    !message.trim() && styles.modalSendButtonDisabled
+                  ]}
+                  onPress={handleSendMessage}
+                  disabled={!message.trim()}
+                >
+                  <Text style={[
+                    styles.modalSendButtonText,
+                    !message.trim() && styles.modalSendButtonTextDisabled
+                  ]}>
+                    Send
+                  </Text>
+                </TouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
           </View>

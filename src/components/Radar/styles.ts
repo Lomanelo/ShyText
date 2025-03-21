@@ -21,6 +21,33 @@ export const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   
+  // Current user section at the top
+  currentUserSection: {
+    alignItems: 'center',
+    marginBottom: 25,
+    width: '100%',
+  },
+  
+  // Current user label
+  currentUserLabel: {
+    marginTop: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    letterSpacing: 0.3,
+    textAlign: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  
   // Circular background
   radarBackground: {
     aspectRatio: 1,
@@ -32,6 +59,12 @@ export const styles = StyleSheet.create({
     borderColor: colors.mediumGray,
     backgroundColor: colors.lightGray,
     position: 'relative', // Ensures absolute positioning of children works correctly
+    marginTop: 10, // Add some space from the current user
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
   },
   
   // Current user (center of radar)
@@ -175,14 +208,6 @@ export const styles = StyleSheet.create({
     textAlign: 'center',
   },
   
-  // Concentric circles
-  radarCircle: {
-    position: 'absolute',
-    borderWidth: 1,
-    borderColor: 'rgba(200, 200, 200, 0.5)',
-    borderRadius: 1000,
-  },
-  
   // Message composition area
   messageComposer: {
     position: 'absolute',
@@ -248,7 +273,7 @@ export const styles = StyleSheet.create({
     minHeight: 50,
   },
   
-  // Send button
+  // Send button on chat bubble
   sendButton: {
     position: 'absolute',
     right: 24,
@@ -269,109 +294,108 @@ export const styles = StyleSheet.create({
   // Modal overlay for the message input
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
 
   // Message modal container
   messageModal: {
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
     width: '90%',
-    maxWidth: 340, // Narrower modal
-    paddingTop: 45, // Reduced padding to bring content closer together
-    paddingBottom: 15,
-    paddingHorizontal: 25,
+    backgroundColor: colors.background,
+    borderRadius: 16,
+    padding: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
     shadowRadius: 10,
-    elevation: 5,
-    position: 'relative',
+    elevation: 10,
   },
 
   // Message modal header
   messageModalHeader: {
     flexDirection: 'row',
-    justifyContent: 'flex-start', // Changed from center to flex-start to align name to the left
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15, // Slightly reduced to bring text input closer
-    position: 'relative',
-    marginLeft: 85, // Add left margin to make space for the photo
+    marginBottom: 15,
   },
 
   // Message modal title
   messageModalTitle: {
-    fontSize: 22,
-    fontWeight: '500',
-    color: COLORS.black,
-    textAlign: 'left', // Changed from center to left
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
   },
 
   // Close button for modal - positioned at top right
   closeButton: {
-    position: 'absolute',
-    right: -5,
-    top: -5,
-    padding: 8,
+    padding: 5,
   },
 
   // User profile picture in message modal
   messageUserProfileContainer: {
-    position: 'absolute',
-    top: -35, // Adjusted to position it better
-    left: 15,
-    width: 85, // Increased size from 75 to 85
-    height: 85, // Increased size from 75 to 85
-    borderRadius: 42.5, // Half of width/height
-    borderWidth: 3,
-    borderColor: COLORS.white,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-    zIndex: 10,
-    backgroundColor: COLORS.white,
-    overflow: 'hidden',
+    alignItems: 'center',
+    marginBottom: 15,
   },
 
   // User profile image
   messageUserProfile: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 42.5, // Half of container width/height
+    width: 70,
+    height: 70,
+    borderRadius: 35,
   },
 
   // User profile fallback (for when image is not available)
   messageUserProfileFallback: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 42.5, // Half of container width/height
-    backgroundColor: COLORS.teal,
-    alignItems: 'center',
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
+    alignItems: 'center',
   },
 
   // User profile fallback text
   messageUserProfileFallbackText: {
-    color: COLORS.white,
-    fontSize: 32, // Larger text for the bigger container
+    fontSize: 30,
     fontWeight: 'bold',
+    color: colors.background,
   },
 
   // Message input in modal - light gray like in second image
   messageModalInput: {
-    backgroundColor: '#F2F2F2',
-    borderRadius: 16,
-    padding: 15,
+    borderWidth: 1,
+    borderColor: colors.mediumGray,
+    borderRadius: 10,
+    padding: 12,
+    minHeight: 100,
+    maxHeight: 150,
     fontSize: 16,
-    color: COLORS.black,
-    minHeight: 80,
+    color: colors.text,
     textAlignVertical: 'top',
-    marginTop: 5, // Added small margin to separate from header
-    marginBottom: 10,
+  },
+
+  // Modal send button styles
+  modalSendButton: {
+    alignSelf: 'flex-end',
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    marginTop: 10,
+    backgroundColor: colors.primary,
+    borderRadius: 20,
+  },
+  
+  modalSendButtonText: {
+    color: colors.background,
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  
+  modalSendButtonDisabled: {
+    backgroundColor: colors.lightGray,
+  },
+  
+  modalSendButtonTextDisabled: {
+    color: colors.darkGray,
   },
 }); 

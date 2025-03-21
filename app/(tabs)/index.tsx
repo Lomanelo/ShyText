@@ -159,63 +159,14 @@ export default function NearbyScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      // Show a confirmation dialog for a force refresh
-      Alert.alert(
-        'Refresh Options',
-        'Choose refresh type:',
-        [
-          { 
-            text: 'Standard Refresh', 
-            onPress: async () => {
-              try {
-                await refreshUsers();
-              } finally {
-                setRefreshing(false);
-              }
-            }
-          },
-          { 
-            text: 'Force Refresh (Clear All)', 
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                // Stop scanning
-                stopScanning();
-                
-                // Wait a moment for scanning to fully stop
-                await new Promise(resolve => setTimeout(resolve, 500));
-                
-                // Clear the users array
-                setUsers([]);
-                
-                // Reset BLE completely by restarting the scan system
-                const bleService = BleService.getInstance();
-                await bleService.cleanUp();
-                
-                // Wait a moment for cleanup to finish
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                
-                // Start scanning again to completely reset the state
-                await refreshUsers();
-                
-                console.log('Performed force refresh - all BLE caches cleared');
-              } finally {
-                setRefreshing(false);
-              }
-            }
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => setRefreshing(false)
-          }
-        ]
-      );
+      // Just perform a standard refresh
+      await refreshUsers();
     } catch (error) {
       console.error('Error refreshing nearby users:', error);
+    } finally {
       setRefreshing(false);
     }
-  }, [refreshUsers, stopScanning, setUsers]);
+  }, [refreshUsers]);
 
   const renderProfileStat = (label: string, value: string | number) => (
     <View style={styles.profileStat}>
@@ -294,12 +245,9 @@ export default function NearbyScreen() {
               <Text style={styles.noUsersText}>
                 Bluetooth is disabled. Please enable Bluetooth to discover nearby users.
               </Text>
-              <TouchableOpacity 
-                style={styles.retryButton}
-                onPress={() => refreshUsers()}
-              >
-                <Text style={styles.retryButtonText}>Retry</Text>
-              </TouchableOpacity>
+              <Text style={styles.subText}>
+                Enable Bluetooth and pull down to refresh
+              </Text>
             </View>
           )}
 
@@ -308,12 +256,9 @@ export default function NearbyScreen() {
               <Text style={styles.noUsersText}>
                 Make sure Bluetooth is enabled in your iOS settings.
               </Text>
-              <TouchableOpacity 
-                style={styles.retryButton}
-                onPress={() => refreshUsers()}
-              >
-                <Text style={styles.retryButtonText}>Force Start Scanning</Text>
-              </TouchableOpacity>
+              <Text style={styles.subText}>
+                Enable Bluetooth and pull down to refresh
+              </Text>
             </View>
           )}
 
@@ -329,59 +274,14 @@ export default function NearbyScreen() {
               <Text style={styles.noUsersText}>
                 {isScanning ? 'Scanning for nearby devices...' : 'No users found nearby'}
               </Text>
-              <Text style={styles.debugText}>
-                State: {isScanning ? 'Scanning' : 'Not scanning'} | Platform: {Platform.OS}
+              <Text style={styles.subText}>
+                Pull down to refresh
               </Text>
-              {!isScanning ? (
-                <TouchableOpacity 
-                  style={styles.retryButton}
-                  onPress={() => startScanning()}
-                >
-                  <Text style={styles.retryButtonText}>Start Scanning</Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity 
-                  style={[styles.retryButton, { backgroundColor: colors.error }]}
-                  onPress={() => {
-                    stopScanning();
-                    setTimeout(() => startScanning(), 1000);
-                  }}
-                >
-                  <Text style={styles.retryButtonText}>Restart Scan</Text>
-                </TouchableOpacity>
-              )}
             </View>
           )}
 
           {btEnabled && !loading && users.length > 0 && (
             <>
-              <View style={styles.deviceInfoHeader}>
-                <Text style={styles.deviceInfoHeaderText}>
-                  Found {users.length} nearby device{users.length !== 1 ? 's' : ''}
-                </Text>
-                <View style={styles.deviceHeaderControls}>
-                  <TouchableOpacity 
-                    style={styles.iconButton}
-                    onPress={() => {
-                      Alert.alert(
-                        'Device Information',
-                        users.map(user => 
-                          `${user.display_name}: ${user.distance}m, Last seen: ${new Date(user.lastActive || '').toLocaleTimeString()}`
-                        ).join('\n\n'),
-                        [{ text: 'OK' }]
-                      );
-                    }}
-                  >
-                    <Ionicons name="information-circle" size={24} color={colors.primary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.iconButton}
-                    onPress={onRefresh}
-                  >
-                    <Ionicons name="refresh" size={24} color={colors.primary} />
-                  </TouchableOpacity>
-                </View>
-              </View>
               <Radar
                 users={users}
                 currentUser={{
@@ -808,5 +708,10 @@ const styles = StyleSheet.create({
   retryButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  subText: {
+    marginTop: 10,
+    fontSize: 12,
+    color: colors.darkGray,
   },
 });

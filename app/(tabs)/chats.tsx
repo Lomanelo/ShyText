@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { db, auth } from '../../src/lib/firebase';
 import { collection, query, where, onSnapshot, orderBy, getDoc, doc, getDocs, limit } from 'firebase/firestore';
 import colors from '../../src/theme/colors';
+import { useUnreadMessages } from './_layout';
 
 interface Conversation {
   id: string;
@@ -39,6 +40,7 @@ export default function ChatsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const { refreshUnreadCount } = useUnreadMessages();
 
   const refreshConversations = useCallback(async () => {
     if (!auth.currentUser) return;
@@ -76,13 +78,16 @@ export default function ChatsScreen() {
         updateConversations(initiatorConvs, true),
         updateConversations(receiverConvs, false)
       ]);
+      
+      // Refresh unread message count
+      await refreshUnreadCount();
     } catch (error) {
       console.error('Error refreshing conversations:', error);
       setError('Failed to refresh conversations');
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [refreshUnreadCount]);
 
   useEffect(() => {
     if (!auth.currentUser) return;
@@ -113,6 +118,8 @@ export default function ChatsScreen() {
         isInitiator: true
       }));
       await updateConversations(convs, true);
+      // Refresh unread message count when conversations change
+      await refreshUnreadCount();
     }, error => {
       console.error('Error in initiator subscription:', error);
       setError('Failed to load conversations');
@@ -126,17 +133,22 @@ export default function ChatsScreen() {
         isInitiator: false
       }));
       await updateConversations(convs, false);
+      // Refresh unread message count when conversations change
+      await refreshUnreadCount();
     }, error => {
       console.error('Error in receiver subscription:', error);
       setError('Failed to load conversations');
       setLoading(false);
     });
 
+    // Refresh unread message count when component mounts
+    refreshUnreadCount();
+
     return () => {
       unsubscribeInitiator();
       unsubscribeReceiver();
     };
-  }, []);
+  }, [refreshUnreadCount]);
 
   const updateConversations = async (newConvs: any[], isInitiator: boolean) => {
     try {
