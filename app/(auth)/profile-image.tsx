@@ -9,6 +9,7 @@ import { launchImageLibraryAsync, launchCameraAsync, MediaTypeOptions } from 'ex
 import { getAuth, updateProfile } from 'firebase/auth';
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { getFirestore, doc, updateDoc, setDoc } from 'firebase/firestore';
+import colors from '../../src/theme/colors';
 
 export default function ProfileImageScreen() {
   // State for image selection and upload
@@ -386,9 +387,8 @@ export default function ProfileImageScreen() {
 
   return (
     <View style={styles.container}>
+      <StatusBar style="dark" />
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar style="light" />
-        
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.content}>
             <View style={styles.header}>
@@ -404,7 +404,7 @@ export default function ProfileImageScreen() {
                 <Image source={{ uri: selectedImage }} style={styles.fullImage} />
               ) : (
                 <View style={styles.placeholderContainer}>
-                  <Ionicons name="images" size={64} color="#AAAAAA" style={styles.placeholderIcon} />
+                  <Ionicons name="images" size={64} color={colors.darkGray} style={styles.placeholderIcon} />
                   <Text style={styles.placeholderText}>Tap to select from gallery</Text>
                 </View>
               )}
@@ -414,11 +414,11 @@ export default function ProfileImageScreen() {
             <View style={styles.birthdateSection}>
               <Text style={styles.sectionLabel}>Your Birth Date</Text>
               <View style={styles.birthdateInputContainer}>
-                <Ionicons name="calendar" size={22} color="#FF5E3A" style={styles.birthdateIcon} />
+                <Ionicons name="calendar" size={22} color={colors.primary} style={styles.birthdateIcon} />
                 <TextInput
                   style={styles.birthdateInput}
                   placeholder="DD/MM/YYYY"
-                  placeholderTextColor="#888888"
+                  placeholderTextColor={colors.darkGray}
                   value={birthDateInput}
                   onChangeText={formatBirthDateInput}
                   keyboardType="number-pad"
@@ -466,10 +466,10 @@ export default function ProfileImageScreen() {
                       onError={() => console.error('Error loading uploaded image')} 
                     />
                   ) : (
-                    <Ionicons name="person" size={64} color="#4CD964" style={styles.completeIcon} />
+                    <Ionicons name="person" size={64} color={colors.success} style={styles.completeIcon} />
                   )}
                 </TouchableOpacity>
-                <Ionicons name="checkmark-circle" size={64} color="#4CD964" style={styles.completeIcon} />
+                <Ionicons name="checkmark-circle" size={64} color={colors.success} style={styles.completeIcon} />
                 <Text style={styles.completeText}>Profile updated successfully!</Text>
               </View>
             ) : (
@@ -478,18 +478,11 @@ export default function ProfileImageScreen() {
                   style={[styles.continueButton, (!selectedImage || !birthDate) && styles.disabledButton]}
                   onPress={handleUpload}
                   disabled={uploading || !selectedImage || !birthDate}>
-                  <LinearGradient
-                    colors={['#FF5E3A', '#FF2A68']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.gradientButton}
-                  >
-                    {uploading ? (
-                      <ActivityIndicator color="#FFFFFF" size="small" />
-                    ) : (
-                      <Text style={styles.continueText}>Save Profile</Text>
-                    )}
-                  </LinearGradient>
+                  {uploading ? (
+                    <ActivityIndicator color={colors.background} size="small" />
+                  ) : (
+                    <Text style={styles.continueText}>Save Profile</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             )}
@@ -509,7 +502,7 @@ export default function ProfileImageScreen() {
             style={styles.fullscreenCloseButton}
             onPress={toggleFullImageView}
           >
-            <Ionicons name="close-circle" size={36} color="#FFFFFF" />
+            <Ionicons name="close-circle" size={36} color={colors.background} />
           </TouchableOpacity>
           <Image 
             source={{ uri: selectedImage || uploadedImageUrl || '' }}
@@ -525,7 +518,7 @@ export default function ProfileImageScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212', // Dark background
+    backgroundColor: colors.background,
   },
   safeArea: {
     flex: 1,
@@ -546,27 +539,27 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.text,
     marginBottom: 8,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#BBBBBB',
+    color: colors.darkGray,
     textAlign: 'center',
     marginBottom: 36,
   },
   fullImageContainer: {
     width: '100%',
     height: 400,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: colors.lightGray,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
     overflow: 'hidden',
     borderRadius: 12,
-    borderWidth: 3,
-    borderColor: '#FF5E3A',
+    borderWidth: 1,
+    borderColor: colors.mediumGray,
   },
   fullImage: {
     width: '100%',
@@ -581,7 +574,7 @@ const styles = StyleSheet.create({
   },
   placeholderText: {
     fontSize: 16,
-    color: '#BBBBBB',
+    color: colors.darkGray,
     textAlign: 'center',
   },
   image: {
@@ -596,16 +589,16 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   photoButton: {
-    backgroundColor: '#2A2A2A',
+    backgroundColor: colors.lightGray,
     paddingHorizontal: 20,
     paddingVertical: 12,
-    borderRadius: 25,
+    borderRadius: 8,
     marginHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: colors.text,
     marginLeft: 8,
     fontSize: 16,
     fontWeight: '600',
@@ -616,33 +609,35 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 16,
-    color: '#FFFFFF',
+    color: colors.text,
     marginBottom: 12,
     fontWeight: '600',
   },
   birthdateInputContainer: {
-    backgroundColor: '#2A2A2A',
-    borderRadius: 12,
+    backgroundColor: colors.lightGray,
+    borderRadius: 8,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.mediumGray,
   },
   birthdateIcon: {
     marginRight: 12,
   },
   birthdateInput: {
     flex: 1,
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 16,
     padding: 0,
   },
   birthdateHelpText: {
-    color: '#888888',
+    color: colors.darkGray,
     fontSize: 12,
     marginTop: 8,
   },
   birthdateErrorText: {
-    color: '#FF453A',
+    color: colors.error,
     fontSize: 12,
     marginTop: 8,
   },
@@ -652,16 +647,16 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: 8,
-    backgroundColor: '#2A2A2A',
+    backgroundColor: colors.lightGray,
     borderRadius: 4,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#FF5E3A',
+    backgroundColor: colors.primary,
   },
   progressText: {
-    color: '#BBBBBB',
+    color: colors.darkGray,
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
@@ -674,22 +669,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   skipText: {
-    color: '#BBBBBB',
+    color: colors.darkGray,
     fontSize: 16,
     textAlign: 'center',
   },
   continueButton: {
-    borderRadius: 30,
-    overflow: 'hidden',
-    marginBottom: 24,
-  },
-  gradientButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 24,
   },
   continueText: {
-    color: '#FFFFFF',
+    color: colors.background,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -697,7 +690,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   errorText: {
-    color: '#FF453A',
+    color: colors.error,
     fontSize: 16,
     marginTop: 16,
     marginBottom: 24,
@@ -713,7 +706,7 @@ const styles = StyleSheet.create({
   completeText: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.text,
     textAlign: 'center',
   },
   uploadedImageContainer: {
@@ -722,8 +715,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: 16,
-    borderWidth: 3,
-    borderColor: '#4CD964',
+    borderWidth: 1,
+    borderColor: colors.success,
   },
   uploadedImage: {
     width: '100%',

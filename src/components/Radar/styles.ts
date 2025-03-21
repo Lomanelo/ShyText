@@ -291,12 +291,13 @@ export const styles = StyleSheet.create({
     opacity: 0.6,
   },
 
-  // Modal overlay for the message input
+  // Modal overlay for all modals
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 20,
   },
 
   // Message modal container
@@ -397,5 +398,188 @@ export const styles = StyleSheet.create({
   
   modalSendButtonTextDisabled: {
     color: colors.darkGray,
+  },
+
+  // Profile Modal Styles
+  profileModal: {
+    width: '90%',
+    height: '60%',
+    borderRadius: 30,
+    overflow: 'hidden', 
+    backgroundColor: colors.background,
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+    // No need for marginBottom as it's centered
+  },
+  
+  fullProfileImageContainer: {
+    width: '100%',
+    height: '85%', // Reduced to make room for message input
+    backgroundColor: '#000',
+  },
+  
+  fullProfileImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  
+  fullProfileImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#222',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  
+  fullProfileImagePlaceholderText: {
+    fontSize: 120,
+    fontWeight: 'bold',
+    color: '#444',
+  },
+  
+  profileDetailsOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    padding: 20,
+  },
+  
+  profileHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  
+  profileNameContainer: {
+    flex: 1,
+  },
+  
+  profileName: {
+    color: '#FFFFFF',
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+  
+  profileAge: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    marginTop: 5,
+  },
+  
+  verifiedBadgeContainer: {
+    marginLeft: 10,
+  },
+  
+  messageButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 30,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  
+  messageButtonText: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginLeft: 8,
+  },
+  
+  // Close button
+  closeProfileButton: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    width: 40,
+    height: 40,
+    backgroundColor: 'rgba(80, 80, 80, 0.7)',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+
+  // Age display on profile picture
+  ageContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingVertical: 5,
+    paddingHorizontal: 15,
+    borderRadius: 20,
+  },
+  
+  ageText: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  
+  // Verification badge for profile
+  profileVerificationBadge: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    zIndex: 10,
+  },
+  
+  // Message input container under profile
+  profileMessageInputContainer: {
+    position: 'relative',
+    height: '15%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+  },
+  
+  // Message input field for profile
+  profileMessageInput: {
+    flex: 1,
+    backgroundColor: '#EEEEEE',
+    borderRadius: 30,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingRight: 50,
+    fontSize: 16,
+    color: colors.text,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  
+  // Send button for profile message
+  profileSendButton: {
+    position: 'absolute',
+    right: 20,
+    top: '50%',
+    transform: [{ translateY: -18 }], // Half the height
+    height: 36,
+    width: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  
+  // Disabled send button for profile
+  profileSendButtonDisabled: {
+    backgroundColor: colors.lightGray,
   },
 }); 

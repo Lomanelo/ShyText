@@ -104,7 +104,7 @@ export default function TabLayout() {
           tabBarInactiveTintColor: colors.darkGray,
           headerStyle: {
             backgroundColor: colors.background,
-            shadowColor: colors.text,
+            shadowColor: colors.primary,
             shadowOffset: { width: 0, height: 1 },
             shadowOpacity: 0.1,
             shadowRadius: 3,
@@ -161,7 +161,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: -6,
     top: -4,
-    backgroundColor: colors.error || 'red',
+    backgroundColor: colors.error,
     borderRadius: 10,
     minWidth: 20,
     height: 20,

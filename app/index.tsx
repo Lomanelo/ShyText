@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Text } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import { useAuth } from '../src/hooks/useAuth';
 import colors from '../src/theme/colors';
@@ -31,5 +31,7 @@ export default function Index() {
   }
 
   // This will only show briefly before redirecting
-  return null;
+  return (
+    <View style={{ display: 'none' }} />
+  );
 } 

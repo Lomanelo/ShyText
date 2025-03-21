@@ -33,6 +33,7 @@ interface Conversation {
     photo_url?: string;
     deleted?: boolean;
   };
+  unreadCount?: number;
 }
 
 export default function ChatsScreen() {
@@ -184,14 +185,37 @@ export default function ChatsScreen() {
         })
       );
 
+      // Get unread message counts for each conversation
+      const enhancedConvs = await Promise.all(conversationsWithProfiles.map(async (conv) => {
+        try {
+          // Check for unread messages in this conversation
+          const messagesRef = collection(db, 'conversations', conv.id, 'messages');
+          const messagesSnap = await getDocs(messagesRef);
+          
+          // Count unread messages not sent by current user
+          let unreadCount = 0;
+          messagesSnap.forEach(messageDoc => {
+            const messageData = messageDoc.data();
+            if (!messageData.read && messageData.sender_id !== auth.currentUser?.uid) {
+              unreadCount++;
+            }
+          });
+          
+          return { ...conv, unreadCount };
+        } catch (error) {
+          console.error('Error getting unread counts:', error);
+          return { ...conv, unreadCount: 0 };
+        }
+      }));
+
       setConversations(current => {
         // Filter out conversations that match the new ones' IDs
         const filtered = current.filter(conv => 
-          !conversationsWithProfiles.find(newConv => newConv.id === conv.id)
+          !enhancedConvs.find(newConv => newConv.id === conv.id)
         );
         
         // Combine and sort by updated_at time
-        const combined = [...filtered, ...conversationsWithProfiles].sort((a, b) => {
+        const combined = [...filtered, ...enhancedConvs].sort((a, b) => {
           const timeA = a.updated_at || a.last_message_time;
           const timeB = b.updated_at || b.last_message_time;
           return new Date(timeB).getTime() - new Date(timeA).getTime();
@@ -207,6 +231,10 @@ export default function ChatsScreen() {
 
   const handleConversationPress = (conversation: Conversation) => {
     router.push(`/chat/${conversation.id}`);
+    // Refresh unread count when navigating to a conversation
+    if (conversation.unreadCount && conversation.unreadCount > 0) {
+      refreshUnreadCount();
+    }
   };
 
   const renderConversationItem = ({ item }: { item: Conversation }) => {
@@ -221,6 +249,7 @@ export default function ChatsScreen() {
       deleted: false
     };
     const isDeletedUser = otherUser.deleted || false;
+    const hasUnread = item.unreadCount && item.unreadCount > 0;
 
     return (
       <TouchableOpacity
@@ -235,24 +264,28 @@ export default function ChatsScreen() {
             <View style={[
               styles.avatar, 
               styles.avatarPlaceholder,
-              isDeletedUser && styles.deletedUserAvatar
+              isDeletedUser ? styles.deletedUserAvatar : null
             ]}>
               <Text style={[
                 styles.avatarText,
-                isDeletedUser && styles.deletedUserText
+                isDeletedUser ? styles.deletedUserText : null
               ]}>
                 {otherUser.display_name?.charAt(0)?.toUpperCase() || '?'}
               </Text>
             </View>
           )}
           {isPending && isReceived && <View style={styles.notificationDot} />}
+          {hasUnread && <View style={styles.unreadBadge}>
+            <Text style={styles.unreadBadgeText}>{item.unreadCount}</Text>
+          </View>}
         </View>
 
         <View style={styles.conversationDetails}>
           <View style={styles.nameRow}>
             <Text style={[
               styles.name,
-              isDeletedUser && styles.deletedUserName
+              isDeletedUser ? styles.deletedUserName : null,
+              hasUnread ? styles.unreadName : null
             ]} numberOfLines={1}>
               {otherUser.display_name}
             </Text>
@@ -272,7 +305,8 @@ export default function ChatsScreen() {
             ) : (
               <Text style={[
                 styles.lastMessage,
-                isDeletedUser && styles.deletedUserMessage
+                isDeletedUser ? styles.deletedUserMessage : null,
+                hasUnread ? styles.unreadMessage : null
               ]} numberOfLines={1}>
                 {isDeletedUser ? 'User no longer available' : (item.last_message || 'No messages yet')}
               </Text>
@@ -544,5 +578,32 @@ const styles = StyleSheet.create({
   deletedUserStatus: {
     color: colors.mediumGray,
     fontStyle: 'italic',
+  },
+  unreadBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1,
+    borderColor: colors.background,
+  },
+  unreadBadgeText: {
+    color: colors.background,
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  unreadName: {
+    fontWeight: 'bold',
+    color: colors.primary,
+  },
+  unreadMessage: {
+    fontWeight: 'bold',
+    color: colors.text,
   },
 });

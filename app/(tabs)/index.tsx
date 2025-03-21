@@ -221,7 +221,7 @@ export default function NearbyScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       
       <RNScrollView
         contentContainerStyle={styles.scrollContainer}

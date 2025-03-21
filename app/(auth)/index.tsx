@@ -22,6 +22,7 @@ import colors from '../../src/theme/colors';
 import * as DeviceInfo from 'react-native-device-info';
 import BleService from '../../src/services/BleService';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { useAuth } from '../../src/hooks/useAuth';
 
 export default function LoginScreen() {
   const [username, setUsername] = useState('');
@@ -29,6 +30,15 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fullUsername, setFullUsername] = useState('');
+  const { user, loading: authLoading } = useAuth();
+
+  // If already authenticated, redirect to tabs
+  useEffect(() => {
+    if (user) {
+      console.log('User already authenticated, redirecting to tabs');
+      router.replace('/(tabs)');
+    }
+  }, [user]);
 
   const handleSignUp = () => {
     router.push('/(auth)/signup');
@@ -98,12 +108,9 @@ export default function LoginScreen() {
   }, [username]);
 
   return (
-    <LinearGradient
-      colors={['#0C0C0C', '#1E1E1E', '#2A2A2A']}
-      style={styles.gradientContainer}
-    >
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="light" />
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeAreaContainer}>
+        <StatusBar style="dark" />
         
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.logoContainer}>
@@ -121,14 +128,14 @@ export default function LoginScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Username</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="person-outline" size={20} color="rgba(255,255,255,0.6)" style={styles.inputIcon} />
+                <Ionicons name="person-outline" size={20} color="rgba(0,0,0,0.6)" style={styles.inputIcon} />
                 <View style={styles.usernameInputContainer}>
                   <TextInput
                     style={styles.usernameInput}
                     value={username}
                     onChangeText={setUsername}
                     placeholder="Enter username"
-                    placeholderTextColor="rgba(255,255,255,0.4)"
+                    placeholderTextColor="rgba(0,0,0,0.4)"
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
@@ -140,13 +147,13 @@ export default function LoginScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Password</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="lock-closed-outline" size={20} color="rgba(255,255,255,0.6)" style={styles.inputIcon} />
+                <Ionicons name="lock-closed-outline" size={20} color="rgba(0,0,0,0.6)" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={password}
                   onChangeText={setPassword}
                   placeholder="Enter your password"
-                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  placeholderTextColor="rgba(0,0,0,0.4)"
                   secureTextEntry
                   autoCapitalize="none"
                 />
@@ -155,13 +162,13 @@ export default function LoginScreen() {
             
             {error && (
               <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={20} color="#FF6B6B" style={{marginRight: 8}} />
+                <Ionicons name="alert-circle" size={20} color={colors.error} style={{marginRight: 8}} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
             
             <View style={styles.noteContainer}>
-              <Ionicons name="information-circle-outline" size={16} color="rgba(255,255,255,0.6)" style={{marginRight: 8, marginTop: 2}} />
+              <Ionicons name="information-circle-outline" size={16} color="rgba(0,0,0,0.6)" style={{marginRight: 8, marginTop: 2}} />
               <Text style={styles.noteText}>
                 Your device name must match your full username including @shytext to enable Bluetooth discovery.
               </Text>
@@ -172,18 +179,11 @@ export default function LoginScreen() {
               onPress={handleLogin}
               disabled={loading}
             >
-              <LinearGradient
-                colors={['#FF5E3A', '#FF2A68']}
-                start={{x: 0, y: 0}}
-                end={{x: 1, y: 0}}
-                style={styles.gradientButton}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#FFFFFF" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>Sign In</Text>
-                )}
-              </LinearGradient>
+              {loading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Sign In</Text>
+              )}
             </TouchableOpacity>
             
             <View style={styles.divider}>
@@ -205,15 +205,16 @@ export default function LoginScreen() {
           </Text>
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  gradientContainer: {
-    flex: 1,
-  },
   container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  safeAreaContainer: {
     flex: 1,
   },
   scrollContent: {
@@ -235,135 +236,54 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 36,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.primary,
     marginTop: 10,
     letterSpacing: 1,
   },
   card: {
     width: '100%',
-    backgroundColor: 'rgba(40, 40, 40, 0.6)',
-    borderRadius: 24,
+    backgroundColor: colors.lightGray,
+    borderRadius: 16,
     padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 5,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 94, 58, 0.2)',
+    elevation: 4,
   },
   cardTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.primary,
     marginBottom: 24,
     textAlign: 'center',
-    letterSpacing: 0.5,
   },
   inputContainer: {
-    marginBottom: 18,
+    marginBottom: 16,
   },
   label: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginBottom: 8,
+    fontSize: 14,
     fontWeight: '500',
-    letterSpacing: 0.3,
+    color: colors.primary,
+    marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(30, 30, 30, 0.8)',
-    borderRadius: 18,
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: 'rgba(255, 94, 58, 0.3)',
+    borderColor: colors.mediumGray,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   inputIcon: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
   },
   input: {
     flex: 1,
-    padding: 16,
+    height: 50,
+    color: colors.text,
     fontSize: 16,
-    color: '#FFFFFF',
-  },
-  errorContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 59, 48, 0.2)',
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 18,
-  },
-  errorText: {
-    color: '#FF6B6B',
-    fontSize: 14,
-    flex: 1,
-  },
-  noteContainer: {
-    flexDirection: 'row',
-    marginBottom: 24,
-    paddingHorizontal: 4,
-  },
-  noteText: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
-    lineHeight: 20,
-    flex: 1,
-  },
-  primaryButton: {
-    borderRadius: 22,
-    marginBottom: 16,
-    overflow: 'hidden',
-    elevation: 3,
-    shadowColor: '#FF5E3A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-  },
-  gradientButton: {
-    paddingVertical: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  line: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-  },
-  orText: {
-    color: 'rgba(255, 255, 255, 0.6)',
-    paddingHorizontal: 16,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  createAccountButton: {
-    padding: 14,
-    alignItems: 'center',
-  },
-  createAccountText: {
-    color: '#FF5E3A',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  footerText: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 20,
   },
   usernameInputContainer: {
     flex: 1,
@@ -372,13 +292,87 @@ const styles = StyleSheet.create({
   },
   usernameInput: {
     flex: 1,
-    padding: 16,
+    height: 50,
+    color: colors.text,
     fontSize: 16,
-    color: '#FFFFFF',
   },
   usernameSuffix: {
+    color: colors.darkGray,
     fontSize: 16,
-    color: 'rgba(255,255,255,0.6)',
-    paddingRight: 16,
+    paddingRight: 12,
+  },
+  errorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(229, 57, 53, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  errorText: {
+    flex: 1,
+    color: colors.error,
+    fontSize: 14,
+  },
+  noteContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: colors.mediumGray,
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  noteText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 14,
+  },
+  primaryButton: {
+    height: 50,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: {
+    color: colors.background,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  line: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.mediumGray,
+  },
+  orText: {
+    color: colors.darkGray,
+    fontSize: 14,
+    fontWeight: '500',
+    marginHorizontal: 12,
+  },
+  createAccountButton: {
+    height: 50,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  createAccountText: {
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  footerText: {
+    fontSize: 12,
+    color: colors.darkGray,
+    textAlign: 'center',
+    marginTop: 24,
   },
 });

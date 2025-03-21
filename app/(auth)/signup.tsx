@@ -224,12 +224,9 @@ export default function SignupScreen() {
   };
 
   return (
-    <LinearGradient
-      colors={['#0C0C0C', '#1E1E1E', '#2A2A2A']}
-      style={styles.gradientContainer}
-    >
-      <SafeAreaView style={styles.container}>
-        <StatusBar style="light" />
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeAreaContainer}>
+        <StatusBar style="dark" />
         
         {/* Device Name Instructions Modal */}
         <Modal
@@ -242,7 +239,7 @@ export default function SignupScreen() {
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <TouchableOpacity onPress={closeDeviceNameModal} style={styles.closeButton}>
-                  <Ionicons name="close" size={22} color="#FFFFFF" />
+                  <Ionicons name="close" size={22} color={colors.text} />
                 </TouchableOpacity>
               </View>
               
@@ -257,7 +254,7 @@ export default function SignupScreen() {
                     style={styles.copyButton}
                     onPress={copyUsernameToClipboard}
                   >
-                    <Ionicons name="copy-outline" size={22} color="#FFFFFF" />
+                    <Ionicons name="copy-outline" size={22} color={colors.background} />
                   </TouchableOpacity>
                 </View>
                 
@@ -291,15 +288,7 @@ export default function SignupScreen() {
                   style={styles.settingsButton}
                   onPress={navigateToDeviceSettings}
                 >
-                  <LinearGradient
-                    colors={['#FF5E3A', '#FF2A68']}
-                    start={{x: 0, y: 0}}
-                    end={{x: 1, y: 0}}
-                    style={styles.gradientButton}
-                  >
-                    <Ionicons name="settings-outline" size={20} color="#FFFFFF" style={{marginRight: 8}} />
-                    <Text style={styles.settingsButtonText}>Go to Settings</Text>
-                  </LinearGradient>
+                  <Text style={styles.settingsButtonText}>Go to Settings</Text>
                 </TouchableOpacity>
                 
                 <View style={styles.modalDivider} />
@@ -311,21 +300,14 @@ export default function SignupScreen() {
                     handleSignup();
                   }}
                 >
-                  <LinearGradient
-                    colors={['#4CAF50', '#388E3C']}
-                    start={{x: 0, y: 0}}
-                    end={{x: 1, y: 0}}
-                    style={styles.gradientButton}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#FFFFFF" size="small" />
-                    ) : (
-                      <>
-                        <Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" style={{marginRight: 8}} />
-                        <Text style={styles.completeButtonText}>Continue</Text>
-                      </>
-                    )}
-                  </LinearGradient>
+                  {loading ? (
+                    <ActivityIndicator color={colors.background} size="small" />
+                  ) : (
+                    <>
+                      <Ionicons name="checkmark-circle-outline" size={20} color={colors.background} style={{marginRight: 8}} />
+                      <Text style={styles.completeButtonText}>Continue</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -334,7 +316,7 @@ export default function SignupScreen() {
         
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Account</Text>
           <View style={styles.placeholderView} />
@@ -354,7 +336,7 @@ export default function SignupScreen() {
             
             {error && (
               <View style={styles.errorContainer}>
-                <Ionicons name="alert-circle" size={20} color="#FF6B6B" style={{marginRight: 8}} />
+                <Ionicons name="alert-circle" size={20} color={colors.error} style={{marginRight: 8}} />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
@@ -362,14 +344,14 @@ export default function SignupScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Username</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="person-outline" size={20} color="rgba(255,255,255,0.6)" style={styles.inputIcon} />
+                <Ionicons name="person-outline" size={20} color="rgba(0,0,0,0.6)" style={styles.inputIcon} />
                 <View style={styles.usernameInputContainer}>
                   <TextInput
                     style={styles.usernameInput}
                     value={username}
                     onChangeText={setUsername}
                     placeholder="Choose username"
-                    placeholderTextColor="rgba(255,255,255,0.4)"
+                    placeholderTextColor="rgba(0,0,0,0.4)"
                     autoCapitalize="none"
                     autoCorrect={false}
                   />
@@ -381,13 +363,13 @@ export default function SignupScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Password</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="lock-closed-outline" size={20} color="rgba(255,255,255,0.6)" style={styles.inputIcon} />
+                <Ionicons name="lock-closed-outline" size={20} color="rgba(0,0,0,0.6)" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={password}
                   onChangeText={setPassword}
                   placeholder="Choose a password"
-                  placeholderTextColor="rgba(255,255,255,0.4)"
+                  placeholderTextColor="rgba(0,0,0,0.4)"
                   secureTextEntry
                   autoCapitalize="none"
                 />
@@ -395,7 +377,7 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.noteContainer}>
-              <Ionicons name="information-circle-outline" size={16} color="rgba(255, 255, 255, 0.6)" style={{marginRight: 8, marginTop: 2}} />
+              <Ionicons name="information-circle-outline" size={16} color="rgba(0,0,0,0.6)" style={{marginRight: 8, marginTop: 2}} />
               <Text style={styles.noteText}>
                 Your device name must match your username@shytext
               </Text>
@@ -409,14 +391,11 @@ export default function SignupScreen() {
               onPress={validateAndCreateAccount}
               disabled={!username || loading || !password.trim() || password.length < 6}
             >
-              <LinearGradient
-                colors={['#FF5E3A', '#FF2A68']}
-                start={{x: 0, y: 0}}
-                end={{x: 1, y: 0}}
-                style={styles.gradientButton}
-              >
+              {loading ? (
+                <ActivityIndicator color={colors.background} />
+              ) : (
                 <Text style={styles.primaryButtonText}>Create Account</Text>
-              </LinearGradient>
+              )}
             </TouchableOpacity>
             
             <TouchableOpacity
@@ -430,15 +409,16 @@ export default function SignupScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  gradientContainer: {
-    flex: 1,
-  },
   container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  safeAreaContainer: {
     flex: 1,
   },
   header: {
@@ -447,6 +427,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 15,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.mediumGray,
   },
   backButton: {
     padding: 5,
@@ -454,8 +437,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
+    color: colors.text,
   },
   placeholderView: {
     width: 34, // to balance the back button width
@@ -475,153 +457,125 @@ const styles = StyleSheet.create({
     height: 100,
   },
   card: {
-    backgroundColor: 'rgba(40, 40, 40, 0.6)',
-    borderRadius: 24,
+    backgroundColor: colors.lightGray,
+    borderRadius: 16,
     padding: 24,
     marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 5,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 94, 58, 0.2)',
+    elevation: 4,
   },
   cardTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: colors.primary,
     marginBottom: 24,
     textAlign: 'center',
-    letterSpacing: 0.5,
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 59, 48, 0.2)',
-    padding: 14,
-    borderRadius: 18,
-    marginBottom: 18,
+    backgroundColor: 'rgba(229, 57, 53, 0.1)',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
   },
   errorText: {
-    color: '#FF6B6B',
+    color: colors.error,
     fontSize: 14,
     flex: 1,
   },
   inputContainer: {
-    marginBottom: 18,
+    marginBottom: 16,
   },
   label: {
-    fontSize: 16,
-    color: '#FFFFFF',
+    fontSize: 14,
+    color: colors.primary,
     marginBottom: 8,
     fontWeight: '500',
-    letterSpacing: 0.3,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(30, 30, 30, 0.8)',
-    borderRadius: 18,
+    backgroundColor: colors.background,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 94, 58, 0.3)',
+    borderColor: colors.mediumGray,
     overflow: 'hidden',
   },
   inputIcon: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
   },
   input: {
     flex: 1,
-    padding: 16,
+    height: 50,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: colors.text,
   },
   checkingText: {
     marginTop: 8,
-    color: '#BBBBBB',
+    color: colors.darkGray,
     fontSize: 14,
     flexDirection: 'row',
     alignItems: 'center',
   },
   availableText: {
     marginTop: 8,
-    color: '#4CD964',
+    color: colors.success,
     fontSize: 14,
   },
   unavailableText: {
     marginTop: 8,
-    color: '#FF6B6B',
+    color: colors.error,
     fontSize: 14,
   },
   noteContainer: {
     flexDirection: 'row',
-    marginBottom: 24,
-    paddingHorizontal: 4,
+    marginBottom: 20,
+    backgroundColor: colors.mediumGray,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'flex-start',
   },
   noteText: {
     fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.7)',
-    lineHeight: 20,
+    color: colors.text,
     flex: 1,
   },
   primaryButton: {
-    borderRadius: 22,
+    height: 50,
+    borderRadius: 8,
     marginBottom: 16,
-    overflow: 'hidden',
-    elevation: 3,
-    shadowColor: '#FF5E3A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   disabledButton: {
     opacity: 0.6,
   },
-  gradientButton: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
   primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  secondaryButton: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(40, 40, 40, 0.6)',
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: '#FF5E3A',
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  secondaryButtonText: {
-    color: '#FF5E3A',
+    color: colors.background,
     fontSize: 16,
     fontWeight: 'bold',
-    marginLeft: 8,
   },
   loginButton: {
     padding: 10,
     alignItems: 'center',
   },
   loginText: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: colors.darkGray,
     fontSize: 14,
   },
   loginTextBold: {
     fontWeight: 'bold',
-    color: '#FF5E3A',
+    color: colors.primary,
   },
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -629,36 +583,35 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '90%',
     maxWidth: 380,
-    backgroundColor: '#2A2A2A',
-    borderRadius: 20,
+    backgroundColor: colors.background,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 94, 58, 0.3)',
+    borderColor: colors.mediumGray,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 15,
-    elevation: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
   },
   modalHeader: {
     alignItems: 'flex-end',
     paddingHorizontal: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(40, 40, 40, 0.9)',
+    borderBottomColor: colors.mediumGray,
   },
   closeButton: {
     padding: 6,
     borderRadius: 16,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    backgroundColor: colors.lightGray,
   },
   modalBody: {
     padding: 16,
     alignItems: 'center',
   },
   modalText: {
-    color: '#FFFFFF',
+    color: colors.text,
     textAlign: 'center',
     marginTop: 4,
     marginBottom: 4,
@@ -667,26 +620,26 @@ const styles = StyleSheet.create({
   },
   usernameDisplay: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: 12,
+    backgroundColor: colors.lightGray,
+    borderRadius: 8,
     padding: 10,
     marginVertical: 10,
     width: '100%',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1,
-    borderColor: 'rgba(255, 94, 58, 0.2)',
+    borderColor: colors.mediumGray,
   },
   usernameText: {
-    color: '#FF5E3A',
+    color: colors.primary,
     fontSize: 20,
     fontWeight: 'bold',
     flex: 1,
   },
   copyButton: {
     padding: 10,
-    backgroundColor: 'rgba(255, 94, 58, 0.3)',
-    borderRadius: 10,
+    backgroundColor: colors.primary,
+    borderRadius: 8,
     marginLeft: 12,
     height: 44,
     width: 44,
@@ -694,7 +647,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   instructionTitle: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 16,
     fontWeight: 'bold',
     alignSelf: 'flex-start',
@@ -714,29 +667,32 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: 'rgba(255, 94, 58, 0.3)',
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
   },
   numberText: {
-    color: '#FFFFFF',
+    color: colors.background,
     fontWeight: 'bold',
   },
   instructionText: {
-    color: '#FFFFFF',
+    color: colors.text,
     fontSize: 15,
     flex: 1,
   },
   settingsButton: {
     width: '100%',
     height: 46,
-    borderRadius: 23,
-    overflow: 'hidden',
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
     marginTop: 8,
   },
   settingsButtonText: {
-    color: '#FFFFFF',
+    color: colors.background,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -747,23 +703,23 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   previewLabel: {
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: colors.darkGray,
     fontSize: 14,
     marginRight: 5,
   },
   previewValue: {
-    color: '#FF5E3A',
+    color: colors.primary,
     fontSize: 14,
     fontWeight: 'bold',
   },
   modalDivider: {
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: colors.mediumGray,
     width: '100%',
     marginVertical: 12,
   },
   completeText: {
-    color: '#FFFFFF',
+    color: colors.text,
     textAlign: 'center',
     marginBottom: 18,
     fontSize: 15,
@@ -771,17 +727,20 @@ const styles = StyleSheet.create({
   completeButton: {
     width: '100%',
     height: 46,
-    borderRadius: 23,
-    overflow: 'hidden',
+    borderRadius: 8,
+    backgroundColor: colors.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
     marginTop: 8,
   },
   completeButtonText: {
-    color: '#FFFFFF',
+    color: colors.background,
     fontSize: 16,
     fontWeight: 'bold',
   },
   helperText: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: colors.darkGray,
     fontSize: 14,
     marginBottom: 24,
     textAlign: 'center',
@@ -793,13 +752,13 @@ const styles = StyleSheet.create({
   },
   usernameInput: {
     flex: 1,
-    padding: 16,
+    height: 50,
     fontSize: 16,
-    color: '#FFFFFF',
+    color: colors.text,
   },
   usernameSuffix: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.6)',
-    paddingRight: 16,
+    color: colors.darkGray,
+    paddingRight: 12,
   },
 }); 

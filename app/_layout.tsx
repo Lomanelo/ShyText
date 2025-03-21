@@ -116,7 +116,7 @@ export default function RootLayout() {
   
   return (
     <ProfileImageContext.Provider value={{ refreshProfileImage }}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

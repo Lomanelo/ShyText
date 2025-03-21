@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import UserBubble from './UserBubble';
 import { styles } from './styles';
 import colors from '../../theme/colors';
+import VerifiedBadge from '../VerifiedBadge';
 
 // Access the COLORS object from styles for consistency
 const { teal, white, darkGray } = {
@@ -55,6 +56,27 @@ interface UserPositions {
   [key: string]: SlotPosition;
 }
 
+// Interface for a user's birth date logic 
+const calculateAge = (birthDate: string) => {
+  if (!birthDate) return null;
+  
+  try {
+    const birthDateObj = new Date(birthDate);
+    const today = new Date();
+    let age = today.getFullYear() - birthDateObj.getFullYear();
+    const monthDiff = today.getMonth() - birthDateObj.getMonth();
+    
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDateObj.getDate())) {
+      age--;
+    }
+    
+    return age;
+  } catch (e) {
+    console.error('Error calculating age:', e);
+    return null;
+  }
+};
+
 const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, onDragStateChange }: RadarProps) => {
   // State for handling drag-and-drop messaging
   const [draggedUserId, setDraggedUserId] = useState<string | null>(null);
@@ -65,6 +87,15 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
   const [draggedUser, setDraggedUser] = useState<any>(null);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const [userPositions, setUserPositions] = useState<UserPositions>({});
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const modalOpenTimeRef = useRef(Date.now());
+  
+  // Update modal open time when showing any modal
+  useEffect(() => {
+    if (showProfileModal || showMessageInput) {
+      modalOpenTimeRef.current = Date.now();
+    }
+  }, [showProfileModal, showMessageInput]);
   
   // Calculate the radar center coordinates
   const centerX = RADAR_SIZE / 2;
@@ -172,29 +203,22 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
   const handleUserDragRelease = (userId: string, dropSuccess: boolean) => {
     console.log(`User ${userId} dropped with success: ${dropSuccess}`);
     
-    // Only show message UI when properly dropped on center
+    // Only show profile UI when properly dropped on center
     if (dropSuccess) {
-      console.log("Drop success detected! Showing message input for user:", userId);
+      console.log("Drop success detected! Showing profile modal for user:", userId);
       // Find the user data for the dropped user
       const user = users.find(u => u.id === userId);
       setDraggedUser(user);
       setDraggedUserId(userId);
       
-      // Delay showing the message input to avoid immediate dismissal
-      // This helps prevent touch events from propagating and closing the modal
+      // Show the profile modal instead of message input
       setTimeout(() => {
-        setShowMessageInput(true);
-        
-        // Focus the input after a small delay to ensure the UI has updated
-        setTimeout(() => {
-          if (inputRef.current) {
-            inputRef.current.focus();
-          }
-        }, 150);
+        setShowProfileModal(true);
       }, 100);
     } else {
-      console.log("Drop was NOT successful, NOT showing message input");
-      // Ensure message input is NOT shown for unsuccessful drops
+      console.log("Drop was NOT successful, NOT showing profile modal");
+      // Ensure modals are NOT shown for unsuccessful drops
+      setShowProfileModal(false);
       setShowMessageInput(false);
       setDraggedUser(null);
       setDraggedUserId(null);
@@ -242,25 +266,38 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
     }
     
     // Small delay to prevent accidental dismissal right after opening
-    if (Date.now() - modalOpenTime < 300) {
+    if (Date.now() - modalOpenTimeRef.current < 300) {
       return;
     }
     
     // Only cancel if we actually have a modal showing
     if (showMessageInput) {
       handleCancelMessage();
+    } else if (showProfileModal) {
+      handleCloseProfile();
     }
   };
   
-  // Track when the modal was opened
-  const [modalOpenTime, setModalOpenTime] = useState(0);
+  // Handle closing the profile modal
+  const handleCloseProfile = () => {
+    setShowProfileModal(false);
+    setDraggedUser(null);
+    setDraggedUserId(null);
+  };
   
-  // Update modal open time when showing the modal
-  useEffect(() => {
-    if (showMessageInput) {
-      setModalOpenTime(Date.now());
-    }
-  }, [showMessageInput]);
+  // Show message composer from profile modal
+  const handleOpenMessageFromProfile = () => {
+    setShowProfileModal(false);
+    setTimeout(() => {
+      setShowMessageInput(true);
+      // Focus the input after a small delay
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 150);
+    }, 100);
+  };
   
   return (
     <View style={styles.container}>
@@ -325,6 +362,106 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend, on
           );
         })}
       </View>
+      
+      {/* User Profile Modal */}
+      <Modal
+        visible={showProfileModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseProfile}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.profileModal}>
+            {/* Full Profile Photo */}
+            <View style={styles.fullProfileImageContainer}>
+              {draggedUser?.photo_url ? (
+                <Image
+                  source={{ uri: draggedUser.photo_url }}
+                  style={styles.fullProfileImage}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.fullProfileImagePlaceholder}>
+                  <Text style={styles.fullProfileImagePlaceholderText}>
+                    {draggedUser?.display_name?.charAt(0).toUpperCase() || '?'}
+                  </Text>
+                </View>
+              )}
+              
+              {/* Age overlay on photo */}
+              {draggedUser?.birth_date && (
+                <View style={styles.ageContainer}>
+                  <Text style={styles.ageText}>
+                    {calculateAge(draggedUser.birth_date)}
+                  </Text>
+                </View>
+              )}
+              
+              {/* Verification badge on photo */}
+              {draggedUser?.is_verified && (
+                <View style={styles.profileVerificationBadge}>
+                  <VerifiedBadge 
+                    isVerified={true} 
+                    size="large"
+                  />
+                </View>
+              )}
+              
+              {/* Close Button */}
+              <TouchableOpacity 
+                style={styles.closeProfileButton}
+                onPress={handleCloseProfile}
+              >
+                <Ionicons name="close" size={24} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+            
+            {/* Message input below profile */}
+            <View style={styles.profileMessageInputContainer}>
+              <TextInput
+                ref={inputRef}
+                style={styles.profileMessageInput}
+                placeholder="Message ..."
+                placeholderTextColor="#999"
+                value={message}
+                onChangeText={setMessage}
+                multiline={false}
+                maxLength={500}
+                returnKeyType="send"
+                blurOnSubmit={true}
+                onSubmitEditing={() => {
+                  if (message.trim() !== '' && draggedUserId && onMessageSend) {
+                    onMessageSend(draggedUserId, message);
+                    setMessage('');
+                    setShowProfileModal(false);
+                    setDraggedUserId(null);
+                    setDraggedUser(null);
+                  }
+                }}
+              />
+              
+              <TouchableOpacity 
+                style={[
+                  styles.profileSendButton,
+                  !message.trim() && styles.profileSendButtonDisabled
+                ]}
+                onPress={() => {
+                  if (message.trim() !== '' && draggedUserId && onMessageSend) {
+                    onMessageSend(draggedUserId, message);
+                    setMessage('');
+                    setShowProfileModal(false);
+                    setDraggedUserId(null);
+                    setDraggedUser(null);
+                  }
+                }}
+                disabled={!message.trim()}
+              >
+                <Ionicons name="send" size={20} color={message.trim() ? colors.background : "#999"} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       
       {/* Message Input Modal - centered on screen */}
       <Modal

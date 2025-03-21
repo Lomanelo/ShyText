@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 
 type AuthState = {
   user: User | null;
@@ -13,8 +14,6 @@ export function useAuth() {
   });
 
   useEffect(() => {
-    const auth = getAuth();
-    
     // Set initial user if already authenticated
     if (auth.currentUser) {
       setAuthState({

@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User, updateProfile, initializeAuth, getReactNativePersistence } from 'firebase/auth';
-import { getFirestore, GeoPoint, collection, doc, setDoc, updateDoc, getDoc, query, where, getDocs, addDoc, orderBy, limit, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, GeoPoint, collection, doc, setDoc, updateDoc, getDoc, query, where, getDocs, addDoc, orderBy, limit, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import * as geofirestore from 'geofire-common';
@@ -1448,6 +1448,9 @@ export function subscribeToUnreadMessageCount(callback: (count: number) => void)
       callback(count);
     } catch (error) {
       console.error('Error updating unread count:', error);
+      // Don't propagate errors to the UI - return last known count or 0
+      // This ensures UI doesn't break if there are temporary Firestore issues
+      callback(0);
     }
   };
   
@@ -1456,4 +1459,50 @@ export function subscribeToUnreadMessageCount(callback: (count: number) => void)
   
   // Return unsubscribe function
   return unsubscribe;
+}
+
+// Mark all messages in a conversation as read by the current user
+export async function markMessagesAsRead(conversationId: string) {
+  const user = getCurrentUser();
+  if (!user) {
+    throw new Error('User not authenticated');
+  }
+  
+  try {
+    // Query all messages in the conversation
+    const messagesRef = collection(db, 'conversations', conversationId, 'messages');
+    const messagesSnap = await getDocs(messagesRef);
+    
+    // If no messages, return early
+    if (messagesSnap.empty) {
+      return 0;
+    }
+    
+    // Create a batch write operation for efficiency
+    const batch = writeBatch(db);
+    
+    // Mark each message as read if it's unread and not from the current user
+    let updatedCount = 0;
+    messagesSnap.forEach(messageDoc => {
+      const messageData = messageDoc.data();
+      if (!messageData.read && messageData.sender_id !== user.uid) {
+        const messageRef = doc(db, 'conversations', conversationId, 'messages', messageDoc.id);
+        batch.update(messageRef, { read: true });
+        updatedCount++;
+      }
+    });
+    
+    // If no messages to update, return early
+    if (updatedCount === 0) {
+      return 0;
+    }
+    
+    // Commit the batch
+    await batch.commit();
+    console.log(`Marked ${updatedCount} messages as read in conversation ${conversationId}`);
+    return updatedCount;
+  } catch (error) {
+    console.error('Error marking messages as read:', error);
+    return 0;
+  }
 } 

@@ -1,7 +1,19 @@
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import colors from '../../src/theme/colors';
+import { useEffect } from 'react';
+import { useAuth } from '../../src/hooks/useAuth';
 
 export default function AuthLayout() {
+  const { user } = useAuth();
+  const router = useRouter();
+  
+  // Redirect to tabs if user is already authenticated
+  useEffect(() => {
+    if (user) {
+      router.replace('/(tabs)');
+    }
+  }, [user, router]);
+
   return (
     <Stack screenOptions={{
       headerStyle: {

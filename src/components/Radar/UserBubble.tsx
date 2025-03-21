@@ -53,8 +53,15 @@ interface UserBubbleProps {
 const DRAG_THRESHOLD = 80; // Distance from center to trigger a successful drop
 export const SNAP_THRESHOLD = 0.33; // When 1/3 of the bubble overlaps with the center
 
-// Additional constants for detection
-const DETECTION_RADIUS_MULTIPLIER = 1.5; // Makes the actual detection area larger than the visual circle
+// Improved detection constants
+const DETECTION_RADIUS_MULTIPLIER = 2.5; // Makes the actual detection area larger than the visual circle
+const ANIMATION_CONFIG = {
+  tension: 120,  // Higher tension for snappier animations
+  friction: 6,   // Lower friction for smoother feel
+  useNativeDriver: true
+};
+
+const DRAG_DELAY = Platform.OS === 'ios' ? 30 : 50; // Milliseconds to wait before starting drag
 
 const UserBubble = ({ 
   user, 
@@ -72,149 +79,214 @@ const UserBubble = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isSnapped, setIsSnapped] = useState(false);
   
+  // Use refs for performance optimization
   const pan = useRef(new Animated.ValueXY()).current;
   const scale = useRef(new Animated.Value(1)).current;
-  const pulseAnim = useRef(new Animated.Value(0)).current; // For pulse animation
+  const pulseAnim = useRef(new Animated.Value(0)).current; 
+  const shadowOpacity = useRef(new Animated.Value(0)).current;
   
-  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-  const screenCenterX = screenWidth / 2;
-  const screenCenterY = screenHeight / 2;
+  // Cache screen dimensions in ref
+  const dimensions = useRef({
+    width: Dimensions.get('window').width,
+    height: Dimensions.get('window').height
+  }).current;
+  
+  // Calculate center points once
+  const screenCenterX = dimensions.width / 2;
+  const screenCenterY = dimensions.height / 2;
 
   const displayName = user.display_name || 'User';
   const initial = displayName.charAt(0).toUpperCase();
+  
+  // Add a state to track if we're waiting for drag to start
+  const [isWaitingForDrag, setIsWaitingForDrag] = useState(false);
+  // Keep track of drag timer
+  const dragTimer = useRef<NodeJS.Timeout | null>(null);
+  
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (dragTimer.current) {
+        clearTimeout(dragTimer.current);
+      }
+    };
+  }, []);
   
   // Reset position when user changes
   useEffect(() => {
     pan.setValue({ x: 0, y: 0 });
   }, [user.id]);
   
-  // Create the pan responder
+  // Create the pan responder with optimizations
   const panResponder = useRef(
     PanResponder.create({
+      // Only respond to moves if we're draggable
       onStartShouldSetPanResponder: () => draggable,
-      onMoveShouldSetPanResponder: () => draggable,
+      onMoveShouldSetPanResponder: (_, gesture) => {
+        // Only allow moving if we're already dragging or if we're deliberate
+        // This prevents accidental drags when trying to tap
+        if (isDragging) return true;
+        
+        // If the move is significant, allow it
+        return draggable && (Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2);
+      },
       
+      // Improve first touch responsiveness
       onPanResponderGrant: () => {
-        // Use offset to maintain position between moves
-        pan.extractOffset();
+        // Set waiting state
+        setIsWaitingForDrag(true);
         
-        // Scale up more dramatically when dragging starts
-        Animated.spring(scale, {
-          toValue: 1.35, // Even bigger scale increase for dragging
-          friction: 6,
-          tension: 50,
-          useNativeDriver: true
-        }).start();
-        
-        // Start pulse animation
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(pulseAnim, {
-              toValue: 1,
-              duration: 800,
-              easing: Easing.inOut(Easing.sin),
-              useNativeDriver: true
+        // Use a small delay before starting drag to avoid accidental drags
+        dragTimer.current = setTimeout(() => {
+          // Extract offset for smoother initial movement
+          pan.extractOffset();
+          
+          // Run animations in parallel for better performance
+          Animated.parallel([
+            // Scale up with optimized config
+            Animated.spring(scale, {
+              toValue: 1.35,
+              ...ANIMATION_CONFIG
             }),
-            Animated.timing(pulseAnim, {
-              toValue: 0,
-              duration: 800,
-              easing: Easing.inOut(Easing.sin),
+            
+            // Add shadow for depth when dragging starts
+            Animated.timing(shadowOpacity, {
+              toValue: 1,
+              duration: 150,
               useNativeDriver: true
             })
-          ])
-        ).start();
-        
-        setIsDragging(true);
-        
-        // Notify parent when drag starts
-        if (onDragStart) {
-          onDragStart();
-        }
+          ]).start();
+          
+          // Start pulse animation for visual feedback
+          Animated.loop(
+            Animated.sequence([
+              Animated.timing(pulseAnim, {
+                toValue: 1,
+                duration: 500, // Even faster pulse
+                easing: Easing.inOut(Easing.sin),
+                useNativeDriver: true
+              }),
+              Animated.timing(pulseAnim, {
+                toValue: 0,
+                duration: 500,
+                easing: Easing.inOut(Easing.sin),
+                useNativeDriver: true
+              })
+            ])
+          ).start();
+          
+          setIsDragging(true);
+          setIsWaitingForDrag(false);
+          
+          // Notify parent when drag starts
+          if (onDragStart) {
+            onDragStart();
+          }
+        }, DRAG_DELAY);
       },
       
       onPanResponderMove: (_, gesture) => {
-        // Normal movement
+        // If we're still waiting, don't process move
+        if (isWaitingForDrag) return;
+        
+        // Use direct setting for better performance
         pan.setValue({ x: gesture.dx, y: gesture.dy });
         
         if (centerPoint) {
           const touchX = gesture.moveX;
           const touchY = gesture.moveY;
           
-          // Calculate distance to center
-          const distanceToCenter = Math.sqrt(
-            Math.pow(touchX - screenCenterX, 2) + 
-            Math.pow(touchY - screenCenterY, 2)
-          );
+          // Calculate distance to center - optimized
+          const dx = touchX - screenCenterX;
+          const dy = touchY - screenCenterY;
+          const distanceToCenter = Math.sqrt(dx * dx + dy * dy);
           
           // Calculate the snap threshold
-          const dropTargetRadius = 35; // Half of visual circle
+          const dropTargetRadius = 45; // Half of visual circle
           const userBubbleRadius = size / 2;
-          // Apply the multiplier to increase detection area, but less aggressive
-          const snapDistance = (dropTargetRadius + userBubbleRadius) * 1.1; // More subtle
+          
+          // Apply larger detection area for better UX
+          const snapDistance = (dropTargetRadius + userBubbleRadius) * 1.2;
           
           // For smooth magnetic effect when close to the center target
           if (distanceToCenter < snapDistance && !isSnapped) {
             setIsSnapped(true);
             
-            // Calculate the direction vector to center
-            const dx = screenCenterX - touchX;
-            const dy = screenCenterY - touchY;
-            
-            // Normalize for smooth animation
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const nx = dx / distance;
-            const ny = dy / distance;
-            
-            // Create a stronger magnetic pull effect
+            // Create a stronger and smoother magnetic pull effect
             pan.flattenOffset();
+            
+            // Calculate normalized direction vector
+            const magnitude = Math.sqrt(dx * dx + dy * dy);
+            const nx = dx / magnitude;
+            const ny = dy / magnitude;
+            
+            // Spring animation to center with improved config
             Animated.spring(pan, {
               toValue: { 
-                x: gesture.dx + (nx * dropTargetRadius * 0.6), // Stronger pull
-                y: gesture.dy + (ny * dropTargetRadius * 0.6)
+                x: gesture.dx + (nx * dropTargetRadius * 0.8),
+                y: gesture.dy + (ny * dropTargetRadius * 0.8)
               },
-              friction: 5,  // Less friction for faster snap
-              tension: 80,  // Higher tension for stronger pull
+              tension: 120,   // Higher tension for snappier snap
+              friction: 8,    // Balanced friction for natural feel
               useNativeDriver: true
             }).start();
             
-            // Even more scale increase when snapped
+            // More dramatic scale when snapped
             Animated.spring(scale, {
-              toValue: 1.5, // Bigger scale when snapped
-              friction: 4,
-              tension: 80,
-              useNativeDriver: true
+              toValue: 1.5,
+              ...ANIMATION_CONFIG,
+              tension: 120 // Even higher tension for snap effect
             }).start();
           } 
           else if (distanceToCenter >= snapDistance && isSnapped) {
             // Reset when moving away from snap area
             setIsSnapped(false);
             
-            // Reset scales with subtle transition
+            // Reset scale with smooth transition
             Animated.spring(scale, {
-              toValue: 1.35, // Back to dragging scale
-              friction: 6,
-              tension: 40,
-              useNativeDriver: true
+              toValue: 1.35,
+              ...ANIMATION_CONFIG
             }).start();
           }
         }
       },
       
       onPanResponderRelease: (evt, gesture) => {
+        // Clear any pending drag timer
+        if (dragTimer.current) {
+          clearTimeout(dragTimer.current);
+          dragTimer.current = null;
+        }
+        
+        // If we were waiting and not yet dragging, treat as tap
+        if (isWaitingForDrag) {
+          setIsWaitingForDrag(false);
+          onPress();
+          return;
+        }
+        
         pan.flattenOffset();
         setIsDragging(false);
         
-        // Stop the pulse animation
+        // Stop animations
         pulseAnim.stopAnimation();
         pulseAnim.setValue(0);
         
-        // Restore original scale
-        Animated.spring(scale, {
-          toValue: 1,
-          friction: 6,
-          tension: 40,
-          useNativeDriver: true
-        }).start();
+        // Reset visual feedback with parallel animations
+        Animated.parallel([
+          // Restore original scale
+          Animated.spring(scale, {
+            toValue: 1,
+            ...ANIMATION_CONFIG
+          }),
+          
+          // Fade out shadow
+          Animated.timing(shadowOpacity, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true
+          })
+        ]).start();
         
         let dropSuccess = false;
         
@@ -224,16 +296,16 @@ const UserBubble = ({
           const touchX = gesture.moveX;
           const touchY = gesture.moveY;
           
-          // Calculate distance to center
-          const distanceToCenter = Math.sqrt(
-            Math.pow(touchX - screenCenterX, 2) + 
-            Math.pow(touchY - screenCenterY, 2)
-          );
+          // Calculate distance to center - optimized
+          const dx = touchX - screenCenterX;
+          const dy = touchY - screenCenterY;
+          const distanceToCenter = Math.sqrt(dx * dx + dy * dy);
           
-          // Calculate the drop threshold - use larger detection area
-          const dropTargetRadius = 45; // Half of visual circle (70px)
+          // Calculate the drop threshold with larger detection area
+          const dropTargetRadius = 45; // Half of visual circle
           const userBubbleRadius = size / 2;
-          // Apply the multiplier to increase detection area
+          
+          // Apply even larger multiplier for easier dropping
           const dropThreshold = (dropTargetRadius + userBubbleRadius) * DETECTION_RADIUS_MULTIPLIER;
           
           dropSuccess = distanceToCenter < dropThreshold;
@@ -247,11 +319,12 @@ const UserBubble = ({
         // Reset snap state
         setIsSnapped(false);
         
-        // Always animate back to original position
+        // Always animate back to original position with improved spring config
         Animated.spring(pan, {
           toValue: { x: 0, y: 0 },
-          friction: 5,
-          useNativeDriver: true
+          ...ANIMATION_CONFIG,
+          tension: 60,  // Lower tension for smoother return
+          friction: 10  // Higher friction for less bounce
         }).start();
       }
     })
@@ -354,19 +427,31 @@ const UserBubble = ({
   // Create the pulse scale animation
   const pulseScale = pulseAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.15]
+    outputRange: [1, 1.08]
   });
+
+  // Create animated shadow opacity
+  const shadowAnimStyle = {
+    shadowOpacity: shadowOpacity.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0.1, 0.8]
+    }),
+    elevation: shadowOpacity.interpolate({
+      inputRange: [0, 1],
+      outputRange: [2, 15]
+    })
+  };
 
   // If draggable, use Animated.View with PanResponder
   if (draggable) {
     // Create shadow style based on drag state
-    const shadowStyle = isDragging ? {
-      shadowColor: 'rgba(0,0,0,0.2)',
-      shadowOffset: {width: 0, height: 3},
-      shadowOpacity: 0.3,
-      shadowRadius: 5,
-      elevation: 5
-    } : {};
+    const shadowStyle = {
+      shadowColor: 'rgba(0,0,0,0.4)',
+      shadowOffset: {width: 0, height: isDragging ? 8 : 2},
+      shadowOpacity: isDragging ? 0.6 : 0.2,
+      shadowRadius: isDragging ? 15 : 3,
+      elevation: isDragging ? 10 : 3
+    };
 
     return (
       <Animated.View
@@ -378,12 +463,13 @@ const UserBubble = ({
           },
           shadowStyle,
           style,
+          shadowAnimStyle,
           { 
             zIndex: isDragging ? 100 : 5, // Bring to front while dragging
             transform: [
               { translateX: pan.x },
               { translateY: pan.y },
-              { scale: scale }
+              { scale: isSnapped ? Animated.multiply(scale, pulseScale) : scale }
             ]
           }
         ]}

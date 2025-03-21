@@ -15,10 +15,11 @@ import {
   Alert
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
-import { auth, sendMessage, subscribeToMessages, getProfile, getConversation, respondToConversation } from '../../src/lib/firebase';
+import { auth, sendMessage, subscribeToMessages, getProfile, getConversation, respondToConversation, markMessagesAsRead } from '../../src/lib/firebase';
 import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import colors from '../../src/theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useUnreadMessages } from '../(tabs)/_layout';
 
 type Message = {
   id: string;
@@ -47,13 +48,44 @@ export default function ChatScreen() {
   const [conversationStatus, setConversationStatus] = useState<string>('');
   const [isInitiator, setIsInitiator] = useState<boolean>(false);
   const [isResponding, setIsResponding] = useState(false);
+  const { refreshUnreadCount } = useUnreadMessages();
 
   useEffect(() => {
     fetchMessages();
     fetchConversationDetails();
     
+    // Mark messages as read when the conversation is opened
+    const markAsRead = async () => {
+      try {
+        if (id) {
+          const updatedCount = await markMessagesAsRead(id as string);
+          if (updatedCount > 0) {
+            // Only refresh if messages were actually marked as read
+            refreshUnreadCount();
+          }
+        }
+      } catch (error) {
+        // Silently handle errors to prevent disrupting the user experience
+        console.error('Error marking messages as read:', error);
+      }
+    };
+    
+    markAsRead();
+    
     const unsubscribe = subscribeToMessages(id as string, (newMessages) => {
+      // Check if there are new messages from the other user
+      const hasNewMessagesFromOther = newMessages.some(
+        msg => !msg.read && msg.sender_id !== auth.currentUser?.uid
+      );
+      
       setMessages(newMessages as Message[]);
+      
+      // If there are new messages from the other user, mark them as read
+      if (hasNewMessagesFromOther) {
+        markAsRead();
+      }
+      
+      // Scroll to bottom after new messages arrive
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
@@ -115,12 +147,24 @@ export default function ChatScreen() {
 
   const handleSend = async () => {
     if (!newMessage.trim()) return;
-
+    
     try {
       await sendMessage(id as string, newMessage.trim());
       setNewMessage('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send message');
+      
+      // After sending a message, check and mark any unread messages from the other person
+      try {
+        await markMessagesAsRead(id as string);
+        refreshUnreadCount();
+      } catch (error) {
+        // Silently handle errors to avoid disrupting the user experience
+        console.error('Error marking messages as read after sending:', error);
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      if (error instanceof Error) {
+        Alert.alert('Error', error.message);
+      }
     }
   };
 
