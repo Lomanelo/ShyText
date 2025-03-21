@@ -9,6 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Platform } from 'react-native';
 import { sendLocalNotification } from '../../src/utils/notifications';
 import { useAuth } from '../../src/hooks/useAuth';
+import VerifiedBadge from '../../src/components/VerifiedBadge';
 
 export default function SettingsScreen() {
   const { user: authUser, loading: authLoading } = useAuth();
@@ -279,7 +280,13 @@ export default function SettingsScreen() {
         </TouchableOpacity>
         
         <View style={styles.profileInfo}>
-          <Text style={styles.profileName}>{user?.display_name || authUser?.displayName || 'User'}</Text>
+          <View style={styles.profileNameContainer}>
+            <Text style={styles.profileName}>{user?.display_name || authUser?.displayName || 'User'}</Text>
+            <VerifiedBadge 
+              isVerified={!!user?.is_verified} 
+              size="small"
+            />
+          </View>
           {user?.age && <Text style={styles.profileAge}>{user.age} years old</Text>}
         </View>
         <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
@@ -397,6 +404,39 @@ export default function SettingsScreen() {
               </Text>
             </View>
 
+            <View style={styles.profileDetailItem}>
+              <Ionicons 
+                name={user?.is_verified ? "shield-checkmark" : "shield-outline"} 
+                size={24} 
+                color={user?.is_verified ? colors.primary : colors.darkGray} 
+                style={styles.detailIcon} 
+              />
+              <Text style={styles.detailLabel}>Verification:</Text>
+              <View style={styles.verificationStatus}>
+                <Text style={[
+                  styles.detailValue, 
+                  user?.is_verified ? styles.verifiedText : styles.notVerifiedText
+                ]}>
+                  {user?.is_verified ? 'Verified' : 'Not Verified'}
+                </Text>
+                <VerifiedBadge 
+                  isVerified={!!user?.is_verified} 
+                  size="small"
+                  style={{ marginLeft: 8 }}
+                />
+              </View>
+            </View>
+
+            {user?.is_verified && user?.verified_at && (
+              <View style={styles.profileDetailItem}>
+                <Ionicons name="time" size={24} color={colors.darkGray} style={styles.detailIcon} />
+                <Text style={styles.detailLabel}>Verified on:</Text>
+                <Text style={styles.detailValue}>
+                  {new Date(user.verified_at).toLocaleDateString()}
+                </Text>
+              </View>
+            )}
+
             <TouchableOpacity 
               style={styles.editProfileButton}
               onPress={() => {
@@ -485,6 +525,10 @@ const styles = StyleSheet.create({
   },
   profileInfo: {
     flex: 1,
+  },
+  profileNameContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   profileName: {
     fontSize: 18,
@@ -662,5 +706,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#FFFFFF',
+  },
+  verificationStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  verifiedText: {
+    color: colors.primary,
+    fontWeight: 'bold',
+  },
+  notVerifiedText: {
+    color: colors.darkGray,
   },
 });

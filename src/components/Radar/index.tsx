@@ -27,12 +27,15 @@ interface RadarProps {
     photo_url?: string;
     status?: string;
     lastActive?: string;
+    is_verified?: boolean;
+    mac_address?: string;
     [key: string]: any;
   }>;
   currentUser: {
     id: string;
     photo_url?: string;
     display_name?: string;
+    is_verified?: boolean;
   };
   maxDistance: number; // Maximum distance in meters
   onUserPress: (userId: string) => void;

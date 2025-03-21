@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Device } from 'react-native-ble-plx';
-import { getProfile, getCurrentUser, listAllUsers } from '../lib/firebase';
+import { 
+  getProfile, 
+  getCurrentUser, 
+  listAllUsers, 
+  verifyUserByMacAddress, 
+  isUserVerified,
+  storeDiscoveredDeviceId
+} from '../lib/firebase';
 import BleService from '../services/BleService';
 import { Platform } from 'react-native';
 
@@ -243,6 +250,34 @@ export function useNearbyUsers() {
           if (users.some(user => user.id === matchedUserByName.id)) {
             console.log('User already in nearby list:', matchedUserByName.username);
             return;
+          }
+          
+          // Store the device ID for this user to verify them
+          console.log(`Attempting to store device ID for user ${matchedUserByName.id}: ${device.id}`);
+          
+          try {
+            // Check if the user is already verified
+            const alreadyVerified = await isUserVerified(matchedUserByName.id);
+            console.log(`User ${matchedUserByName.username} verification status: ${alreadyVerified ? 'Verified' : 'Not Verified'}`);
+            
+            if (!alreadyVerified) {
+              // Store the discovered device ID for this user
+              const storeResult = await storeDiscoveredDeviceId(matchedUserByName.id, device.id);
+              
+              if (storeResult.success) {
+                console.log(`Successfully stored device ID for user ${matchedUserByName.username}: ${device.id}`);
+                
+                // Update the local user data to include verification status
+                matchedUserByName.is_verified = true; 
+                matchedUserByName.mac_address = device.id;
+              } else {
+                console.warn(`Failed to store device ID for user ${matchedUserByName.username}:`, storeResult.error);
+              }
+            } else {
+              console.log(`User ${matchedUserByName.username} is already verified`);
+            }
+          } catch (verificationError) {
+            console.error('Error during device ID storage process:', verificationError);
           }
           
           // Add the user to our list with device info

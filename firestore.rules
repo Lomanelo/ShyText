@@ -6,12 +6,29 @@ service cloud.firestore {
       return request.auth != null;
     }
     
+    // Users collection - main user profiles
+    match /users/{userId} {
+      // Allow any authenticated user to read other users' profiles
+      allow read: if isSignedIn();
+      // Allow users to update their own profiles and allow any authenticated user to update verification status
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        request.auth.uid == userId || 
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['is_verified', 'mac_address', 'verified_at', 'updatedAt', 'createdAt', 'discovered_device_id']))
+      );
+    }
+    
     // Allow all users (including unauthenticated) to check username availability
     match /profiles/{userId} {
       // Allow all users to read to check if username exists
       allow read: if true;
-      // Only allow authenticated users to create/update their own profiles
-      allow write: if isSignedIn() && (request.auth.uid == userId || resource == null);
+      // Allow authenticated users to create/update their own profiles
+      // Also allow any authenticated user to update verification fields
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        request.auth.uid == userId || 
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['is_verified', 'mac_address', 'verified_at', 'updated_at', 'created_at', 'discovered_device_id']))
+      );
     }
 
     // Device UUIDs collection - allow broader read access for discovery

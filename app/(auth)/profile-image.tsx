@@ -424,6 +424,13 @@ export default function ProfileImageScreen() {
                   keyboardType="number-pad"
                   maxLength={10}
                   editable={!uploading}
+                  returnKeyType="done"
+                  onSubmitEditing={() => {
+                    if (birthDateInput.length === 10) {
+                      validateBirthDate(birthDateInput);
+                    }
+                  }}
+                  blurOnSubmit={true}
                 />
               </View>
               {birthDateError ? (

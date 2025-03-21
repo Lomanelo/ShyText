@@ -982,45 +982,6 @@ export async function listAllUsers() {
   }
 }
 
-// New functions for device UUID management
-export const storeDeviceUUID = async (uid: string, deviceUUID: string) => {
-  try {
-    const devicesRef = collection(db, 'devices');
-    
-    // First create a query to check if this user already has a device entry
-    const q = query(devicesRef, where('user_id', '==', uid));
-    const querySnapshot = await getDocs(q);
-    
-    if (!querySnapshot.empty) {
-      // User already has a device entry, update it
-      const deviceDoc = querySnapshot.docs[0];
-      await updateDoc(doc(db, 'devices', deviceDoc.id), {
-        device_uuid: deviceUUID,
-        updated_at: new Date().toISOString()
-      });
-    } else {
-      // Create a new device entry
-      await addDoc(devicesRef, {
-        user_id: uid,
-        device_uuid: deviceUUID,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-    }
-    
-    // Also update the user's profile with their device UUID
-    await updateDoc(doc(db, 'profiles', uid), {
-      device_uuid: deviceUUID,
-      updated_at: new Date().toISOString()
-    });
-    
-    return { success: true };
-  } catch (error) {
-    console.error('Error storing device UUID:', error);
-    return { success: false, error };
-  }
-};
-
 // Get user by device UUID
 export const getUserByDeviceUUID = async (deviceUUID: string) => {
   try {
@@ -1038,22 +999,22 @@ export const getUserByDeviceUUID = async (deviceUUID: string) => {
       };
     }
     
-    // If not found in profiles, try device_uuids collection as backup
-    const deviceUuidsRef = collection(db, 'device_uuids');
-    const deviceQuery = query(deviceUuidsRef, where('device_uuid', '==', deviceUUID));
+    // If not found in profiles, check devices collection
+    const devicesRef = collection(db, 'devices');
+    const deviceQuery = query(devicesRef, where('device_uuid', '==', deviceUUID));
     const deviceSnapshot = await getDocs(deviceQuery);
     
     if (!deviceSnapshot.empty) {
       const deviceDoc = deviceSnapshot.docs[0];
-      const userId = deviceDoc.id; // The document ID is the user ID
+      const userId = deviceDoc.data().user_id;
       
-      // Get the user profile
-      const profileDoc = await getDoc(doc(db, 'profiles', userId));
-      if (profileDoc.exists()) {
-        return { 
-          id: userId, 
-          ...profileDoc.data(),
-          device_uuid: deviceUUID 
+      // Get the user profile with this ID
+      const userDoc = await getDoc(doc(db, 'profiles', userId));
+      if (userDoc.exists()) {
+        return {
+          id: userDoc.id,
+          ...userDoc.data(),
+          device_uuid: deviceUUID
         };
       }
     }
@@ -1062,6 +1023,80 @@ export const getUserByDeviceUUID = async (deviceUUID: string) => {
   } catch (error) {
     console.error('Error getting user by device UUID:', error);
     return null;
+  }
+};
+
+// Store discovered device ID for a user (for verification)
+export const storeDiscoveredDeviceId = async (userId: string, deviceId: string) => {
+  try {
+    if (!userId || !deviceId) {
+      console.error('Missing userId or deviceId for storing discovered device');
+      return { success: false, error: 'Missing userId or deviceId' };
+    }
+
+    console.log(`Storing discovered device ID ${deviceId} for user ${userId}`);
+    const timestamp = new Date().toISOString();
+    
+    // Update the user's profile with the discovered device ID
+    try {
+      // First check if the profile document exists
+      const profileRef = doc(db, 'profiles', userId);
+      const profileSnap = await getDoc(profileRef);
+      
+      if (profileSnap.exists()) {
+        // Update existing profile
+        console.log(`Updating existing profile for user ${userId}`);
+        await updateDoc(profileRef, {
+          discovered_device_id: deviceId,
+          mac_address: deviceId,
+          is_verified: true,
+          verified_at: timestamp,
+          updated_at: timestamp
+        });
+      } else {
+        // Profile doesn't exist, create a new one
+        console.log(`Creating new profile for user ${userId}`);
+        await setDoc(profileRef, {
+          id: userId,
+          discovered_device_id: deviceId,
+          mac_address: deviceId,
+          is_verified: true,
+          verified_at: timestamp,
+          created_at: timestamp,
+          updated_at: timestamp
+        });
+      }
+      
+      // Also update or create in users collection for redundancy
+      const userRef = doc(db, 'users', userId);
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists()) {
+        await updateDoc(userRef, {
+          mac_address: deviceId,
+          is_verified: true,
+          verified_at: timestamp,
+          updatedAt: timestamp
+        });
+      } else {
+        await setDoc(userRef, {
+          mac_address: deviceId,
+          is_verified: true,
+          verified_at: timestamp,
+          createdAt: timestamp,
+          updatedAt: timestamp
+        });
+      }
+      
+      console.log(`Successfully stored discovered device ID for user ${userId}`);
+      return { success: true };
+    } catch (error) {
+      console.error('Error storing discovered device ID:', error);
+      return { success: false, error };
+    }
+  } catch (error) {
+    console.error('Error in storeDiscoveredDeviceId:', error);
+    return { success: false, error };
   }
 };
 
@@ -1131,5 +1166,109 @@ export const authenticateByDeviceName = async (username: string) => {
   } catch (error) {
     console.error('Error in authenticateByUsername:', error);
     return { success: false, error: 'Authentication failed' };
+  }
+};
+
+// Improved function to verify a user by MAC address
+export const verifyUserByMacAddress = async (userId: string, macAddress: string): Promise<boolean> => {
+  try {
+    if (!userId || !macAddress) {
+      console.error('Missing userId or macAddress for verification');
+      return false;
+    }
+    
+    console.log(`Verifying user ${userId} with MAC address ${macAddress}`);
+    
+    const db = getFirestore();
+    const timestamp = new Date().toISOString();
+    let profileError: any = null;
+    
+    // Update profile document
+    try {
+      const profileRef = doc(db, 'profiles', userId);
+      const profileSnap = await getDoc(profileRef);
+      
+      if (!profileSnap.exists()) {
+        console.warn(`Profile document for user ${userId} not found`);
+      } else {
+        await updateDoc(profileRef, {
+          mac_address: macAddress,
+          is_verified: true,
+          verified_at: timestamp,
+          updated_at: timestamp
+        });
+        console.log(`Successfully verified user in profiles collection: ${userId}`);
+      }
+    } catch (error) {
+      profileError = error;
+      console.error('Error updating profiles collection:', error);
+      // Continue trying users collection even if profiles update fails
+    }
+    
+    // Update user document in users collection 
+    try {
+      const userRef = doc(db, 'users', userId);
+      const userSnap = await getDoc(userRef);
+      
+      if (!userSnap.exists()) {
+        console.warn(`User document for ${userId} not found in users collection`);
+        // Create the document if it doesn't exist
+        await setDoc(userRef, {
+          mac_address: macAddress,
+          is_verified: true,
+          verified_at: timestamp,
+          createdAt: timestamp,
+          updatedAt: timestamp
+        });
+        console.log(`Created and verified new user document in users collection: ${userId}`);
+      } else {
+        await updateDoc(userRef, {
+          mac_address: macAddress,
+          is_verified: true,
+          verified_at: timestamp,
+          updatedAt: timestamp
+        });
+        console.log(`Successfully verified user in users collection: ${userId}`);
+      }
+      
+      // At least one collection was updated successfully
+      return true;
+    } catch (userError) {
+      console.error('Error updating users collection:', userError);
+      // If both updates failed, return false
+      if (profileError) return false;
+      
+      // If only the users collection update failed but profiles worked, still return true
+      return profileError === null;
+    }
+  } catch (error) {
+    console.error('Error verifying user:', error);
+    return false;
+  }
+};
+
+// Check if a user is verified
+export const isUserVerified = async (userId: string): Promise<boolean> => {
+  try {
+    const db = getFirestore();
+    const profileRef = doc(db, 'profiles', userId);
+    const profileSnap = await getDoc(profileRef);
+    
+    if (profileSnap.exists() && profileSnap.data().is_verified === true) {
+      return true;
+    }
+    
+    // Try users collection if not found in profiles
+    const userRef = doc(db, 'users', userId);
+    const userSnap = await getDoc(userRef);
+    
+    if (userSnap.exists() && userSnap.data().is_verified === true) {
+      return true;
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking user verification:', error);
+    return false;
   }
 }; 

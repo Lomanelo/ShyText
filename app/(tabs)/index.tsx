@@ -31,61 +31,8 @@ export default function NearbyScreen() {
       setAuthError(true);
       // We let the TabLayout handle the redirect
     } else {
-      // For existing users, check and update device UUID if needed
-      (async () => {
-        try {
-          const { storeDeviceUUID, getCurrentUserDeviceUUID } = require('../../src/lib/firebase');
-          
-          // Define getDeviceUUID inline to avoid import issues
-          const getDeviceUUID = async () => {
-            try {
-              const DeviceInfo = require('react-native-device-info');
-              if (Platform.OS === 'android') {
-                try {
-                  const macAddress = await DeviceInfo.getMacAddress();
-                  if (macAddress && macAddress !== '02:00:00:00:00:00') {
-                    return `android-${macAddress.replace(/:/g, '')}`;
-                  }
-                } catch (error) {
-                  console.warn('Could not get MAC address:', error);
-                }
-              }
-              
-              try {
-                const uniqueId = await DeviceInfo.getUniqueId();
-                if (uniqueId) {
-                  return `${Platform.OS}-${uniqueId}`;
-                }
-              } catch (error) {
-                console.warn('Could not get unique ID:', error);
-              }
-              
-              const deviceName = DeviceInfo.getDeviceNameSync();
-              const deviceId = DeviceInfo.getDeviceId();
-              
-              return `${Platform.OS}-${deviceName}-${deviceId}-${Date.now()}`;
-            } catch (error) {
-              console.warn('Error getting device UUID:', error);
-              return `fallback-${Platform.OS}-${Math.random().toString(36).substring(2, 15)}`;
-            }
-          };
-          
-          // Check if this user already has a device UUID stored
-          const storedUUID = await getCurrentUserDeviceUUID();
-          
-          if (!storedUUID) {
-            console.log('No device UUID found for current user, generating and storing one...');
-            // Generate and store a device UUID
-            const deviceUUID = await getDeviceUUID();
-            await storeDeviceUUID(user.uid, deviceUUID);
-            console.log('Stored new device UUID for existing user:', deviceUUID);
-          } else {
-            console.log('User already has device UUID:', storedUUID);
-          }
-        } catch (error) {
-          console.warn('Error checking/updating device UUID:', error);
-        }
-      })();
+      // No longer need to check or store own device UUID
+      console.log('User authenticated, focusing only on nearby devices');
     }
   }, []);
 

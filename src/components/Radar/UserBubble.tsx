@@ -10,10 +10,22 @@ import {
   PanResponder,
   Animated,
   Dimensions,
-  Easing
+  Easing,
+  StyleSheet
 } from 'react-native';
 import { styles } from './styles';
 import colors from '../../theme/colors';
+import VerifiedBadge from '../VerifiedBadge';
+
+// Custom component styles
+const localStyles = StyleSheet.create({
+  verifiedBadgeContainer: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    zIndex: 10,
+  }
+});
 
 interface User {
   id: string;
@@ -21,6 +33,8 @@ interface User {
   photo_url?: string;
   isCurrentUser?: boolean;
   position?: { x: number, y: number };
+  is_verified?: boolean;
+  mac_address?: string;
   [key: string]: any;
 }
 
@@ -328,6 +342,21 @@ const UserBubble = ({
     );
   };
 
+  // Create the animated transforms
+  const animatedStyles = {
+    transform: [
+      { translateX: pan.x },
+      { translateY: pan.y },
+      { scale }
+    ]
+  };
+  
+  // Create the pulse scale animation
+  const pulseScale = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.15]
+  });
+
   // If draggable, use Animated.View with PanResponder
   if (draggable) {
     // Create shadow style based on drag state
@@ -339,7 +368,7 @@ const UserBubble = ({
       elevation: 5
     } : {};
 
-  return (
+    return (
       <Animated.View
         style={[
           styles.userBubble,
@@ -383,8 +412,15 @@ const UserBubble = ({
           </View>
         )}
       
-      {user.isCurrentUser && (
+        {user.isCurrentUser && (
           <View style={styles.currentUserIndicator} />
+        )}
+        
+        {/* Verified Badge for draggable */}
+        {user.is_verified && (
+          <View style={localStyles.verifiedBadgeContainer}>
+            <VerifiedBadge isVerified={true} size="small" />
+          </View>
         )}
         
         {!isDropTarget && displayName && (
@@ -425,14 +461,28 @@ const UserBubble = ({
             </>
           ) : (
             <View style={[styles.userPlaceholder, { width: size, height: size }]}>
-              <Text style={styles.userInitial}>{initial}</Text>
-        </View>
+              <Text style={[styles.userInitial, { fontSize: size * 0.4 }]}>{initial}</Text>
+            </View>
           )}
+          
+          {/* Verified Badge for non-draggable */}
+          {user.is_verified && (
+            <View style={localStyles.verifiedBadgeContainer}>
+              <VerifiedBadge isVerified={true} size="small" />
+            </View>
+          )}
+          
           {user.isCurrentUser && (
             <View style={styles.currentUserIndicator} />
           )}
-          {!isDropTarget && displayName && (
-            <Text style={styles.userName} numberOfLines={1}>{displayName}</Text>
+          
+          {displayName && (
+            <Text 
+              style={[styles.userName, { fontSize: size * 0.24 }]} 
+              numberOfLines={1}
+            >
+              {displayName}
+            </Text>
           )}
         </>
       )}
