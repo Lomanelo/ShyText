@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -53,23 +53,39 @@ export default function ChatScreen() {
   const { refreshUnreadCount } = useUnreadMessages();
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [initiatorMessageCount, setInitiatorMessageCount] = useState(0);
+  const [messageLimitReached, setMessageLimitReached] = useState(false);
+
+  const countInitiatorMessages = useCallback((msgs: Message[]) => {
+    if (!isInitiator) return;
+    
+    const count = msgs.filter(msg => 
+      msg.sender_id === auth.currentUser?.uid && 
+      msg.sender_id !== 'system'
+    ).length;
+    
+    setInitiatorMessageCount(count);
+    
+    if (conversationStatus === 'pending' && count >= 2) {
+      setMessageLimitReached(true);
+    } else {
+      setMessageLimitReached(false);
+    }
+  }, [isInitiator, conversationStatus]);
 
   useEffect(() => {
     fetchMessages();
     fetchConversationDetails();
     
-    // Mark messages as read when the conversation is opened
     const markAsRead = async () => {
       try {
         if (id) {
           const updatedCount = await markMessagesAsRead(id as string);
           if (updatedCount > 0) {
-            // Only refresh if messages were actually marked as read
             refreshUnreadCount();
           }
         }
       } catch (error) {
-        // Silently handle errors to prevent disrupting the user experience
         console.error('Error marking messages as read:', error);
       }
     };
@@ -77,19 +93,18 @@ export default function ChatScreen() {
     markAsRead();
     
     const unsubscribe = subscribeToMessages(id as string, (newMessages) => {
-      // Check if there are new messages from the other user
       const hasNewMessagesFromOther = newMessages.some(
         msg => !msg.read && msg.sender_id !== auth.currentUser?.uid
       );
       
       setMessages(newMessages as Message[]);
       
-      // If there are new messages from the other user, mark them as read
+      countInitiatorMessages(newMessages as Message[]);
+      
       if (hasNewMessagesFromOther) {
         markAsRead();
       }
       
-      // Scroll to bottom after new messages arrive
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
@@ -98,7 +113,7 @@ export default function ChatScreen() {
     return () => {
       unsubscribe();
     };
-  }, [id]);
+  }, [id, countInitiatorMessages]);
 
   useEffect(() => {
     if (otherUserId) {
@@ -107,7 +122,6 @@ export default function ChatScreen() {
   }, [otherUserId]);
 
   useEffect(() => {
-    // Scroll to the bottom when keyboard appears or disappears
     if (flatListRef.current && messages.length > 0) {
       setTimeout(() => {
         try {
@@ -165,16 +179,23 @@ export default function ChatScreen() {
   const handleSend = async () => {
     if (!newMessage.trim()) return;
     
+    if (isInitiator && conversationStatus === 'pending' && initiatorMessageCount >= 2) {
+      Alert.alert(
+        'Message Limit Reached',
+        'You can only send 2 messages until the other person accepts your conversation request.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
     try {
       await sendMessage(id as string, newMessage.trim());
       setNewMessage('');
       
-      // After sending a message, check and mark any unread messages from the other person
       try {
         await markMessagesAsRead(id as string);
         refreshUnreadCount();
       } catch (error) {
-        // Silently handle errors to avoid disrupting the user experience
         console.error('Error marking messages as read after sending:', error);
       }
     } catch (error) {
@@ -186,7 +207,7 @@ export default function ChatScreen() {
   };
 
   const handleAcceptDecline = async (accept: boolean) => {
-    if (isResponding) return; // Prevent double-clicks
+    if (isResponding) return;
     
     try {
       setIsResponding(true);
@@ -198,7 +219,6 @@ export default function ChatScreen() {
       }
     } catch (error) {
       console.error('Error responding to conversation:', error);
-      // Only show alert if it's not already accepted
       if (error instanceof Error && error.message !== 'This conversation is no longer pending') {
         Alert.alert('Error', 'Failed to respond to conversation request');
       }
@@ -245,7 +265,6 @@ export default function ChatScreen() {
         <View style={styles.headerProfile}>
           <TouchableOpacity 
             onPress={() => {
-              // Show profile modal when tapped
               if (otherUser) {
                 setShowProfileModal(true);
               }
@@ -279,30 +298,22 @@ export default function ChatScreen() {
   };
 
   const renderMessage = ({ item, index }: { item: Message, index: number }) => {
-    // Check if this is a system message
     const isSystemMessage = item.sender_id === 'system';
     
-    // For non-system messages, handle as before
     const isCurrentUser = !isSystemMessage && item.sender_id === auth.currentUser?.uid;
     
-    // Determine if this is the first message in a sequence from this sender
-    // System messages always break the sequence
     const isFirstInSequence = index === 0 || 
       messages[index - 1]?.sender_id !== item.sender_id ||
       isSystemMessage || 
       messages[index - 1]?.sender_id === 'system';
     
-    // Determine if this is the last message in a sequence from this sender
-    // System messages always break the sequence
     const isLastInSequence = index === messages.length - 1 || 
       messages[index + 1]?.sender_id !== item.sender_id ||
       isSystemMessage || 
       messages[index + 1]?.sender_id === 'system';
     
-    // Show timestamp only for the last message in a sequence
     const showTimestamp = isLastInSequence;
     
-    // If it's a system message, render it differently
     if (isSystemMessage) {
       return (
         <View style={styles.systemMessageContainer}>
@@ -314,19 +325,16 @@ export default function ChatScreen() {
       );
     }
     
-    // For regular messages
     return (
       <View style={[
         styles.messageRow,
         isCurrentUser ? styles.sentMessageRow : styles.receivedMessageRow,
-        // Add extra margin for first message in a sequence
         isFirstInSequence && { marginTop: 8 }
       ]}>
-        {/* Show avatar only for the first message in a sequence from the other user */}
         {!isCurrentUser ? (
           <View style={[
             styles.avatarContainer,
-            !isFirstInSequence && { opacity: 0 } // Hide avatar visually but keep space for alignment
+            !isFirstInSequence && { opacity: 0 }
           ]}>
             {isFirstInSequence && otherUser && (
               otherUser.photo_url ? (
@@ -351,7 +359,7 @@ export default function ChatScreen() {
         <View style={[
           styles.messageContainer,
           isCurrentUser ? styles.sentMessage : styles.receivedMessage,
-          !isLastInSequence && { marginBottom: 2 }, // Tighter grouping for consecutive messages
+          !isLastInSequence && { marginBottom: 2 },
           isFirstInSequence && !isLastInSequence && (
             isCurrentUser 
               ? { borderBottomRightRadius: 4 } 
@@ -383,7 +391,7 @@ export default function ChatScreen() {
         {isCurrentUser && (
           <View style={[
             styles.avatarContainer,
-            { opacity: 0 } // Invisible spacer for sent messages
+            { opacity: 0 }
           ]} />
         )}
       </View>
@@ -471,6 +479,15 @@ export default function ChatScreen() {
       
       {conversationStatus === 'pending' && !isInitiator && renderPendingBanner()}
       
+      {conversationStatus === 'pending' && isInitiator && messageLimitReached && (
+        <View style={styles.messageLimitBanner}>
+          <Ionicons name="alert-circle-outline" size={20} color={colors.primary} />
+          <Text style={styles.messageLimitText}>
+            You've sent 2 messages. Wait for a response to continue chatting.
+          </Text>
+        </View>
+      )}
+      
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardAvoidView}
@@ -491,22 +508,24 @@ export default function ChatScreen() {
             <View style={styles.inputWrapper}>
               <TextInput
                 style={styles.input}
-                placeholder="Type a message..."
+                placeholder={messageLimitReached ? "Message limit reached. Wait for acceptance..." : "Type a message..."}
                 value={newMessage}
                 onChangeText={setNewMessage}
                 multiline
                 placeholderTextColor={colors.darkGray}
                 onFocus={() => setIsInputFocused(true)}
                 onBlur={() => setIsInputFocused(false)}
+                editable={!(isInitiator && conversationStatus === 'pending' && initiatorMessageCount >= 2)}
               />
             </View>
             <TouchableOpacity 
               style={[
                 styles.sendButton,
-                (!newMessage.trim() && { opacity: 0.5 })
+                (!newMessage.trim() && { opacity: 0.5 }),
+                (isInitiator && conversationStatus === 'pending' && initiatorMessageCount >= 2) && styles.sendButtonDisabled
               ]} 
               onPress={handleSend}
-              disabled={!newMessage.trim()}
+              disabled={!newMessage.trim() || (isInitiator && conversationStatus === 'pending' && initiatorMessageCount >= 2)}
             >
               <Ionicons name="send" size={20} color="#fff" />
             </TouchableOpacity>
@@ -514,7 +533,6 @@ export default function ChatScreen() {
         )}
       </KeyboardAvoidingView>
       
-      {/* Profile Modal */}
       <Modal
         visible={showProfileModal}
         transparent={true}
@@ -917,13 +935,13 @@ const styles = StyleSheet.create({
   profileImage: {
     width: '100%',
     height: undefined,
-    aspectRatio: 0.75, // Portrait mode - taller than wide
+    aspectRatio: 0.75,
     borderRadius: 24,
   },
   profileImagePlaceholder: {
     width: '100%',
     height: undefined,
-    aspectRatio: 0.75, // Portrait mode - taller than wide
+    aspectRatio: 0.75,
     backgroundColor: colors.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
@@ -978,5 +996,19 @@ const styles = StyleSheet.create({
     color: colors.success,
     fontSize: 12,
     fontWeight: '600',
+  },
+  messageLimitBanner: {
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.lightGray,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  messageLimitText: {
+    fontSize: 14,
+    color: colors.primary,
+    marginLeft: 8,
+    flex: 1,
   },
 });

@@ -98,8 +98,8 @@ export default function NearbyScreen() {
     if (!selectedUser) return;
     
     try {
-      // Start conversation without a message
-      const result = await startConversation(selectedUser.id, "");
+      // Start conversation with the wave emoji as the initial message
+      const result = await startConversation(selectedUser.id, "👋");
       
       // Close the modal safely using requestAnimationFrame
       requestAnimationFrame(() => {
@@ -139,7 +139,10 @@ export default function NearbyScreen() {
   
   const handleSendMessage = async (userId: string, message: string) => {
     try {
-      const result = await startConversation(userId, message);
+      // Use wave emoji if no custom message provided
+      const messageToSend = message.trim() === "" ? "👋" : message;
+      
+      const result = await startConversation(userId, messageToSend);
       
       // If we get a conversationId back, it means there's an existing active conversation
       if (result?.conversationId) {
