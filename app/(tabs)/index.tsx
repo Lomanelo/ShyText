@@ -339,7 +339,7 @@ export default function NearbyScreen() {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            {/* Modal Header */}
+            {/* Close Button */}
             <View style={styles.modalHeader}>
               <TouchableOpacity style={styles.closeButton} onPress={handleCloseProfile}>
                 <Ionicons name="close" size={24} color="white" />
@@ -347,46 +347,35 @@ export default function NearbyScreen() {
             </View>
 
             {/* Profile Content */}
-            <RNScrollView 
-              style={styles.scrollableContent}
-              contentContainerStyle={styles.profileContentContainer}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.profileContentCenter}>
-                {/* Profile Photo */}
-                <View style={styles.profileImageContainer}>
-                  {selectedUser?.photo_url ? (
-                    <Image
-                      source={{ uri: selectedUser.photo_url }}
-                      style={styles.profileImage}
-                    />
-                  ) : (
-                    <View style={styles.profileImagePlaceholder}>
-                      <Text style={styles.profileImagePlaceholderText}>
-                        {selectedUser?.display_name?.charAt(0) || '?'}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
-                {/* Bio if viewing full profile */}
-                {viewingFullProfile && selectedUser?.bio && (
-                  <Text style={styles.profileBio}>{selectedUser.bio}</Text>
+            <View style={styles.profileContentCompact}>
+              {/* Profile Photo */}
+              <View style={styles.profileImageContainer}>
+                {selectedUser?.photo_url ? (
+                  <Image
+                    source={{ uri: selectedUser.photo_url }}
+                    style={styles.profileImage}
+                  />
+                ) : (
+                  <View style={styles.profileImagePlaceholder}>
+                    <Text style={styles.profileImagePlaceholderText}>
+                      {selectedUser?.display_name?.charAt(0) || '?'}
+                    </Text>
+                  </View>
                 )}
               </View>
-            </RNScrollView>
 
-            {/* Action Buttons */}
-            <View style={styles.actionButtons}>
-              <TouchableOpacity
-                style={styles.startChatButton}
-                onPress={handleStartChat}
-              >
-                <Ionicons name="chatbubble" size={20} color={colors.background} />
-                <Text style={styles.startChatText}>
-                  Start Conversation
-                </Text>
-              </TouchableOpacity>
+              {/* Action Button */}
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  style={styles.startChatButton}
+                  onPress={handleStartChat}
+                >
+                  <Ionicons name="chatbubble" size={20} color={colors.background} />
+                  <Text style={styles.startChatText}>
+                    Start Conversation
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
@@ -500,10 +489,10 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderRadius: 20,
     width: '90%',
-    height: '70%',
+    maxHeight: '80%',
     overflow: 'hidden',
-    flexDirection: 'column',
     backfaceVisibility: 'hidden',
+    padding: 0,
   },
   modalHeader: {
     position: 'absolute',
@@ -532,17 +521,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   profileImageContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
     width: '100%',
-    height: 400,
-    marginBottom: 20,
+    padding: 0,
   },
   profileImage: {
-    width: '85%',
-    height: '85%',
-    resizeMode: 'contain',
-    borderRadius: 10,
+    width: '100%', 
+    height: undefined,
+    aspectRatio: 1,
+    resizeMode: 'cover',
   },
   profileImagePlaceholder: {
     width: 120,
@@ -605,13 +591,10 @@ const styles = StyleSheet.create({
   actionButtons: {
     width: '100%',
     paddingVertical: 15,
+    paddingHorizontal: 20,
     backgroundColor: colors.background,
-    position: 'absolute',
-    bottom: 0,
     borderTopWidth: 1,
     borderTopColor: colors.lightGray,
-    paddingHorizontal: 20,
-    zIndex: 5,
   },
   startChatButton: {
     backgroundColor: colors.primary,
@@ -636,7 +619,7 @@ const styles = StyleSheet.create({
   profileContentContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingBottom: 70,
+    paddingBottom: 0,
   },
   messageInputContainer: {
     marginTop: 20,
@@ -713,5 +696,9 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  profileContentCompact: {
+    display: 'flex',
+    flexDirection: 'column',
   },
 });
