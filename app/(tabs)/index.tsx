@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, ActivityIndicator, SafeAreaView, Image, RefreshControl, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView as RNScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Modal, ActivityIndicator, SafeAreaView, Image, RefreshControl, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView as RNScrollView, BackHandler } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,10 +19,24 @@ export default function NearbyScreen() {
   const [viewingFullProfile, setViewingFullProfile] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [authError, setAuthError] = useState<boolean>(false);
-  const [customMessage, setCustomMessage] = useState('');
-  const [showMessageInput, setShowMessageInput] = useState(false);
   const { users, loading, error, isScanning, btEnabled, refreshUsers, startScanning, stopScanning, setUsers } = useNearbyUsers();
-  const [isDragging, setIsDragging] = useState(false);
+
+  // Define handleCloseProfile first since it's used in the useEffect below
+  const handleCloseProfile = useCallback(() => {
+    if (viewingFullProfile) {
+      setViewingFullProfile(false);
+    } else {
+      // Close modal with slight delay to prevent UI freezing
+      // This helps with animation completion
+      requestAnimationFrame(() => {
+        setShowingUserInfo(false);
+        // Wait for modal close animation to complete before updating other state
+        setTimeout(() => {
+          setSelectedUser(null);
+        }, 100);
+      });
+    }
+  }, [viewingFullProfile]);
 
   // Check authentication on component mount
   useEffect(() => {
@@ -52,48 +66,68 @@ export default function NearbyScreen() {
     };
   }, [btEnabled, startScanning, stopScanning, isScanning]);
 
-  const handleUserPress = (userId: string) => {
+  // Add this useEffect for handling hardware back button
+  useEffect(() => {
+    // Only run on Android
+    if (Platform.OS === 'android') {
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (showingUserInfo) {
+          // If modal is open, handle back button press
+          handleCloseProfile();
+          // Return true to prevent default back button behavior
+          return true;
+        }
+        // Return false to allow default back button behavior
+        return false;
+      });
+
+      return () => backHandler.remove();
+    }
+  }, [showingUserInfo, handleCloseProfile]);
+
+  const handleUserPress = useCallback((userId: string) => {
     const user = users.find(u => u.id === userId);
     if (user) {
       setSelectedUser(user);
       setShowingUserInfo(true);
       setViewingFullProfile(false);
     }
-  };
+  }, [users]);
 
-  const handleStartChat = async () => {
+  const handleStartChat = useCallback(async () => {
     if (!selectedUser) return;
     
-    if (!showMessageInput) {
-      setShowMessageInput(true);
-      return;
-    }
-    
-    if (!customMessage.trim()) {
-      Alert.alert('Message Required', 'Please enter a message to start the conversation.');
-      return;
-    }
-    
     try {
-      const result = await startConversation(selectedUser.id, customMessage.trim());
+      // Start conversation without a message
+      const result = await startConversation(selectedUser.id, "");
       
-      // If we get a conversationId back, it means there's an existing active conversation
-      if (result?.conversationId) {
-        Alert.alert(
-          'Existing Conversation',
-          'You already have an active conversation with this user.',
-          [{ text: 'Go to Chat', onPress: () => router.push(`/chat/${result.conversationId}`) }]
-        );
-      } else {
-        router.push('/chats');
-      }
+      // Close the modal safely using requestAnimationFrame
+      requestAnimationFrame(() => {
+        setShowingUserInfo(false);
+        // Only navigate after modal is closed
+        setTimeout(() => {
+          setSelectedUser(null);
+          
+          // If we get a conversationId back, navigate to that chat
+          if (result?.conversationId) {
+            router.push(`/chat/${result.conversationId}`);
+          } else {
+            // Otherwise go to chats list
+            router.push('/chats');
+          }
+        }, 100);
+      });
+      
     } catch (error: any) {
       console.error('Error starting conversation:', error);
       if (error.message?.includes('already have a pending conversation')) {
         Alert.alert(
           'Pending Request',
           'You already have a pending conversation request with this user.',
-          [{ text: 'Go to Chats', onPress: () => router.push('/chats') }]
+          [
+            { text: 'Stay Here', style: 'cancel' },
+            { text: 'Go to Chats', onPress: () => router.push('/chats') }
+          ]
         );
       } else if (error.message?.includes('declined your previous conversation')) {
         Alert.alert('Request Declined', error.message);
@@ -101,13 +135,7 @@ export default function NearbyScreen() {
         Alert.alert('Error', 'Failed to start conversation. Please try again.');
       }
     }
-    
-    setSelectedUser(null);
-    setShowingUserInfo(false);
-    setViewingFullProfile(false);
-    setShowMessageInput(false);
-    setCustomMessage('');
-  };
+  }, [selectedUser]);
   
   const handleSendMessage = async (userId: string, message: string) => {
     try {
@@ -124,7 +152,10 @@ export default function NearbyScreen() {
         Alert.alert(
           'Message Sent',
           'Your conversation request has been sent.',
-          [{ text: 'OK', onPress: () => router.push('/chats') }]
+          [
+            { text: 'Stay Here', style: 'cancel' },
+            { text: 'Go to Chats', onPress: () => router.push('/chats') }
+          ]
         );
       }
     } catch (error: any) {
@@ -133,7 +164,10 @@ export default function NearbyScreen() {
         Alert.alert(
           'Pending Request',
           'You already have a pending conversation request with this user.',
-          [{ text: 'Go to Chats', onPress: () => router.push('/chats') }]
+          [
+            { text: 'Stay Here', style: 'cancel' },
+            { text: 'Go to Chats', onPress: () => router.push('/chats') }
+          ]
         );
       } else if (error.message?.includes('declined your previous conversation')) {
         Alert.alert('Request Declined', error.message);
@@ -146,20 +180,11 @@ export default function NearbyScreen() {
   const handleViewProfile = () => {
     setViewingFullProfile(true);
   };
-  
-  const handleCloseProfile = () => {
-    if (viewingFullProfile) {
-      setViewingFullProfile(false);
-    } else {
-      setSelectedUser(null);
-      setShowingUserInfo(false);
-    }
-  };
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      // Just perform a standard refresh
+      // Just perform a standard refresh but don't reset UI state
       await refreshUsers();
     } catch (error) {
       console.error('Error refreshing nearby users:', error);
@@ -168,17 +193,24 @@ export default function NearbyScreen() {
     }
   }, [refreshUsers]);
 
+  // Add a useEffect to update the selectedUser data when users list changes
+  useEffect(() => {
+    // Update the selected user data if it's in the list
+    if (selectedUser?.id && users.length > 0) {
+      const updatedUser = users.find(u => u.id === selectedUser.id);
+      if (updatedUser) {
+        // Update the selected user without closing the modal
+        setSelectedUser(updatedUser);
+      }
+    }
+  }, [users]);
+
   const renderProfileStat = (label: string, value: string | number) => (
     <View style={styles.profileStat}>
       <Text style={styles.profileStatValue}>{value}</Text>
       <Text style={styles.profileStatLabel}>{label}</Text>
     </View>
   );
-
-  // Handler to be passed to Radar to set drag state
-  const handleDragStateChange = (dragging: boolean) => {
-    setIsDragging(dragging);
-  };
 
   if (loading && !refreshing) {
     return (
@@ -233,7 +265,6 @@ export default function NearbyScreen() {
             tintColor={colors.primary}
           />
         }
-        scrollEnabled={!isDragging} // Disable scrolling during drag
       >
         <View style={styles.header}>
           {/* Activity indicator removed as requested */}
@@ -291,8 +322,6 @@ export default function NearbyScreen() {
                 }}
                 maxDistance={MAX_RADAR_DISTANCE}
                 onUserPress={handleUserPress}
-                onMessageSend={handleSendMessage}
-                onDragStateChange={handleDragStateChange}
               />
             </>
           )}
@@ -303,111 +332,64 @@ export default function NearbyScreen() {
       <Modal
         visible={showingUserInfo}
         transparent={true}
-        animationType="slide"
+        animationType="fade"
         onRequestClose={handleCloseProfile}
+        statusBarTranslucent={true}
+        hardwareAccelerated={true}
       >
-        <KeyboardAvoidingView 
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.keyboardAvoidingView}
-        >
-          <SafeAreaView style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              {/* Modal Header */}
-              <View style={styles.modalHeader}>
-                <TouchableOpacity style={styles.closeButton} onPress={handleCloseProfile}>
-                  <Ionicons name="close" size={24} color={colors.text} />
-                </TouchableOpacity>
-                
-                {viewingFullProfile ? (
-                  <Text style={styles.modalTitle}>Profile</Text>
-                ) : (
-                  <TouchableOpacity style={styles.viewProfileButton} onPress={handleViewProfile}>
-                    <Text style={styles.viewProfileText}>View Full Profile</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <TouchableOpacity style={styles.closeButton} onPress={handleCloseProfile}>
+                <Ionicons name="close" size={24} color="white" />
+              </TouchableOpacity>
+            </View>
 
-              {/* Profile Content */}
-              <RNScrollView 
-                style={styles.scrollableContent}
-                contentContainerStyle={styles.profileContentContainer}
-                keyboardShouldPersistTaps="handled"
-              >
-                <View style={styles.profileContent}>
-                  {/* Profile Photo */}
-                  <View style={styles.profileImageContainer}>
-                    {selectedUser?.photo_url ? (
-                      <Image
-                        source={{ uri: selectedUser.photo_url }}
-                        style={styles.profileImage}
-                      />
-                    ) : (
-                      <View style={styles.profileImagePlaceholder}>
-                        <Text style={styles.profileImagePlaceholderText}>
-                          {selectedUser?.display_name?.charAt(0) || '?'}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Basic Info */}
-                  <View style={styles.profileInfo}>
-                    <Text style={styles.profileName}>
-                      {selectedUser?.display_name || 'Anonymous'}{' '}
-                      {selectedUser?.birthdate && (
-                        <Text style={styles.profileAge}>
-                          {calculateAge(selectedUser.birthdate)}
-                        </Text>
-                      )}
-                    </Text>
-                    
-                    <View style={styles.profileDistance}>
-                      <Ionicons name="location" size={16} color={colors.primary} />
-                      <Text style={styles.profileDistanceText}>
-                        {selectedUser?.distance < 1000
-                          ? `${Math.round(selectedUser?.distance)} meters away`
-                          : `${(selectedUser?.distance / 1000).toFixed(1)} km away`}
+            {/* Profile Content */}
+            <RNScrollView 
+              style={styles.scrollableContent}
+              contentContainerStyle={styles.profileContentContainer}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.profileContentCenter}>
+                {/* Profile Photo */}
+                <View style={styles.profileImageContainer}>
+                  {selectedUser?.photo_url ? (
+                    <Image
+                      source={{ uri: selectedUser.photo_url }}
+                      style={styles.profileImage}
+                    />
+                  ) : (
+                    <View style={styles.profileImagePlaceholder}>
+                      <Text style={styles.profileImagePlaceholderText}>
+                        {selectedUser?.display_name?.charAt(0) || '?'}
                       </Text>
-                    </View>
-                    
-                    {viewingFullProfile && selectedUser?.bio && (
-                      <Text style={styles.profileBio}>{selectedUser.bio}</Text>
-                    )}
-                  </View>
-
-                  {/* Message Input */}
-                  {showMessageInput && (
-                    <View style={styles.messageInputContainer}>
-                      <Text style={styles.messageInputLabel}>Send a message to start the conversation:</Text>
-                      <TextInput
-                        style={styles.messageInput}
-                        value={customMessage}
-                        onChangeText={setCustomMessage}
-                        placeholder="Write your message here..."
-                        multiline
-                        maxLength={500}
-                        autoFocus
-                      />
                     </View>
                   )}
                 </View>
-              </RNScrollView>
 
-              {/* Action Buttons - Outside ScrollView to stay fixed at bottom */}
-              <View style={styles.actionButtons}>
-                <TouchableOpacity
-                  style={styles.startChatButton}
-                  onPress={handleStartChat}
-                >
-                  <Ionicons name={showMessageInput ? "send" : "chatbubble"} size={20} color={colors.background} />
-                  <Text style={styles.startChatText}>
-                    {showMessageInput ? "Send Message" : "Start Conversation"}
-                  </Text>
-                </TouchableOpacity>
+                {/* Bio if viewing full profile */}
+                {viewingFullProfile && selectedUser?.bio && (
+                  <Text style={styles.profileBio}>{selectedUser.bio}</Text>
+                )}
               </View>
+            </RNScrollView>
+
+            {/* Action Buttons */}
+            <View style={styles.actionButtons}>
+              <TouchableOpacity
+                style={styles.startChatButton}
+                onPress={handleStartChat}
+              >
+                <Ionicons name="chatbubble" size={20} color={colors.background} />
+                <Text style={styles.startChatText}>
+                  Start Conversation
+                </Text>
+              </TouchableOpacity>
             </View>
-          </SafeAreaView>
-        </KeyboardAvoidingView>
+          </View>
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -509,29 +491,30 @@ const styles = StyleSheet.create({
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backfaceVisibility: 'hidden',
   },
   modalContent: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '90%',
-    flex: 1,
+    borderRadius: 20,
+    width: '90%',
+    height: '70%',
+    overflow: 'hidden',
     flexDirection: 'column',
+    backfaceVisibility: 'hidden',
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.mediumGray,
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 10,
   },
   closeButton: {
-    padding: 5,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 20,
+    padding: 8,
   },
   modalTitle: {
     fontSize: 18,
@@ -550,13 +533,16 @@ const styles = StyleSheet.create({
   },
   profileImageContainer: {
     alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: 400,
     marginBottom: 20,
   },
   profileImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: 10,
+    width: '85%',
+    height: '85%',
+    resizeMode: 'contain',
+    borderRadius: 10,
   },
   profileImagePlaceholder: {
     width: 120,
@@ -617,13 +603,15 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   actionButtons: {
-    paddingTop: 15,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 15,
+    width: '100%',
+    paddingVertical: 15,
+    backgroundColor: colors.background,
+    position: 'absolute',
+    bottom: 0,
     borderTopWidth: 1,
     borderTopColor: colors.lightGray,
-    marginHorizontal: -20,
     paddingHorizontal: 20,
-    backgroundColor: colors.background,
+    zIndex: 5,
   },
   startChatButton: {
     backgroundColor: colors.primary,
@@ -647,7 +635,8 @@ const styles = StyleSheet.create({
   },
   profileContentContainer: {
     flexGrow: 1,
-    paddingBottom: 20,
+    justifyContent: 'center',
+    paddingBottom: 70,
   },
   messageInputContainer: {
     marginTop: 20,
@@ -713,5 +702,16 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 12,
     color: colors.darkGray,
+  },
+  startChatButtonDisabled: {
+    backgroundColor: 'rgba(128, 128, 128, 0.6)',
+  },
+  profileContentSimple: {
+    flex: 1,
+  },
+  profileContentCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
