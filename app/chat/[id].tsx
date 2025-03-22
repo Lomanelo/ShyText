@@ -107,14 +107,11 @@ export default function ChatScreen() {
   }, [otherUserId]);
 
   useEffect(() => {
-    // Scroll to top when keyboard appears or disappears (in inverted list this is the most recent message)
+    // Scroll to the bottom when keyboard appears or disappears
     if (flatListRef.current && messages.length > 0) {
       setTimeout(() => {
         try {
-          flatListRef.current?.scrollToIndex({ 
-            index: 0,
-            animated: true
-          });
+          flatListRef.current?.scrollToEnd({ animated: true });
         } catch (error) {
           console.log("Scroll error:", error);
         }
@@ -484,8 +481,8 @@ export default function ChatScreen() {
           data={messages}
           renderItem={renderMessage}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          inverted
+          contentContainerStyle={[styles.listContent, { flexGrow: 1, justifyContent: 'flex-end' }]}
+          inverted={false}
           ListHeaderComponent={renderHeader}
         />
         
@@ -886,7 +883,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingBottom: 8,
+    paddingBottom: 20,
+    paddingTop: 8,
   },
   modalOverlay: {
     flex: 1,
