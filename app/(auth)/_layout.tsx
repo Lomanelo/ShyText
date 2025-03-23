@@ -1,4 +1,4 @@
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import colors from '../../src/theme/colors';
 import { useEffect } from 'react';
 import { useAuth } from '../../src/hooks/useAuth';
@@ -6,13 +6,17 @@ import { useAuth } from '../../src/hooks/useAuth';
 export default function AuthLayout() {
   const { user } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   
   // Redirect to tabs if user is already authenticated
   useEffect(() => {
-    if (user) {
+    // Don't redirect if on profile-image screen
+    const isProfileImageScreen = pathname.includes('profile-image');
+    
+    if (user && !isProfileImageScreen) {
       router.replace('/(tabs)');
     }
-  }, [user, router]);
+  }, [user, router, pathname]);
 
   return (
     <Stack screenOptions={{

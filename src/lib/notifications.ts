@@ -67,7 +67,7 @@ export const requestIOSPermissions = async () => {
 // Register for push notifications - call this after login or signup
 export const registerForPushNotifications = async () => {
   if (!Device.isDevice) {
-    console.log('Physical device is required for Push Notifications');
+    console.log('Physical device is required for Push Notifications - running in simulator');
     return null;
   }
   
@@ -77,34 +77,64 @@ export const registerForPushNotifications = async () => {
     
     // Request iOS permissions
     if (Platform.OS === 'ios') {
-      const permissionGranted = await requestIOSPermissions();
-      if (!permissionGranted) {
-        console.log('Notification permissions not granted on iOS');
-        return null;
+      try {
+        const permissionGranted = await requestIOSPermissions();
+        if (!permissionGranted) {
+          console.log('Notification permissions not granted on iOS');
+          // Still continue - some notification features might work without full permissions
+        }
+      } catch (iosError) {
+        console.error('Error requesting iOS permissions:', iosError);
+        // Continue despite errors to try getting a token anyway
       }
     }
     
     // Get the token using the EAS project ID
     console.log('Getting push token with project ID:', EXPO_PROJECT_ID);
     try {
-      const token = (await Notifications.getExpoPushTokenAsync({
+      const tokenResponse = await Notifications.getExpoPushTokenAsync({
         projectId: EXPO_PROJECT_ID
-      })).data;
+      });
       
+      const token = tokenResponse.data;
       console.log('Push token received:', token);
       
       // Store the token in Firebase for the current user
       if (auth.currentUser) {
         console.log('Saving push token to Firebase for user:', auth.currentUser.uid);
-        await updatePushToken(auth.currentUser.uid, token);
-        console.log('Push token saved to Firebase');
+        try {
+          await updatePushToken(auth.currentUser.uid, token);
+          console.log('Push token saved to Firebase');
+        } catch (updateError) {
+          console.error('Error saving push token to Firebase:', updateError);
+          // Continue despite the error - at least we got the token
+        }
       } else {
         console.warn('No current user to save push token');
       }
       
       return token;
-    } catch (error) {
-      console.error('Error getting push token:', error);
+    } catch (tokenError) {
+      console.error('Error getting push token:', tokenError);
+      
+      // On iOS, try one more time with a different method if the first one fails
+      if (Platform.OS === 'ios') {
+        try {
+          console.log('Trying alternative method to get push token');
+          const legacyToken = await Notifications.getExpoPushTokenAsync();
+          console.log('Got legacy push token:', legacyToken.data);
+          
+          if (auth.currentUser) {
+            await updatePushToken(auth.currentUser.uid, legacyToken.data);
+          }
+          
+          return legacyToken.data;
+        } catch (legacyError) {
+          console.error('Error getting legacy push token:', legacyError);
+          return null;
+        }
+      }
+      
       return null;
     }
   } catch (error) {
@@ -142,6 +172,16 @@ export const handleNotificationInteraction = (data: any) => {
 
   console.log('Handling notification interaction:', data);
 
+  // Check if user is authenticated
+  if (!auth.currentUser) {
+    console.log('User not authenticated when handling notification - storing for later processing');
+    // Store the notification data for later processing after authentication
+    storeNotificationForLaterProcessing(data);
+    // Redirect to login if user is not authenticated
+    router.replace('/');
+    return;
+  }
+
   // Handle different notification types
   switch (data.type) {
     case 'first_message':
@@ -164,6 +204,24 @@ export const handleNotificationInteraction = (data: any) => {
     default:
       console.log('Unhandled notification type:', data.type);
   }
+};
+
+// Store notification for processing after authentication
+let pendingNotification: any = null;
+export const storeNotificationForLaterProcessing = (data: any) => {
+  pendingNotification = data;
+};
+
+// Check if there's a pending notification to process
+export const processPendingNotification = () => {
+  if (pendingNotification && auth.currentUser) {
+    console.log('Processing pending notification after authentication');
+    const notificationToProcess = pendingNotification;
+    pendingNotification = null;
+    handleNotificationInteraction(notificationToProcess);
+    return true;
+  }
+  return false;
 };
 
 // Send a local notification - useful for testing

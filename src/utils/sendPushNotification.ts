@@ -1,5 +1,4 @@
 import { Platform } from 'react-native';
-import { getProfile } from '../lib/firebase';
 
 const EXPO_PUSH_ENDPOINT = 'https://exp.host/--/api/v2/push/send';
 
@@ -23,26 +22,23 @@ type PushMessage = {
  * needs to be online to trigger the notification.
  */
 export const sendPushNotification = async (
-  receiverId: string, 
+  pushToken: string, 
   title: string, 
   body: string, 
   data: any
 ) => {
   try {
-    // Get the receiver's profile to get their push token
-    const receiverProfile = await getProfile(receiverId);
-    
-    // If no push token found, we can't send a notification
-    if (!receiverProfile || !receiverProfile.push_token) {
-      console.log('No push token found for receiver:', receiverId);
+    // If no push token provided, we can't send a notification
+    if (!pushToken) {
+      console.log('No push token provided for notification');
       return false;
     }
     
-    console.log(`Sending push notification to ${receiverId} with token: ${receiverProfile.push_token}`);
+    console.log(`Sending push notification to token: ${pushToken}`);
     
     // Format the message
     const message: PushMessage = {
-      to: receiverProfile.push_token,
+      to: pushToken,
       title,
       body,
       data: {

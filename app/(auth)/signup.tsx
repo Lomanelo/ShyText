@@ -214,8 +214,15 @@ export default function SignupScreen() {
       });
       
       console.log('User registered successfully with username and @shytext suffix');
-      // Redirect to profile picture upload instead of tabs
-      router.replace('/(auth)/profile-image');
+      
+      // Using push instead of replace to avoid being overridden by auth redirect
+      console.log('Navigating to profile image upload screen');
+      router.push('/(auth)/profile-image');
+      
+      // Delay setting loading to false to ensure the navigation happens
+      setTimeout(() => {
+        setLoading(false);
+      }, 500);
     } catch (err: any) {
       console.error('Account creation error:', err);
       setError(err.message || 'Failed to create account');

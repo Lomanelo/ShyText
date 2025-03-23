@@ -6,6 +6,7 @@ import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } fr
 import * as geofirestore from 'geofire-common';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { sendNewMessageNotification, sendChatAcceptedNotification, sendVerificationNotification } from '../utils/notifications';
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
@@ -577,9 +578,6 @@ export async function startConversation(receiverId: string, message: string) {
     const receiverProfile = await getProfile(receiverId);
     if (receiverProfile && receiverProfile.push_token) {
       try {
-        // Import locally to avoid circular dependency
-        const { sendNewMessageNotification } = require('../utils/notifications');
-        
         // Send a push notification for the message
         await sendNewMessageNotification(
           senderProfile?.display_name || 'Someone',
@@ -658,9 +656,6 @@ export async function respondToConversation(conversationId: string, accept: bool
         const initiatorProfile = await getProfile(conversationData.initiator_id);
         
         if (initiatorProfile && initiatorProfile.push_token) {
-          // Import locally to avoid circular dependency
-          const { sendChatAcceptedNotification } = require('../utils/notifications');
-          
           // Send notification of acceptance
           await sendChatAcceptedNotification(
             userProfile?.display_name || 'Someone',
@@ -745,9 +740,6 @@ export async function sendMessage(conversationId: string, content: string) {
     const receiverProfile = await getProfile(receiverId);
     if (receiverProfile && receiverProfile.push_token) {
       try {
-        // Import locally to avoid circular dependency
-        const { sendNewMessageNotification } = require('../utils/notifications');
-        
         // Send a push notification for the message
         await sendNewMessageNotification(
           senderProfile?.display_name || 'Someone',
@@ -1138,8 +1130,7 @@ export const storeDiscoveredDeviceId = async (userId: string, deviceId: string) 
       // Send verification notification if verification was successful
       if (verificationSuccess) {
         try {
-          // Import locally to avoid circular dependency
-          const { sendVerificationNotification } = require('../utils/notifications');
+          // Send verification notification
           await sendVerificationNotification(userId);
           console.log(`Verification notification sent to user ${userId}`);
         } catch (notifError) {
@@ -1298,8 +1289,7 @@ export const verifyUserByMacAddress = async (userId: string, macAddress: string)
       // Send verification notification if verification was successful
       if (verificationSuccess) {
         try {
-          // Import locally to avoid circular dependency
-          const { sendVerificationNotification } = require('../utils/notifications');
+          // Send verification notification
           await sendVerificationNotification(userId);
           console.log(`Verification notification sent to user ${userId}`);
         } catch (notifError) {
@@ -1316,8 +1306,7 @@ export const verifyUserByMacAddress = async (userId: string, macAddress: string)
       // If verification was successful in profiles, send notification
       if (verificationSuccess) {
         try {
-          // Import locally to avoid circular dependency
-          const { sendVerificationNotification } = require('../utils/notifications');
+          // Send verification notification
           await sendVerificationNotification(userId);
           console.log(`Verification notification sent to user ${userId}`);
         } catch (notifError) {

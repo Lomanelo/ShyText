@@ -41,10 +41,12 @@ export default function ProfileImageScreen() {
     const auth = getAuth();
     if (!auth.currentUser) {
       Alert.alert(
-        'Error',
-        'You must be logged in to upload a profile picture.',
+        'Session Error',
+        'There was a problem with your account session. Please try signing up again.',
         [{ text: 'OK', onPress: () => router.replace('/(auth)') }]
       );
+    } else {
+      console.log('User authenticated in profile image screen:', auth.currentUser.uid);
     }
   }, []);
 
@@ -362,8 +364,25 @@ export default function ProfileImageScreen() {
   };
 
   const handleSkip = () => {
-    // Navigate directly to the main app without requiring a profile image
-    router.replace('/(tabs)');
+    // Show alert to confirm user wants to skip profile image upload
+    Alert.alert(
+      'Skip Profile Image?',
+      'Having a profile photo helps other users recognize you. Are you sure you want to skip this step?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Skip',
+          onPress: () => {
+            console.log('User chose to skip profile image upload');
+            router.replace('/(tabs)');
+          }
+        }
+      ],
+      { cancelable: true }
+    );
   };
 
   // Function to verify uploaded image is accessible
