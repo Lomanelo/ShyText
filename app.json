@@ -9,7 +9,7 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "notification": {
-      "icon": "./assets/notification-icon.png",
+      "icon": "./assets/images/translogoWhite.png",
       "color": "#00ADAD",
       "iosDisplayInForeground": true,
       "androidMode": "default",
@@ -64,8 +64,7 @@
         "expo-notifications",
         {
           "icon": "./assets/translogoWhite.png",
-          "color": "#ffffff",
-          "sounds": ["./assets/notification-sound.wav"]
+          "color": "#ffffff"
         }
       ],
       [
