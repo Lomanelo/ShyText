@@ -58,8 +58,25 @@ export default function RootLayout() {
     // Set up notification channels (primarily for Android)
     const setupNotifications = async () => {
       try {
+        console.log('Setting up notifications for platform:', Platform.OS);
         await defineNotificationChannels();
         console.log('Notification channels defined');
+        
+        // Register for push notifications if user is logged in
+        if (user) {
+          console.log('User is logged in, registering for push notifications:', user.uid);
+          const { registerForPushNotifications } = require('../src/lib/notifications');
+          const token = await registerForPushNotifications();
+          console.log('Push notification registration result:', token ? 'Success' : 'Failed');
+          
+          if (token) {
+            console.log('Successfully registered for push notifications with token:', token.substring(0, 15) + '...');
+          } else {
+            console.warn('Failed to get push token');
+          }
+        } else {
+          console.log('User not logged in, skipping push notification registration');
+        }
         
         // Setup notification listeners for handling app in different states
         notificationListeners.current = setupNotificationListeners();
@@ -77,7 +94,7 @@ export default function RootLayout() {
         notificationListeners.current.unsubscribe();
       }
     };
-  }, []);
+  }, [user]); // Add user dependency to re-run when user logs in
 
   // Handle BLE scanning based on app state
   useEffect(() => {

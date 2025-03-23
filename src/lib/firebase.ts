@@ -578,19 +578,20 @@ export async function startConversation(receiverId: string, message: string) {
     if (receiverProfile && receiverProfile.push_token) {
       try {
         // Import locally to avoid circular dependency
-        const { sendChatRequestNotification } = require('../utils/notifications');
+        const { sendNewMessageNotification } = require('../utils/notifications');
         
-        // Send a local notification for the chat request
-        await sendChatRequestNotification(
+        // Send a push notification for the message
+        await sendNewMessageNotification(
           senderProfile?.display_name || 'Someone',
           message,
           newConversationRef.id,
-          user.uid
+          user.uid,
+          receiverId
         );
         
-        console.log('Chat request notification sent successfully');
+        console.log('Chat notification sent successfully');
       } catch (notifError) {
-        console.error('Error sending chat request notification:', notifError);
+        console.error('Error sending chat notification:', notifError);
         // Continue even if notification fails
       }
     }
@@ -658,18 +659,13 @@ export async function respondToConversation(conversationId: string, accept: bool
         
         if (initiatorProfile && initiatorProfile.push_token) {
           // Import locally to avoid circular dependency
-          const { sendLocalNotification } = require('../utils/notifications');
+          const { sendChatAcceptedNotification } = require('../utils/notifications');
           
           // Send notification of acceptance
-          await sendLocalNotification(
-            'Chat Request Accepted',
-            `${userProfile?.display_name || 'Someone'} accepted your chat request`,
-            {
-              type: 'message',
-              conversationId,
-              senderId: 'system',
-              timestamp: new Date().toISOString()
-            }
+          await sendChatAcceptedNotification(
+            userProfile?.display_name || 'Someone',
+            conversationId,
+            conversationData.initiator_id
           );
           
           console.log('Chat acceptance notification sent successfully');
@@ -750,18 +746,15 @@ export async function sendMessage(conversationId: string, content: string) {
     if (receiverProfile && receiverProfile.push_token) {
       try {
         // Import locally to avoid circular dependency
-        const { sendLocalNotification } = require('../utils/notifications');
+        const { sendNewMessageNotification } = require('../utils/notifications');
         
-        // Send a local notification for immediate delivery
-        await sendLocalNotification(
-          `Message from ${senderProfile?.display_name || 'Someone'}`,
-          content.length > 40 ? content.substring(0, 37) + '...' : content,
-          {
-            type: 'message',
-            conversationId,
-            senderId: user.uid,
-            timestamp: new Date().toISOString()
-          }
+        // Send a push notification for the message
+        await sendNewMessageNotification(
+          senderProfile?.display_name || 'Someone',
+          content,
+          conversationId,
+          user.uid,
+          receiverId
         );
         
         console.log('Chat notification sent successfully');
@@ -1075,7 +1068,7 @@ export const getUserByDeviceUUID = async (deviceUUID: string) => {
   }
 };
 
-// Store discovered device ID for a user (for verification)
+// Store a discovered device ID for a user - used to verify users automatically
 export const storeDiscoveredDeviceId = async (userId: string, deviceId: string) => {
   try {
     if (!userId || !deviceId) {
@@ -1085,6 +1078,7 @@ export const storeDiscoveredDeviceId = async (userId: string, deviceId: string) 
 
     console.log(`Storing discovered device ID ${deviceId} for user ${userId}`);
     const timestamp = new Date().toISOString();
+    let verificationSuccess = false;
     
     // Update the user's profile with the discovered device ID
     try {
@@ -1102,6 +1096,7 @@ export const storeDiscoveredDeviceId = async (userId: string, deviceId: string) 
           verified_at: timestamp,
           updated_at: timestamp
         });
+        verificationSuccess = true;
       } else {
         // Profile doesn't exist, create a new one
         console.log(`Creating new profile for user ${userId}`);
@@ -1114,6 +1109,7 @@ export const storeDiscoveredDeviceId = async (userId: string, deviceId: string) 
           created_at: timestamp,
           updated_at: timestamp
         });
+        verificationSuccess = true;
       }
       
       // Also update or create in users collection for redundancy
@@ -1127,6 +1123,7 @@ export const storeDiscoveredDeviceId = async (userId: string, deviceId: string) 
           verified_at: timestamp,
           updatedAt: timestamp
         });
+        verificationSuccess = true;
       } else {
         await setDoc(userRef, {
           mac_address: deviceId,
@@ -1135,6 +1132,20 @@ export const storeDiscoveredDeviceId = async (userId: string, deviceId: string) 
           createdAt: timestamp,
           updatedAt: timestamp
         });
+        verificationSuccess = true;
+      }
+      
+      // Send verification notification if verification was successful
+      if (verificationSuccess) {
+        try {
+          // Import locally to avoid circular dependency
+          const { sendVerificationNotification } = require('../utils/notifications');
+          await sendVerificationNotification(userId);
+          console.log(`Verification notification sent to user ${userId}`);
+        } catch (notifError) {
+          console.error('Error sending verification notification:', notifError);
+          // Continue even if notification fails
+        }
       }
       
       console.log(`Successfully stored discovered device ID for user ${userId}`);
@@ -1231,6 +1242,7 @@ export const verifyUserByMacAddress = async (userId: string, macAddress: string)
     const db = getFirestore();
     const timestamp = new Date().toISOString();
     let profileError: any = null;
+    let verificationSuccess = false;
     
     // Update profile document
     try {
@@ -1247,6 +1259,7 @@ export const verifyUserByMacAddress = async (userId: string, macAddress: string)
           updated_at: timestamp
         });
         console.log(`Successfully verified user in profiles collection: ${userId}`);
+        verificationSuccess = true;
       }
     } catch (error) {
       profileError = error;
@@ -1258,7 +1271,7 @@ export const verifyUserByMacAddress = async (userId: string, macAddress: string)
     try {
       const userRef = doc(db, 'users', userId);
       const userSnap = await getDoc(userRef);
-      
+     
       if (!userSnap.exists()) {
         console.warn(`User document for ${userId} not found in users collection`);
         // Create the document if it doesn't exist
@@ -1270,6 +1283,7 @@ export const verifyUserByMacAddress = async (userId: string, macAddress: string)
           updatedAt: timestamp
         });
         console.log(`Created and verified new user document in users collection: ${userId}`);
+        verificationSuccess = true;
       } else {
         await updateDoc(userRef, {
           mac_address: macAddress,
@@ -1278,12 +1292,40 @@ export const verifyUserByMacAddress = async (userId: string, macAddress: string)
           updatedAt: timestamp
         });
         console.log(`Successfully verified user in users collection: ${userId}`);
+        verificationSuccess = true;
+      }
+      
+      // Send verification notification if verification was successful
+      if (verificationSuccess) {
+        try {
+          // Import locally to avoid circular dependency
+          const { sendVerificationNotification } = require('../utils/notifications');
+          await sendVerificationNotification(userId);
+          console.log(`Verification notification sent to user ${userId}`);
+        } catch (notifError) {
+          console.error('Error sending verification notification:', notifError);
+          // Continue even if notification fails
+        }
       }
       
       // At least one collection was updated successfully
       return true;
     } catch (userError) {
       console.error('Error updating users collection:', userError);
+      
+      // If verification was successful in profiles, send notification
+      if (verificationSuccess) {
+        try {
+          // Import locally to avoid circular dependency
+          const { sendVerificationNotification } = require('../utils/notifications');
+          await sendVerificationNotification(userId);
+          console.log(`Verification notification sent to user ${userId}`);
+        } catch (notifError) {
+          console.error('Error sending verification notification:', notifError);
+          // Continue even if notification fails
+        }
+      }
+      
       // If both updates failed, return false
       if (profileError) return false;
       

@@ -95,6 +95,7 @@ export const registerForPushNotifications = async () => {
       
       // Store the token in Firebase for the current user
       if (auth.currentUser) {
+        console.log('Saving push token to Firebase for user:', auth.currentUser.uid);
         await updatePushToken(auth.currentUser.uid, token);
         console.log('Push token saved to Firebase');
       } else {
@@ -141,9 +142,27 @@ export const handleNotificationInteraction = (data: any) => {
 
   console.log('Handling notification interaction:', data);
 
-  // Both first messages and regular messages now open the chat screen directly
-  if (data.type === 'first_message' || data.type === 'message') {
-    router.push(`/chat/${data.conversationId}`);
+  // Handle different notification types
+  switch (data.type) {
+    case 'first_message':
+    case 'message':
+    case 'new_message':
+      // Open the chat screen for all message-related notifications
+      router.push(`/chat/${data.conversationId}`);
+      break;
+    
+    case 'chat_accepted':
+      // Open the chat screen when a chat request is accepted
+      router.push(`/chat/${data.conversationId}`);
+      break;
+    
+    case 'verification':
+      // Open the settings page when user gets verified
+      router.push('/settings');
+      break;
+      
+    default:
+      console.log('Unhandled notification type:', data.type);
   }
 };
 
