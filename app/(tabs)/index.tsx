@@ -271,7 +271,7 @@ export default function NearbyScreen() {
         }
       >
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Nearby</Text>
+          <Text style={styles.headerTitle}>{getCurrentUser()?.displayName}</Text>
           <TouchableOpacity 
             style={styles.visibilityIndicator}
             onPress={() => {

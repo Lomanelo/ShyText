@@ -571,12 +571,6 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.settingsItem}>
-          <Ionicons name="lock-closed-outline" size={24} color={colors.primary} />
-          <Text style={styles.settingsText}>Privacy</Text>
-          <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.settingsItem}>
           <Ionicons name="help-circle-outline" size={24} color={colors.primary} />
           <Text style={styles.settingsText}>Help & Support</Text>
           <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
