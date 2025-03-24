@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Alert, Image, Modal, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
+import React, { useState, useEffect, useRef, memo } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, Alert, Image, Modal, ScrollView, ActivityIndicator, RefreshControl, TextInput, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import colors from '../../src/theme/colors';
-import { auth, getCurrentUser, getProfile, uploadProfileImage } from '../../src/lib/firebase';
-import { signOut, getAuth } from 'firebase/auth';
+import { auth, getCurrentUser, getProfile, uploadProfileImage, updateUserPassword } from '../../src/lib/firebase';
+import { signOut, getAuth, deleteUser, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import * as ImagePicker from 'expo-image-picker';
-import { Platform } from 'react-native';
 import { sendLocalNotification } from '../../src/utils/notifications';
 import { useAuth } from '../../src/hooks/useAuth';
 import VerifiedBadge from '../../src/components/VerifiedBadge';
+import * as DeviceInfo from 'react-native-device-info';
+import BleService from '../../src/services/BleService';
 
 export default function SettingsScreen() {
   const { user: authUser, loading: authLoading } = useAuth();
@@ -20,8 +21,159 @@ export default function SettingsScreen() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showProfileImageModal, setShowProfileImageModal] = useState(false);
-  const [modalAnimationComplete, setModalAnimationComplete] = useState(true);
   const [isActionInProgress, setIsActionInProgress] = useState(false);
+  const [modalAnimationComplete, setModalAnimationComplete] = useState(true);
+  const [showGhostModeInfo, setShowGhostModeInfo] = useState(false);
+  const [bluetoothEnabled, setBluetoothEnabled] = useState<boolean>(false);
+  const [bleAuthorized, setBleAuthorized] = useState<boolean>(true);
+  const [showAccountOptions, setShowAccountOptions] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [password, setPassword] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  // Check Bluetooth and authorization status
+  useEffect(() => {
+    const checkBluetoothStatus = async () => {
+      try {
+        // Get BleService instance
+        const bleService = BleService.getInstance();
+        
+        // Start by initializing - needed for other state checks
+        const isEnabled = await bleService.initialize();
+        setBluetoothEnabled(isEnabled);
+        
+        // Now check authorization separately - this is what determines visibility
+        const isAuthorized = bleService.isBluetoothAuthorized();
+        setBleAuthorized(isAuthorized);
+        
+        // Log both states for debugging
+        console.log(`BT Status - Enabled: ${isEnabled}, Authorized: ${isAuthorized}`);
+      } catch (error) {
+        console.error('Error checking Bluetooth status:', error);
+        setBluetoothEnabled(false);
+        setBleAuthorized(false);
+      }
+    };
+    
+    checkBluetoothStatus();
+    
+    // Set up a periodic check every 3 seconds
+    const statusInterval = setInterval(checkBluetoothStatus, 3000);
+    
+    return () => {
+      clearInterval(statusInterval);
+    };
+  }, []);
+
+  // Handle notification settings redirect
+  const openNotificationSettings = () => {
+    try {
+      if (Platform.OS === 'ios') {
+        Linking.openURL('app-settings:');
+      } else {
+        // For Android
+        Linking.openSettings();
+      }
+    } catch (error) {
+      console.error('Error opening settings:', error);
+      Alert.alert('Error', 'Unable to open settings. Please open your device settings manually.');
+    }
+  };
+
+  // Delete account handler
+  const handleDeleteAccount = async () => {
+    if (!password) {
+      Alert.alert('Error', 'Please enter your password');
+      return;
+    }
+
+    setIsDeleting(true);
+    
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser || !currentUser.email) {
+        throw new Error('User not authenticated or email not available');
+      }
+      
+      // Re-authenticate before deleting
+      const credential = EmailAuthProvider.credential(currentUser.email, password);
+      await reauthenticateWithCredential(currentUser, credential);
+      
+      // Delete the user
+      await deleteUser(currentUser);
+      
+      Alert.alert('Account Deleted', 'Your account has been deleted successfully');
+      router.replace('/(auth)');
+    } catch (error: any) {
+      console.error('Error deleting account:', error);
+      let errorMessage = 'Failed to delete account';
+      
+      if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Incorrect password. Please try again.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many attempts. Please try again later.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsDeleting(false);
+      setPassword('');
+    }
+  };
+
+  // Change password handler
+  const handleChangePassword = async () => {
+    // Validate input
+    if (!currentPassword) {
+      Alert.alert('Error', 'Please enter your current password');
+      return;
+    }
+    
+    if (!newPassword || !confirmNewPassword) {
+      Alert.alert('Error', 'Please enter and confirm your new password');
+      return;
+    }
+    
+    if (newPassword !== confirmNewPassword) {
+      Alert.alert('Error', 'New passwords do not match');
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'New password must be at least 6 characters');
+      return;
+    }
+    
+    setIsChangingPassword(true);
+    
+    try {
+      // Call the firebase function to update password
+      const result = await updateUserPassword(currentPassword, newPassword);
+      
+      if (result.success) {
+        Alert.alert('Success', 'Your password has been updated successfully');
+        // Close modal and clear fields
+        setShowChangePassword(false);
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to update password');
+      }
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      Alert.alert('Error', error.message || 'Failed to update password');
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
 
   const fetchUserProfile = async () => {
     const currentUser = getCurrentUser();
@@ -389,14 +541,32 @@ export default function SettingsScreen() {
 
       <View style={styles.settingsSection}>
         <View style={styles.settingsSectionHeader}>
-          <Text style={styles.settingsSectionTitle}>Notifications</Text>
+          <Text style={styles.settingsSectionTitle}>App Settings</Text>
         </View>
       </View>
 
       <View style={styles.settingsSection}>
-        <TouchableOpacity style={styles.settingsItem}>
+        <TouchableOpacity style={styles.settingsItem} onPress={openNotificationSettings}>
           <Ionicons name="notifications-outline" size={24} color={colors.primary} />
           <Text style={styles.settingsText}>Notifications</Text>
+          <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.settingsItem}
+          onPress={() => setShowGhostModeInfo(true)}
+        >
+          <Ionicons name="eye-off-outline" size={24} color={colors.primary} />
+          <Text style={styles.settingsText}>Ghost Mode</Text>
+          <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.settingsItem}
+          onPress={() => setShowAccountOptions(true)}
+        >
+          <Ionicons name="person-outline" size={24} color={colors.primary} />
+          <Text style={styles.settingsText}>Account</Text>
           <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
         </TouchableOpacity>
 
@@ -407,20 +577,8 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.settingsItem}>
-          <Ionicons name="person-outline" size={24} color={colors.primary} />
-          <Text style={styles.settingsText}>Account</Text>
-          <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.settingsItem}>
           <Ionicons name="help-circle-outline" size={24} color={colors.primary} />
           <Text style={styles.settingsText}>Help & Support</Text>
-          <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.settingsItem}>
-          <Ionicons name="information-circle-outline" size={24} color={colors.primary} />
-          <Text style={styles.settingsText}>About</Text>
           <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
         </TouchableOpacity>
 
@@ -432,6 +590,320 @@ export default function SettingsScreen() {
           <Text style={[styles.settingsText, styles.signOutText]}>Sign Out</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Ghost Mode Info Modal */}
+      <Modal
+        visible={showGhostModeInfo}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowGhostModeInfo(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Ghost Mode</Text>
+              <TouchableOpacity onPress={() => setShowGhostModeInfo(false)}>
+                <Ionicons name="close" size={28} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollContent}>
+              <View style={styles.ghostModeIcon}>
+                <Ionicons name="eye-off" size={60} color={colors.primary} />
+              </View>
+              
+              <Text style={styles.ghostModeTitle}>How to Go Invisible</Text>
+              
+              <Text style={styles.ghostModeDescription}>
+                {Platform.OS === 'ios' 
+                  ? "To become invisible to other users, don't allow Bluetooth permissions for ShyText. When the app doesn't have Bluetooth permissions, other users won't be able to detect you."
+                  : "To become invisible to other users, simply toggle off Bluetooth in your device settings. When Bluetooth is off, other users won't be able to detect you on the radar."}
+              </Text>
+              
+              <View style={styles.deviceInfoCard}>
+                <Text style={styles.deviceInfoLabel}>Your current status:</Text>
+                <View style={styles.statusContainer}>
+                  <View style={[styles.statusIndicator, { backgroundColor: bleAuthorized ? colors.success : colors.error }]} />
+                  <Text style={styles.deviceInfoValue}>{bleAuthorized ? 'Visible to others' : 'Invisible to others'}</Text>
+                </View>
+              </View>
+              
+              <Text style={styles.ghostModeDescription}>
+                {Platform.OS === 'ios'
+                  ? "When you want to be visible again, allow Bluetooth permissions for ShyText in your device settings."
+                  : "When you want to be visible again, simply turn Bluetooth back on in your device settings."}
+              </Text>
+              
+              <Text style={styles.ghostModeInstructions}>
+                {Platform.OS === 'ios' ? 
+                  `To toggle Bluetooth permissions:
+                  \n\n1. Go to your device's Settings
+                  \n2. Scroll down and tap on "ShyText"
+                  \n3. Toggle off "Bluetooth" to go invisible
+                  \n4. Toggle on "Bluetooth" to become visible again
+                  \n\nNote: You won't be able to see other users while the app doesn't have Bluetooth permissions.`
+                  :
+                  `To toggle Bluetooth:
+                  \n\n1. Go to your device's settings
+                  \n2. Find Bluetooth settings
+                  \n3. Toggle Bluetooth off to go invisible
+                  \n4. Toggle Bluetooth on to become visible again
+                  \n\nNote: You won't be able to see other users while Bluetooth is off.`
+                }
+              </Text>
+              
+              <TouchableOpacity 
+                style={styles.ghostModeButton}
+                onPress={() => {
+                  Linking.openSettings();
+                  setShowGhostModeInfo(false);
+                }}
+              >
+                <Text style={styles.ghostModeButtonText}>Open Settings</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Account Options Modal */}
+      <Modal
+        visible={showAccountOptions}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowAccountOptions(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Account</Text>
+              <TouchableOpacity onPress={() => setShowAccountOptions(false)}>
+                <Ionicons name="close" size={28} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollContent}>
+              <View style={styles.accountIcon}>
+                <Ionicons name="person-circle" size={60} color={colors.primary} />
+              </View>
+              
+              <Text style={styles.accountOptionsTitle}>Account Options</Text>
+              
+              <TouchableOpacity 
+                style={styles.accountOption}
+                onPress={() => {
+                  setShowAccountOptions(false);
+                  setShowChangePassword(true);
+                }}
+              >
+                <Ionicons name="key-outline" size={24} color={colors.primary} />
+                <Text style={styles.accountOptionText}>Change Password</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.accountOption}
+                onPress={() => {
+                  setShowAccountOptions(false);
+                  setShowDeleteAccount(true);
+                }}
+              >
+                <Ionicons name="trash-outline" size={24} color={colors.error} />
+                <Text style={styles.accountOptionText}>Delete Account</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Account Modal */}
+      <Modal
+        visible={showDeleteAccount}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowDeleteAccount(false);
+          setPassword('');
+        }}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Delete Account</Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  setShowDeleteAccount(false);
+                  setPassword('');
+                }}
+              >
+                <Ionicons name="close" size={28} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollContent}>
+              <View style={styles.warningIcon}>
+                <Ionicons name="warning" size={60} color={colors.error} />
+              </View>
+              
+              <Text style={styles.warningTitle}>Warning: This Cannot Be Undone</Text>
+              
+              <Text style={styles.warningDescription}>
+                Deleting your account will permanently remove all your data, including:
+              </Text>
+              
+              <View style={styles.bulletPointsContainer}>
+                <Text style={styles.bulletPoint}>• Profile information</Text>
+                <Text style={styles.bulletPoint}>• Messages and conversations</Text>
+                <Text style={styles.bulletPoint}>• Account settings</Text>
+                <Text style={styles.bulletPoint}>• All other associated data</Text>
+              </View>
+              
+              <Text style={styles.confirmationText}>
+                To confirm deletion, please enter your password:
+              </Text>
+              
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Enter your password"
+                placeholderTextColor={colors.darkGray}
+                secureTextEntry={true}
+                value={password}
+                onChangeText={setPassword}
+                editable={!isDeleting}
+              />
+              
+              <TouchableOpacity 
+                style={[
+                  styles.deleteButton,
+                  (isDeleting || !password) && styles.disabledButton
+                ]}
+                onPress={handleDeleteAccount}
+                disabled={isDeleting || !password}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.deleteButtonText}>Delete My Account</Text>
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={() => {
+                  setShowDeleteAccount(false);
+                  setPassword('');
+                }}
+                disabled={isDeleting}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Change Password Modal */}
+      <Modal
+        visible={showChangePassword}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowChangePassword(false);
+          setCurrentPassword('');
+          setNewPassword('');
+          setConfirmNewPassword('');
+        }}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Change Password</Text>
+              <TouchableOpacity 
+                onPress={() => {
+                  setShowChangePassword(false);
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmNewPassword('');
+                }}
+              >
+                <Ionicons name="close" size={28} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollContent}>
+              <View style={styles.passwordIcon}>
+                <Ionicons name="lock-closed" size={60} color={colors.primary} />
+              </View>
+              
+              <Text style={styles.passwordTitle}>Update Your Password</Text>
+              
+              <Text style={styles.passwordDescription}>
+                Please enter your current password and a new password.
+              </Text>
+              
+              <Text style={styles.inputLabel}>Current Password:</Text>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Enter current password"
+                placeholderTextColor={colors.darkGray}
+                secureTextEntry={true}
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                editable={!isChangingPassword}
+              />
+              
+              <Text style={styles.inputLabel}>New Password:</Text>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Enter new password"
+                placeholderTextColor={colors.darkGray}
+                secureTextEntry={true}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                editable={!isChangingPassword}
+              />
+              
+              <Text style={styles.inputLabel}>Confirm New Password:</Text>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Confirm new password"
+                placeholderTextColor={colors.darkGray}
+                secureTextEntry={true}
+                value={confirmNewPassword}
+                onChangeText={setConfirmNewPassword}
+                editable={!isChangingPassword}
+              />
+              
+              <TouchableOpacity 
+                style={[
+                  styles.changePasswordButton,
+                  (isChangingPassword || !currentPassword || !newPassword || !confirmNewPassword) && styles.disabledButton
+                ]}
+                onPress={handleChangePassword}
+                disabled={isChangingPassword || !currentPassword || !newPassword || !confirmNewPassword}
+              >
+                {isChangingPassword ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.changePasswordButtonText}>Update Password</Text>
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={() => {
+                  setShowChangePassword(false);
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmNewPassword('');
+                }}
+                disabled={isChangingPassword}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Full Profile Modal */}
       <Modal
@@ -858,5 +1330,212 @@ const styles = StyleSheet.create({
   },
   notVerifiedText: {
     color: colors.darkGray,
+  },
+  ghostModeIcon: {
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  ghostModeTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  ghostModeDescription: {
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  deviceInfoCard: {
+    backgroundColor: colors.lightGray,
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  deviceInfoLabel: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 8,
+  },
+  deviceInfoValue: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  ghostModeInstructions: {
+    fontSize: 16,
+    color: colors.text,
+    marginTop: 16,
+    marginBottom: 24,
+    lineHeight: 24,
+  },
+  ghostModeStep: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  ghostModeButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 30,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 30,
+  },
+  ghostModeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  warningIcon: {
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  warningTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: colors.error,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  warningDescription: {
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  bulletPointsContainer: {
+    marginBottom: 24,
+    paddingHorizontal: 16,
+  },
+  bulletPoint: {
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: 8,
+    lineHeight: 22,
+  },
+  confirmationText: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '500',
+    marginBottom: 16,
+  },
+  passwordInput: {
+    backgroundColor: colors.lightGray,
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 24,
+    fontSize: 16,
+    color: colors.text,
+  },
+  deleteButton: {
+    backgroundColor: colors.error,
+    borderRadius: 30,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  deleteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  cancelButton: {
+    backgroundColor: 'transparent',
+    borderRadius: 30,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  cancelButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusIndicator: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  // Account options modal styles
+  accountIcon: {
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  accountOptionsTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  accountOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.lightGray,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  accountOptionText: {
+    fontSize: 16,
+    color: colors.text,
+    marginLeft: 12,
+    fontWeight: '500',
+  },
+  
+  // Change password modal styles
+  passwordIcon: {
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  passwordTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  passwordDescription: {
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  inputLabel: {
+    fontSize: 14,
+    color: colors.text,
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  changePasswordButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 30,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  changePasswordButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

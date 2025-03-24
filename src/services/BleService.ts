@@ -22,6 +22,8 @@ class BleService {
   private isInitializing: boolean = false;
   private onDeviceFoundCallback: ((device: Device) => void) | null = null;
   private foundDevices: Set<string> = new Set();
+  private lastAuthorizationError: string | null = null;
+  private authorizationErrorDetected: boolean = false;
 
   private constructor() {
     this.supportsAdvertising = Platform.OS === 'android';
@@ -103,6 +105,19 @@ class BleService {
       
       // Get the BleManager instance
       const bleManager = this.getBleManager();
+      
+      // When reinitializing, we'll try to clear any authorization errors if the system's Bluetooth is actually on
+      if (this.authorizationErrorDetected) {
+        const state = await bleManager.state();
+        console.log('Current BLE state while authorization errors exist:', state);
+        
+        // If the system shows Bluetooth is on but we've detected authorization errors previously,
+        // we should re-test to see if permissions have been granted
+        if (state === State.PoweredOn) {
+          console.log('Bluetooth appears to be on, clearing previous authorization errors to recheck');
+          this.resetAuthorizationError();
+        }
+      }
       
       // Set up the state subscription directly using onStateChange
       this.stateSubscription = bleManager.onStateChange(this.handleStateChange, true);
@@ -197,6 +212,35 @@ class BleService {
     }
   }
 
+  // Add method to check if BLE is authorized based on errors
+  public isBluetoothAuthorized(): boolean {
+    // If authorization error was previously detected, return false
+    if (this.authorizationErrorDetected) {
+      return false;
+    }
+    
+    // For iOS: check for all known authorization error message variations
+    if (Platform.OS === 'ios' && this.lastAuthorizationError) {
+      const errorMessages = [
+        'Device is not authorized to use BluetoothLE',
+        'Bluetooth LE is powered off',
+        'Bluetooth is not authorized for this application',
+        'The user denied access to Bluetooth'
+      ];
+      
+      for (const message of errorMessages) {
+        if (this.lastAuthorizationError.includes(message)) {
+          this.authorizationErrorDetected = true;
+          console.log(`Bluetooth not authorized: ${message}`);
+          return false;
+        }
+      }
+    }
+    
+    // For Android, we rely on BT status and permissions which are handled in initialize()
+    return this.isInitialized;
+  }
+
   // Helper method to print device info for debugging
   private printDeviceInfo = async (): Promise<void> => {
     try {
@@ -204,9 +248,11 @@ class BleService {
       console.log('Platform:', Platform.OS);
       console.log('Version:', Platform.Version);
       console.log('BT State:', await this.getBleManager().state());
+      console.log('Bluetooth Authorized:', this.isBluetoothAuthorized());
       console.log('Advertising Supported:', this.supportsAdvertising);
       console.log('Advertising Initialized:', this.advertiserInitialized);
       console.log('BLE Initialized:', this.isInitialized);
+      console.log('Last Authorization Error:', this.lastAuthorizationError);
       console.log('---------------------------------');
     } catch (error) {
       console.error('Error printing device info:', error);
@@ -341,7 +387,7 @@ class BleService {
 
   public async startScanning(
     onDeviceFound: (device: Device) => void,
-    scanDuration: number = 30000 // Reduced from 60s to 30s for more frequent restarts
+    scanDuration: number = 10000 // Reduced from 60s to 10s for more frequent restarts
   ): Promise<boolean> {
     try {
       if (!await this.initialize()) {
@@ -382,6 +428,28 @@ class BleService {
         (error, device) => {
           if (error) {
             console.error(`Scan error on ${Platform.OS}:`, error);
+            
+            // Track authorization errors for visibility status
+            if (error.message) {
+              // Store the full error message
+              this.lastAuthorizationError = error.message;
+              
+              // Check for any authorization-related error patterns
+              const errorMessages = [
+                'Device is not authorized to use BluetoothLE',
+                'Bluetooth LE is powered off',
+                'Bluetooth is not authorized for this application',
+                'The user denied access to Bluetooth'
+              ];
+              
+              for (const message of errorMessages) {
+                if (error.message.includes(message)) {
+                  this.authorizationErrorDetected = true;
+                  console.log(`Bluetooth authorization error detected: ${message}, updating visibility status`);
+                  break;
+                }
+              }
+            }
             
             // On iOS, just log the error but continue scanning
             if (Platform.OS === 'ios') {
@@ -621,6 +689,13 @@ class BleService {
       console.error('Error in authenticateByDeviceName:', error);
       return { success: false, error: String(error) };
     }
+  }
+
+  // Reset authorization errors - use this when BT is re-enabled
+  public resetAuthorizationError(): void {
+    this.lastAuthorizationError = null;
+    this.authorizationErrorDetected = false;
+    console.log('Reset Bluetooth authorization errors');
   }
 }
 

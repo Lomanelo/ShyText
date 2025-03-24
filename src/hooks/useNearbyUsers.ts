@@ -81,6 +81,7 @@ export function useNearbyUsers() {
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [btEnabled, setBtEnabled] = useState(false);
+  const [isAuthorized, setIsAuthorized] = useState(true);
   const [deviceInfo, setDeviceInfo] = useState<any>(null);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   
@@ -319,6 +320,11 @@ export function useNearbyUsers() {
         console.log('BLE initialization result:', initialized);
         setBtEnabled(initialized);
         
+        // Check authorization status
+        const authorized = bleService.isBluetoothAuthorized();
+        setIsAuthorized(authorized);
+        console.log('BLE authorization status:', authorized);
+        
         if (initialized) {
           setLoading(false);
         } else {
@@ -341,6 +347,30 @@ export function useNearbyUsers() {
     };
   }, [getDeviceInfo, fetchAllUsers]);
 
+  // Add a periodic authorization check
+  useEffect(() => {
+    // Set up periodic authorization check (every 2 seconds)
+    const authCheckInterval = setInterval(() => {
+      try {
+        const bleService = BleService.getInstance();
+        const isAuthorized = bleService.isBluetoothAuthorized();
+        setIsAuthorized(prev => {
+          if (prev !== isAuthorized) {
+            console.log(`Authorization status changed: ${prev} -> ${isAuthorized}`);
+            return isAuthorized;
+          }
+          return prev;
+        });
+      } catch (error) {
+        console.error('Error checking BLE authorization:', error);
+      }
+    }, 2000);
+    
+    return () => {
+      clearInterval(authCheckInterval);
+    };
+  }, []);
+
   // Function to start scanning for devices
   const startScanningForDevices = useCallback(async () => {
     try {
@@ -350,7 +380,25 @@ export function useNearbyUsers() {
       
       const bleService = BleService.getInstance();
       console.log('Starting BLE scanning from hook...');
-      const success = await bleService.startScanning(handleDeviceFound);
+      
+      // Check authorization before starting scan
+      const authorized = bleService.isBluetoothAuthorized();
+      if (isAuthorized !== authorized) {
+        console.log(`Updating authorization state before scan: ${isAuthorized} -> ${authorized}`);
+        setIsAuthorized(authorized);
+      }
+      
+      const success = await bleService.startScanning((device) => {
+        // Check for authorization changes on every device event
+        const currentAuthorized = bleService.isBluetoothAuthorized();
+        if (isAuthorized !== currentAuthorized) {
+          console.log(`Authorization changed during scan: ${isAuthorized} -> ${currentAuthorized}`);
+          setIsAuthorized(currentAuthorized);
+        }
+        
+        // Continue with normal device handling
+        handleDeviceFound(device);
+      });
       
       if (success) {
         console.log('BLE scanning started successfully');
@@ -360,6 +408,13 @@ export function useNearbyUsers() {
           console.log('Advertising result:', advResult);
         }
       } else {
+        // Double-check authorization after failed scan attempt
+        const postCheckAuth = bleService.isBluetoothAuthorized();
+        if (isAuthorized !== postCheckAuth) {
+          console.log(`Authorization changed after failed scan: ${isAuthorized} -> ${postCheckAuth}`);
+          setIsAuthorized(postCheckAuth);
+        }
+        
         setError('Could not start scanning. Please ensure Bluetooth is enabled.');
         setIsScanning(false);
       }
@@ -367,11 +422,24 @@ export function useNearbyUsers() {
       setLoading(false);
     } catch (err) {
       console.error('Error in startScanningForDevices:', err);
+      
+      // Check authorization status after error
+      try {
+        const bleService = BleService.getInstance();
+        const authorized = bleService.isBluetoothAuthorized();
+        if (isAuthorized !== authorized) {
+          console.log(`Authorization changed after scan error: ${isAuthorized} -> ${authorized}`);
+          setIsAuthorized(authorized);
+        }
+      } catch (authError) {
+        console.error('Error checking authorization after scan error:', authError);
+      }
+      
       setError('Failed to start scanning. Please try again.');
       setLoading(false);
       setIsScanning(false);
     }
-  }, [handleDeviceFound]);
+  }, [handleDeviceFound, isAuthorized]);
 
   // Function to stop scanning and advertising
   const stopScanningAndAdvertising = useCallback(() => {
@@ -421,6 +489,7 @@ export function useNearbyUsers() {
     error,
     isScanning,
     btEnabled,
+    isAuthorized,
     deviceInfo,
     allUsers,
     refreshUsers,

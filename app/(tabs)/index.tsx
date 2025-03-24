@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Modal, ActivityIndicator, SafeAreaView, Image, RefreshControl, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView as RNScrollView, BackHandler } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Modal, ActivityIndicator, SafeAreaView, Image, RefreshControl, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView as RNScrollView, BackHandler, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,7 +20,7 @@ export default function NearbyScreen() {
   const [viewingFullProfile, setViewingFullProfile] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [authError, setAuthError] = useState<boolean>(false);
-  const { users, loading, error, isScanning, btEnabled, refreshUsers, startScanning, stopScanning, setUsers } = useNearbyUsers();
+  const { users, loading, error, isScanning, btEnabled, isAuthorized, refreshUsers, startScanning, stopScanning, setUsers } = useNearbyUsers();
 
   // Define handleCloseProfile first since it's used in the useEffect below
   const handleCloseProfile = useCallback(() => {
@@ -271,40 +271,69 @@ export default function NearbyScreen() {
         }
       >
         <View style={styles.header}>
-          {/* Activity indicator removed as requested */}
+          <Text style={styles.headerTitle}>Nearby</Text>
+          <TouchableOpacity 
+            style={styles.visibilityIndicator}
+            onPress={() => {
+              Alert.alert(
+                isAuthorized ? "You are Visible" : "You are Invisible",
+                Platform.OS === 'ios'
+                  ? (isAuthorized 
+                    ? "Other users can see you on their radar. To go invisible, disable Bluetooth permissions for the app in your device settings."
+                    : "You are currently invisible to other users. To become visible, enable Bluetooth permissions for ShyText in your device settings.")
+                  : (isAuthorized
+                    ? "Other users can see you on their radar. To go invisible, toggle off Bluetooth in your device settings."
+                    : "You are currently invisible to other users. To become visible, turn on Bluetooth in your device settings."),
+                [
+                  { text: "Cancel", style: "cancel" },
+                  { 
+                    text: "Open Settings", 
+                    onPress: () => {
+                      try {
+                        if (Platform.OS === 'ios') {
+                          Linking.openURL('app-settings:');
+                        } else {
+                          Linking.openSettings();
+                        }
+                      } catch (error) {
+                        console.error('Error opening settings:', error);
+                        Alert.alert('Error', 'Unable to open settings. Please open your device settings manually.');
+                      }
+                    }
+                  }
+                ]
+              )
+            }}
+          >
+            <View style={[styles.statusDot, { backgroundColor: isAuthorized ? colors.success : colors.error }]} />
+            <Text style={styles.visibilityText}>{isAuthorized ? "Visible" : "Invisible"}</Text>
+          </TouchableOpacity>
         </View>
         
         <View style={styles.radarContainer}>
-          {!btEnabled && !loading && Platform.OS === 'android' && (
+          {!isAuthorized && !loading && (
             <View style={styles.noUsersContainer}>
               <Text style={styles.noUsersText}>
-                Bluetooth is disabled. Please enable Bluetooth to discover nearby users.
+                {Platform.OS === 'ios'
+                  ? "Bluetooth permissions are required to discover nearby users."
+                  : "Bluetooth is disabled. Please enable Bluetooth to discover nearby users."}
               </Text>
               <Text style={styles.subText}>
-                Enable Bluetooth and pull down to refresh
+                {Platform.OS === 'ios'
+                  ? "Enable Bluetooth permissions in Settings and pull down to refresh"
+                  : "Enable Bluetooth and pull down to refresh"}
               </Text>
             </View>
           )}
 
-          {!btEnabled && !loading && Platform.OS === 'ios' && (
-            <View style={styles.noUsersContainer}>
-              <Text style={styles.noUsersText}>
-                Make sure Bluetooth is enabled in your iOS settings.
-              </Text>
-              <Text style={styles.subText}>
-                Enable Bluetooth and pull down to refresh
-              </Text>
-            </View>
-          )}
-
-          {btEnabled && loading && (
+          {isAuthorized && loading && (
             <View style={styles.noUsersContainer}>
               <ActivityIndicator size="large" color={colors.primary} />
               <Text style={styles.noUsersText}>Initializing Bluetooth...</Text>
             </View>
           )}
 
-          {btEnabled && !loading && users.length === 0 && (
+          {isAuthorized && !loading && users.length === 0 && (
             <View style={styles.noUsersContainer}>
               <Text style={styles.noUsersText}>
                 {isScanning ? 'Scanning for nearby devices...' : 'No users found nearby'}
@@ -315,7 +344,7 @@ export default function NearbyScreen() {
             </View>
           )}
 
-          {btEnabled && !loading && users.length > 0 && (
+          {isAuthorized && !loading && users.length > 0 && (
             <>
               <Radar
                 users={users}
@@ -415,18 +444,35 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   header: {
-    padding: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    paddingTop: 60,
+    paddingBottom: 15,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.mediumGray,
   },
-  title: {
+  headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 5,
   },
-  subtitle: {
+  visibilityIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+  },
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  visibilityText: {
     fontSize: 14,
-    color: colors.darkGray,
+    color: colors.text,
   },
   radarContainer: {
     flex: 1,

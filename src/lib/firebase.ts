@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User, updateProfile, initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, User, updateProfile, initializeAuth, getReactNativePersistence, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import { getFirestore, GeoPoint, collection, doc, setDoc, updateDoc, getDoc, query, where, getDocs, addDoc, orderBy, limit, onSnapshot, serverTimestamp, writeBatch, deleteDoc } from 'firebase/firestore';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 import { getStorage, ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
@@ -73,7 +73,7 @@ export const updateRegistrationData = (data: { displayName?: string; birthDate?:
   return { success: true };
 };
 
-// Get current registration data
+// Get registration data
 export const getRegistrationData = () => {
   return registrationData;
 };
@@ -1654,4 +1654,39 @@ export async function deleteConversation(conversationId: string) {
     console.error('Error deleting conversation:', error);
     throw error;
   }
-} 
+}
+
+// Function to update user password
+export const updateUserPassword = async (currentPassword: string, newPassword: string) => {
+  try {
+    // Get current user
+    const currentUser = auth.currentUser;
+    if (!currentUser || !currentUser.email) {
+      throw new Error('User not authenticated or email not available');
+    }
+    
+    // First re-authenticate the user with their current password
+    const credential = EmailAuthProvider.credential(currentUser.email, currentPassword);
+    await reauthenticateWithCredential(currentUser, credential);
+    
+    // After successful re-authentication, update the password
+    await updatePassword(currentUser, newPassword);
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error updating password:', error);
+    
+    let errorMessage = 'Failed to update password';
+    if (error.code === 'auth/wrong-password') {
+      errorMessage = 'Incorrect current password. Please try again.';
+    } else if (error.code === 'auth/weak-password') {
+      errorMessage = 'New password is too weak. Please use a stronger password.';
+    } else if (error.code === 'auth/requires-recent-login') {
+      errorMessage = 'This operation requires recent authentication. Please log in again.';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    return { success: false, error: errorMessage };
+  }
+}; 
