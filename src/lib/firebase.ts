@@ -1017,6 +1017,59 @@ export async function updatePushToken(userId: string, token: string) {
   }
 }
 
+// Submit a support message to Firebase
+export async function submitSupportMessage(message: {
+  subject: string;
+  message: string;
+  contactEmail: string;
+  userId?: string;
+  userName?: string;
+  deviceInfo?: any;
+}) {
+  try {
+    const currentUser = getCurrentUser();
+    if (!currentUser && !message.userId) {
+      throw new Error('User not authenticated');
+    }
+    
+    // Get device information
+    let deviceInfo = message.deviceInfo || {};
+    try {
+      const platform = Platform.OS;
+      const version = Platform.Version;
+      deviceInfo = {
+        ...deviceInfo,
+        platform,
+        version,
+        appVersion: '1.0.0', // Replace with actual app version
+      };
+    } catch (error) {
+      console.warn('Could not get device info:', error);
+    }
+    
+    // Create the support message document
+    const supportData = {
+      subject: message.subject || 'Support Request',
+      message: message.message,
+      contactEmail: message.contactEmail,
+      userId: message.userId || currentUser?.uid,
+      userName: message.userName || currentUser?.displayName || 'Unknown',
+      deviceInfo: JSON.stringify(deviceInfo),
+      status: 'new',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    // Add to support_messages collection
+    await addDoc(collection(db, 'support_messages'), supportData);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Error submitting support message:', error);
+    return { success: false, error };
+  }
+}
+
 // Add this function after the getProfile function
 
 export async function listAllUsers() {

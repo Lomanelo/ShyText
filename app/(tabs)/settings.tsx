@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, Alert, Image, Modal, ScrollVi
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import colors from '../../src/theme/colors';
-import { auth, getCurrentUser, getProfile, uploadProfileImage, updateUserPassword } from '../../src/lib/firebase';
+import { auth, getCurrentUser, getProfile, uploadProfileImage, updateUserPassword, submitSupportMessage } from '../../src/lib/firebase';
 import { signOut, getAuth, deleteUser, reauthenticateWithCredential, EmailAuthProvider } from 'firebase/auth';
 import * as ImagePicker from 'expo-image-picker';
 import { sendLocalNotification } from '../../src/utils/notifications';
@@ -29,6 +29,11 @@ export default function SettingsScreen() {
   const [showAccountOptions, setShowAccountOptions] = useState(false);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showSupportForm, setShowSupportForm] = useState(false);
+  const [supportSubject, setSupportSubject] = useState('');
+  const [supportMessage, setSupportMessage] = useState('');
+  const [supportEmail, setSupportEmail] = useState('');
+  const [isSendingSupport, setIsSendingSupport] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -172,6 +177,74 @@ export default function SettingsScreen() {
       Alert.alert('Error', error.message || 'Failed to update password');
     } finally {
       setIsChangingPassword(false);
+    }
+  };
+
+  // Submit support message handler
+  const handleSubmitSupport = async () => {
+    // Validate input
+    if (!supportSubject.trim()) {
+      Alert.alert('Error', 'Please enter a subject for your support message');
+      return;
+    }
+    
+    if (!supportMessage.trim()) {
+      Alert.alert('Error', 'Please enter your message');
+      return;
+    }
+    
+    if (!supportEmail.trim() || !supportEmail.includes('@')) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+    
+    setIsSendingSupport(true);
+    
+    try {
+      // Get device info for better support context
+      let deviceInfo = {};
+      try {
+        deviceInfo = {
+          deviceName: await DeviceInfo.getDeviceName(),
+          deviceId: await DeviceInfo.getUniqueId(),
+          brand: DeviceInfo.getBrand(),
+          model: DeviceInfo.getModel(),
+          systemVersion: DeviceInfo.getSystemVersion(),
+          isEmulator: await DeviceInfo.isEmulator(),
+          appVersion: DeviceInfo.getVersion(),
+        };
+      } catch (error) {
+        console.warn('Could not get full device info:', error);
+      }
+      
+      // Submit support message
+      const result = await submitSupportMessage({
+        subject: supportSubject,
+        message: supportMessage,
+        contactEmail: supportEmail,
+        deviceInfo
+      });
+      
+      if (result.success) {
+        Alert.alert(
+          'Message Sent',
+          'Your support request has been submitted. We will contact you via email soon.',
+          [{ text: 'OK', onPress: () => {
+            // Clear form and close modal
+            setSupportSubject('');
+            setSupportMessage('');
+            setSupportEmail('');
+            setShowSupportForm(false);
+          }}]
+        );
+      } else {
+        Alert.alert('Error', result.error?.toString() || 'Failed to send support message. Please try again.');
+      }
+    } catch (error: any) {
+      console.error('Error sending support message:', error);
+      Alert.alert('Error', error.message || 'An unexpected error occurred. Please try again.');
+    } finally {
+      setIsSendingSupport(false);
     }
   };
 
@@ -570,7 +643,10 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.settingsItem}>
+        <TouchableOpacity 
+          style={styles.settingsItem}
+          onPress={() => setShowSupportForm(true)}
+        >
           <Ionicons name="help-circle-outline" size={24} color={colors.primary} />
           <Text style={styles.settingsText}>Help & Support</Text>
           <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
@@ -891,6 +967,102 @@ export default function SettingsScreen() {
                   setConfirmNewPassword('');
                 }}
                 disabled={isChangingPassword}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Support Form Modal */}
+      <Modal
+        visible={showSupportForm}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => {
+          setShowSupportForm(false);
+        }}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Contact Support</Text>
+              <TouchableOpacity 
+                onPress={() => setShowSupportForm(false)}
+                disabled={isSendingSupport}
+              >
+                <Ionicons name="close" size={28} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollContent}>
+              <View style={styles.supportIcon}>
+                <Ionicons name="chatbubble-ellipses" size={60} color={colors.primary} />
+              </View>
+              
+              <Text style={styles.supportTitle}>How can we help?</Text>
+              
+              <Text style={styles.supportDescription}>
+                Please fill out the form below and our support team will get back to you as soon as possible.
+              </Text>
+              
+              <Text style={styles.inputLabel}>Email Address:</Text>
+              <TextInput
+                style={styles.supportInput}
+                placeholder="Enter your email address"
+                placeholderTextColor={colors.darkGray}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                value={supportEmail}
+                onChangeText={setSupportEmail}
+                editable={!isSendingSupport}
+              />
+              
+              <Text style={styles.inputLabel}>Subject:</Text>
+              <TextInput
+                style={styles.supportInput}
+                placeholder="What's your issue about?"
+                placeholderTextColor={colors.darkGray}
+                value={supportSubject}
+                onChangeText={setSupportSubject}
+                editable={!isSendingSupport}
+              />
+              
+              <Text style={styles.inputLabel}>Message:</Text>
+              <TextInput
+                style={[styles.supportInput, styles.messageInput]}
+                placeholder="Describe your issue in detail"
+                placeholderTextColor={colors.darkGray}
+                multiline={true}
+                numberOfLines={6}
+                textAlignVertical="top"
+                value={supportMessage}
+                onChangeText={setSupportMessage}
+                editable={!isSendingSupport}
+              />
+              
+              <TouchableOpacity 
+                style={[
+                  styles.sendSupportButton,
+                  (isSendingSupport || !supportSubject || !supportMessage || !supportEmail) && styles.disabledButton
+                ]}
+                onPress={handleSubmitSupport}
+                disabled={isSendingSupport || !supportSubject || !supportMessage || !supportEmail}
+              >
+                {isSendingSupport ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.sendSupportButtonText}>Send Message</Text>
+                )}
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.cancelButton}
+                onPress={() => {
+                  setShowSupportForm(false);
+                }}
+                disabled={isSendingSupport}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
@@ -1528,6 +1700,51 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   changePasswordButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // Support form modal styles
+  supportIcon: {
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 16,
+  },
+  supportTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: colors.primary,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  supportDescription: {
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  supportInput: {
+    backgroundColor: colors.lightGray,
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    fontSize: 16,
+    color: colors.text,
+  },
+  messageInput: {
+    minHeight: 120,
+    maxHeight: 200,
+  },
+  sendSupportButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 30,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  sendSupportButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
