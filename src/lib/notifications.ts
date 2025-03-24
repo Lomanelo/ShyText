@@ -10,12 +10,51 @@ const EXPO_PROJECT_ID = Constants.expoConfig?.extra?.eas?.projectId || '8eb807c3
 
 // Configure how notifications appear when the app is in the foreground
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
+  handleNotification: async (notification) => {
+    // Fast path for high-priority messages - skip complex processing
+    const data = notification.request.content.data || {};
+    
+    // Check if notification is marked as high priority
+    if (data.priority === 'high' || data.urgent === true) {
+      return {
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+      };
+    }
+    
+    // Check if user is in same conversation (only for non-urgent messages)
+    if ((data?.type === 'message' || data?.type === 'new_message') && 
+        data.conversationId && isViewingConversation(data.conversationId)) {
+      return {
+        shouldShowAlert: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      };
+    }
+    
+    // Default fast path
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      priority: Notifications.AndroidNotificationPriority.HIGH,
+    };
+  },
 });
+
+// Track which conversation the user is currently viewing
+let currentViewingConversationId: string | null = null;
+
+export const setViewingConversation = (conversationId: string | null) => {
+  currentViewingConversationId = conversationId;
+  console.log('Now viewing conversation:', conversationId);
+};
+
+export const isViewingConversation = (conversationId: string): boolean => {
+  return currentViewingConversationId === conversationId;
+};
 
 // Define notification channel for Android
 export const defineNotificationChannels = async () => {
@@ -41,27 +80,49 @@ export const defineNotificationChannels = async () => {
 export const requestIOSPermissions = async () => {
   if (Platform.OS !== 'ios') return true;
   
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
+  console.log('Requesting iOS notification permissions');
   
-  // Only ask if permissions have not been determined
-  if (existingStatus !== 'granted') {
-    // Request permission
-    const { status } = await Notifications.requestPermissionsAsync({
-      ios: {
-        allowAlert: true,
-        allowBadge: true,
-        allowSound: true,
-        allowDisplayInCarPlay: false,
-        allowCriticalAlerts: false,
-        provideAppNotificationSettings: true,
-        allowProvisional: true,
-      },
-    });
-    finalStatus = status;
+  try {
+    // Get current permission status
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    console.log('Current iOS notification permission status:', existingStatus);
+    
+    let finalStatus = existingStatus;
+    
+    // Only ask if permissions have not been determined or not granted
+    if (existingStatus !== 'granted') {
+      console.log('Requesting full iOS notification permissions...');
+      
+      // Request permission with full authorization (not provisional)
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowDisplayInCarPlay: false,
+          allowCriticalAlerts: true, // Request critical alerts permission
+          provideAppNotificationSettings: true,
+          allowProvisional: false, // Not using provisional notifications
+        },
+      });
+      
+      finalStatus = status;
+      console.log('iOS notification permission request result:', finalStatus);
+    }
+    
+    // To ensure background notifications, we need to explicitly call registerForPushNotificationsAsync
+    // This is different from just getting permission
+    if (finalStatus === 'granted') {
+      console.log('iOS push notifications authorized, completing setup');
+    } else {
+      console.warn('iOS push notifications not fully authorized:', finalStatus);
+    }
+    
+    return finalStatus === 'granted';
+  } catch (error) {
+    console.error('Error during iOS notification permission request:', error);
+    return false;
   }
-  
-  return finalStatus === 'granted';
 };
 
 // Register for push notifications - call this after login or signup
@@ -236,4 +297,79 @@ export const sendLocalNotification = async (title: string, body: string, data?: 
     },
     trigger: null,
   });
-}; 
+};
+
+// Send a local notification that can wake up the app from the background
+export const sendBackgroundLocalNotification = async (title: string, body: string, data?: object) => {
+  try {
+    console.log('Sending high-priority background notification');
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: {
+          ...data,
+          // These properties help with faster background delivery
+          contentAvailable: true,
+          priority: 'high',
+          urgent: true,
+          messageId: Date.now().toString(),
+          // Add iOS-specific flags
+          '_displayInForeground': true,
+          'mutable-content': 1,
+          'interruption-level': 'time-sensitive',
+        },
+        sound: 'default',
+        priority: Notifications.AndroidNotificationPriority.MAX,
+        categoryIdentifier: 'critical_message', // Use our critical message category
+        autoDismiss: false, // Don't auto dismiss on iOS
+      },
+      trigger: null, // Trigger immediately
+    });
+    console.log('High-priority background notification sent');
+  } catch (error) {
+    console.error('Error sending background notification:', error);
+  }
+};
+
+// Enable background notification handling for iOS
+if (Platform.OS === 'ios') {
+  // Set up time-sensitive category for faster delivery
+  Notifications.setNotificationCategoryAsync('time_sensitive', [
+    {
+      identifier: 'read',
+      buttonTitle: 'Open',
+      options: {
+        opensAppToForeground: true,
+      }
+    }
+  ]).catch(error => {
+    console.error('Failed to set up time-sensitive category:', error);
+  });
+  
+  // Regular message category
+  Notifications.setNotificationCategoryAsync('message', [
+    {
+      identifier: 'read',
+      buttonTitle: 'Read',
+      options: {
+        opensAppToForeground: true,
+      }
+    }
+  ]).catch(error => {
+    console.error('Failed to set notification category:', error);
+  });
+  
+  // Critical notifications category
+  Notifications.setNotificationCategoryAsync('critical_message', [
+    {
+      identifier: 'read',
+      buttonTitle: 'Read',
+      options: {
+        opensAppToForeground: true,
+      }
+    }
+  ]).catch(error => {
+    console.error('Failed to set critical notification category:', error);
+  });
+} 

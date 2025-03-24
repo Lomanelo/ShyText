@@ -8,15 +8,6 @@ import { defineNotificationChannels, setupNotificationListeners } from '../src/l
 import { startScanning, stopScanning } from '../src/hooks/useNearbyUsers';
 import { useAuth } from '../src/hooks/useAuth';
 
-// Configure how notifications appear when the app is in the foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
-
 // Create a Profile Image context to help with caching
 export const ProfileImageContext = createContext<{
   refreshProfileImage: () => void;
@@ -34,6 +25,7 @@ export default function RootLayout() {
   const [scanningError, setScanningError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [nearbyUsers, setNearbyUsers] = useState<any[]>([]);
+  const [notificationsInitialized, setNotificationsInitialized] = useState(false);
 
   // Function to refresh and preload profile image
   const refreshProfileImage = () => {
@@ -53,40 +45,28 @@ export default function RootLayout() {
     }
   }, [user?.photoURL]);
 
-  // Initialize notifications
+  // Initialize notifications - only once and early to ensure they work
   useEffect(() => {
-    // Set up notification channels (primarily for Android)
-    const setupNotifications = async () => {
+    if (notificationsInitialized) return;
+    
+    // Set up notification channels and listeners early, regardless of login state
+    const setupNotificationsEarly = async () => {
       try {
         console.log('Setting up notifications for platform:', Platform.OS);
         await defineNotificationChannels();
         console.log('Notification channels defined');
         
-        // Register for push notifications if user is logged in
-        if (user) {
-          console.log('User is logged in, registering for push notifications:', user.uid);
-          const { registerForPushNotifications } = require('../src/lib/notifications');
-          const token = await registerForPushNotifications();
-          console.log('Push notification registration result:', token ? 'Success' : 'Failed');
-          
-          if (token) {
-            console.log('Successfully registered for push notifications with token:', token.substring(0, 15) + '...');
-          } else {
-            console.warn('Failed to get push token');
-          }
-        } else {
-          console.log('User not logged in, skipping push notification registration');
-        }
-        
         // Setup notification listeners for handling app in different states
         notificationListeners.current = setupNotificationListeners();
         console.log('Notification listeners set up');
+        
+        setNotificationsInitialized(true);
       } catch (error) {
-        console.warn('Error setting up notifications:', error);
+        console.warn('Error setting up early notifications:', error);
       }
     };
     
-    setupNotifications();
+    setupNotificationsEarly();
     
     return () => {
       // Clean up notification listeners when component unmounts
@@ -94,7 +74,53 @@ export default function RootLayout() {
         notificationListeners.current.unsubscribe();
       }
     };
-  }, [user]); // Add user dependency to re-run when user logs in
+  }, []);
+  
+  // Register for push notifications when user logs in
+  useEffect(() => {
+    // Only register for push notifications if user is logged in
+    if (user) {
+      const registerUserForPushNotifications = async () => {
+        try {
+          console.log('User is logged in, registering for push notifications:', user.uid);
+          const { registerForPushNotifications, requestIOSPermissions } = require('../src/lib/notifications');
+          
+          // For iOS, explicitly request permissions first
+          if (Platform.OS === 'ios') {
+            const permissionGranted = await requestIOSPermissions();
+            console.log('iOS notification permissions granted:', permissionGranted);
+          }
+          
+          const token = await registerForPushNotifications();
+          
+          if (token) {
+            console.log('Successfully registered for push notifications with token:', token.substring(0, 15) + '...');
+          } else {
+            console.warn('Failed to get push token, will retry later');
+            
+            // Retry after a delay if it failed
+            setTimeout(async () => {
+              try {
+                // For iOS, explicitly request permissions again before retry
+                if (Platform.OS === 'ios') {
+                  await requestIOSPermissions();
+                }
+                
+                const retryToken = await registerForPushNotifications();
+                console.log('Retry push notification registration result:', retryToken ? 'Success' : 'Failed again');
+              } catch (retryError) {
+                console.error('Error in retry registration:', retryError);
+              }
+            }, 5000);
+          }
+        } catch (error) {
+          console.warn('Error registering for push notifications:', error);
+        }
+      };
+      
+      registerUserForPushNotifications();
+    }
+  }, [user?.uid]); // Only re-run when user ID changes (login/logout)
 
   // Handle BLE scanning based on app state
   useEffect(() => {

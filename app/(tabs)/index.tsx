@@ -9,6 +9,7 @@ import { startConversation, getCurrentUser } from '../../src/lib/firebase';
 import colors from '../../src/theme/colors';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import BleService from '../../src/services/BleService';
+import VerifiedBadge from '../../src/components/VerifiedBadge';
 
 // Maximum distance for radar in meters
 const MAX_RADAR_DISTANCE = 10;
@@ -348,6 +349,14 @@ export default function NearbyScreen() {
                 <Ionicons name="close" size={24} color="white" />
               </TouchableOpacity>
             </View>
+
+            {/* Verification Badge - Added to top left */}
+            <View style={styles.verificationBadgeContainer}>
+              <VerifiedBadge isVerified={true} size="large" />
+            </View>
+            
+            {/* Also log the user data to check if is_verified exists */}
+            {selectedUser && console.log('Selected user data:', JSON.stringify(selectedUser))}
 
             {/* Profile Content */}
             <View style={styles.profileContentCompact}>
@@ -703,5 +712,19 @@ const styles = StyleSheet.create({
   profileContentCompact: {
     display: 'flex',
     flexDirection: 'column',
+  },
+  verificationBadgeContainer: {
+    position: 'absolute',
+    top: 15,
+    left: 15,
+    zIndex: 50,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 16,
+    padding: 6,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 3,
   },
 });

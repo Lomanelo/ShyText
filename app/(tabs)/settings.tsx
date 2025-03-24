@@ -20,6 +20,8 @@ export default function SettingsScreen() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showProfileImageModal, setShowProfileImageModal] = useState(false);
+  const [modalAnimationComplete, setModalAnimationComplete] = useState(true);
+  const [isActionInProgress, setIsActionInProgress] = useState(false);
 
   const fetchUserProfile = async () => {
     const currentUser = getCurrentUser();
@@ -75,7 +77,23 @@ export default function SettingsScreen() {
   };
 
   useEffect(() => {
-    fetchUserProfile();
+    let mounted = true;
+    
+    const loadUserProfile = async () => {
+      if (mounted) {
+        await fetchUserProfile();
+      }
+    };
+    
+    loadUserProfile();
+    
+    // Clean up function
+    return () => {
+      mounted = false;
+      // Ensure all modals are closed when component unmounts
+      setShowProfileDetails(false);
+      setShowProfileImageModal(false);
+    };
   }, [authUser]); // Refetch when authUser changes
   
   const onRefresh = async () => {
@@ -114,16 +132,61 @@ export default function SettingsScreen() {
   };
 
   const handleProfilePress = () => {
+    if (isActionInProgress || !modalAnimationComplete) return;
+    
+    setIsActionInProgress(true);
+    setModalAnimationComplete(false);
     setShowProfileDetails(true);
+    
+    // Reset action lock after a short delay
+    setTimeout(() => {
+      setIsActionInProgress(false);
+    }, 800);
+  };
+
+  const handleCloseProfileModal = () => {
+    if (isActionInProgress || !modalAnimationComplete) return;
+    
+    setIsActionInProgress(true);
+    setShowProfileDetails(false);
+    
+    // Reset action lock after animation completes
+    setTimeout(() => {
+      setIsActionInProgress(false);
+    }, 400);
   };
 
   const handleProfileImagePress = () => {
+    if (isActionInProgress) return;
+    
     if (user?.photo_url || authUser?.photoURL) {
+      setIsActionInProgress(true);
       setShowProfileImageModal(true);
+      
+      // Reset action lock after a short delay
+      setTimeout(() => {
+        setIsActionInProgress(false);
+      }, 500);
     }
   };
 
+  const handleCloseImageModal = () => {
+    if (isActionInProgress) return;
+    
+    setIsActionInProgress(true);
+    setShowProfileImageModal(false);
+    
+    // Reset action lock after animation completes
+    setTimeout(() => {
+      setIsActionInProgress(false);
+    }, 300);
+  };
+
   const handleChangeProfileImage = async () => {
+    if (isActionInProgress || uploadingImage) return;
+    
+    setIsActionInProgress(true);
+    
     try {
       // Request permission if needed
       if (Platform.OS !== 'web') {
@@ -150,12 +213,17 @@ export default function SettingsScreen() {
           {
             text: 'Cancel',
             style: 'cancel',
+            onPress: () => setIsActionInProgress(false),
           },
         ],
-        { cancelable: true }
+        { 
+          cancelable: true,
+          onDismiss: () => setIsActionInProgress(false)
+        }
       );
     } catch (error) {
       console.error('Error preparing image picker:', error);
+      setIsActionInProgress(false);
     }
   };
 
@@ -170,10 +238,14 @@ export default function SettingsScreen() {
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
         uploadProfilePicture(result.assets[0].uri);
+      } else {
+        // User canceled the picker
+        setIsActionInProgress(false);
       }
     } catch (error) {
       console.error('Error picking image:', error);
       Alert.alert('Error', 'Failed to pick image. Please try again.');
+      setIsActionInProgress(false);
     }
   };
 
@@ -183,6 +255,7 @@ export default function SettingsScreen() {
       
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Sorry, we need camera permissions to take a picture!');
+        setIsActionInProgress(false);
         return;
       }
       
@@ -194,10 +267,14 @@ export default function SettingsScreen() {
       
       if (!result.canceled && result.assets && result.assets.length > 0) {
         uploadProfilePicture(result.assets[0].uri);
+      } else {
+        // User canceled taking picture
+        setIsActionInProgress(false);
       }
     } catch (error) {
       console.error('Error taking picture:', error);
       Alert.alert('Error', 'Failed to take picture. Please try again.');
+      setIsActionInProgress(false);
     }
   };
 
@@ -205,6 +282,7 @@ export default function SettingsScreen() {
     const currentUser = getCurrentUser();
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to update your profile picture.');
+      setIsActionInProgress(false);
       return;
     }
 
@@ -219,6 +297,9 @@ export default function SettingsScreen() {
         // Refresh the user profile to get the updated image URL
         await fetchUserProfile();
         Alert.alert('Success', 'Your profile picture has been updated.');
+        
+        // Close profile details modal after successful upload
+        setShowProfileDetails(false);
       } else {
         setUploadError(result.error?.toString() || 'Failed to upload image');
         if (result.error?.toString().includes('too large')) {
@@ -232,8 +313,26 @@ export default function SettingsScreen() {
       Alert.alert('Error', 'An unexpected error occurred. Please try again.');
     } finally {
       setUploadingImage(false);
+      setIsActionInProgress(false);
     }
   };
+
+  // Wrap image component in memo to prevent unnecessary re-renders
+  const ProfileImage = React.memo(({ photoUrl, displayName }: { photoUrl?: string, displayName?: string }) => {
+    return photoUrl ? (
+      <Image
+        source={{ uri: photoUrl }}
+        style={styles.profileImage}
+        onError={() => console.log('Failed to load profile image')}
+      />
+    ) : (
+      <View style={styles.profileImagePlaceholder}>
+        <Text style={styles.profileInitial}>
+          {displayName ? displayName.charAt(0).toUpperCase() : '?'}
+        </Text>
+      </View>
+    );
+  });
 
   return (
     <ScrollView 
@@ -252,24 +351,20 @@ export default function SettingsScreen() {
       </View>
 
       {/* Profile Section */}
-      <TouchableOpacity style={styles.profileSection} onPress={handleProfilePress}>
+      <TouchableOpacity 
+        style={styles.profileSection} 
+        onPress={handleProfilePress}
+        activeOpacity={0.7}
+        disabled={isActionInProgress || !modalAnimationComplete}
+      >
         <TouchableOpacity 
           style={styles.profileImageContainer}
           onPress={handleProfileImagePress}
         >
-          {(user?.photo_url || authUser?.photoURL) ? (
-            <Image
-              source={{ uri: user?.photo_url || authUser?.photoURL }}
-              style={styles.profileImage}
-              onError={() => console.log('Failed to load profile image')}
-            />
-          ) : (
-            <View style={styles.profileImagePlaceholder}>
-              <Text style={styles.profileInitial}>
-                {user?.display_name ? user.display_name.charAt(0).toUpperCase() : '?'}
-              </Text>
-            </View>
-          )}
+          <ProfileImage 
+            photoUrl={user?.photo_url || authUser?.photoURL} 
+            displayName={user?.display_name} 
+          />
           
           <TouchableOpacity 
             style={styles.editProfileImageButton}
@@ -343,109 +438,121 @@ export default function SettingsScreen() {
         visible={showProfileDetails}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => setShowProfileDetails(false)}
+        onRequestClose={handleCloseProfileModal}
+        onShow={() => {
+          // Animation has completed showing
+          setModalAnimationComplete(true);
+        }}
+        onDismiss={() => {
+          // Clean up after modal is fully dismissed
+          setModalAnimationComplete(true);
+        }}
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Profile</Text>
-              <TouchableOpacity onPress={() => setShowProfileDetails(false)}>
+              <TouchableOpacity 
+                onPress={handleCloseProfileModal}
+                disabled={isActionInProgress || !modalAnimationComplete}
+                activeOpacity={0.7}
+              >
                 <Ionicons name="close" size={28} color={colors.text} />
               </TouchableOpacity>
             </View>
 
-            {/* Full Profile Image Card */}
-            <View style={styles.fullProfileCard}>
-              <TouchableOpacity 
-                style={styles.fullProfileImageContainer}
-                onPress={handleProfileImagePress}
-              >
-                {(user?.photo_url || authUser?.photoURL) ? (
-                  <Image
-                    source={{ uri: user?.photo_url || authUser?.photoURL }}
-                    style={styles.fullProfileImage}
-                    resizeMode="cover"
+            <ScrollView 
+              style={styles.modalScrollContent}
+              bounces={false}
+              showsVerticalScrollIndicator={false}
+              removeClippedSubviews={true}
+            >
+              {/* Full Profile Image Card */}
+              <View style={styles.fullProfileCard}>
+                <TouchableOpacity 
+                  style={styles.fullProfileImageContainer}
+                  onPress={handleProfileImagePress}
+                >
+                  {(user?.photo_url || authUser?.photoURL) ? (
+                    <Image
+                      source={{ uri: user?.photo_url || authUser?.photoURL }}
+                      style={styles.fullProfileImage}
+                      resizeMode="cover"
+                      progressiveRenderingEnabled={true}
+                      fadeDuration={300}
+                    />
+                  ) : (
+                    <View style={styles.fullProfileImagePlaceholder}>
+                      <Ionicons name="person" size={80} color="#888888" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+                
+                <View style={styles.profileDetailsOverlay}>
+                  <Text style={styles.fullProfileName}>
+                    {user?.display_name || authUser?.displayName || 'User'}
+                    {user?.age ? `, ${user.age}` : ''}
+                  </Text>
+                  <VerifiedBadge 
+                    isVerified={!!user?.is_verified} 
+                    size="medium"
                   />
+                </View>
+              </View>
+
+              <Text style={styles.sectionTitle}>Profile Details</Text>
+              <View style={styles.profileDetailItem}>
+                <Ionicons name="calendar" size={24} color={colors.primary} style={styles.detailIcon} />
+                <Text style={styles.detailLabel}>Birth Date:</Text>
+                <Text style={styles.detailValue}>{user?.formattedBirthDate || 'Not available'}</Text>
+              </View>
+
+              <View style={styles.profileDetailItem}>
+                <Ionicons 
+                  name={user?.is_verified ? "shield-checkmark" : "shield-outline"} 
+                  size={24} 
+                  color={user?.is_verified ? colors.primary : colors.darkGray} 
+                  style={styles.detailIcon} 
+                />
+                <Text style={styles.detailLabel}>Verification:</Text>
+                <View style={styles.verificationStatus}>
+                  <Text style={[
+                    styles.detailValue, 
+                    user?.is_verified ? styles.verifiedText : styles.notVerifiedText
+                  ]}>
+                    {user?.is_verified ? 'Verified' : 'Not Verified'}
+                  </Text>
+                  <VerifiedBadge 
+                    isVerified={!!user?.is_verified} 
+                    size="small"
+                    style={{ marginLeft: 8 }}
+                  />
+                </View>
+              </View>
+
+              {user?.is_verified && user?.verified_at && (
+                <View style={styles.profileDetailItem}>
+                  <Ionicons name="time" size={24} color={colors.darkGray} style={styles.detailIcon} />
+                  <Text style={styles.detailLabel}>Verified on:</Text>
+                  <Text style={styles.detailValue}>
+                    {new Date(user.verified_at).toLocaleDateString()}
+                  </Text>
+                </View>
+              )}
+
+              <TouchableOpacity 
+                style={styles.editProfileButton}
+                onPress={handleChangeProfileImage}
+                disabled={isActionInProgress || uploadingImage || !modalAnimationComplete}
+                activeOpacity={0.7}
+              >
+                {uploadingImage ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
-                  <View style={styles.fullProfileImagePlaceholder}>
-                    <Ionicons name="person" size={80} color="#888888" />
-                  </View>
+                  <Text style={styles.editProfileButtonText}>Change Photo</Text>
                 )}
               </TouchableOpacity>
-              
-              <View style={styles.profileDetailsOverlay}>
-                <Text style={styles.fullProfileName}>
-                  {user?.display_name || authUser?.displayName || 'User'}
-                  {user?.age ? `, ${user.age}` : ''}
-                </Text>
-              </View>
-            </View>
-
-            <Text style={styles.sectionTitle}>Profile Details</Text>
-            <View style={styles.profileDetailItem}>
-              <Ionicons name="mail" size={24} color={colors.primary} style={styles.detailIcon} />
-              <Text style={styles.detailLabel}>Email:</Text>
-              <Text style={styles.detailValue}>{user?.email || 'No email available'}</Text>
-            </View>
-
-            <View style={styles.profileDetailItem}>
-              <Ionicons name="calendar" size={24} color={colors.primary} style={styles.detailIcon} />
-              <Text style={styles.detailLabel}>Birth Date:</Text>
-              <Text style={styles.detailValue}>{user?.formattedBirthDate || 'Not available'}</Text>
-            </View>
-
-            <View style={styles.profileDetailItem}>
-              <Ionicons name="time" size={24} color={colors.primary} style={styles.detailIcon} />
-              <Text style={styles.detailLabel}>Member Since:</Text>
-              <Text style={styles.detailValue}>
-                {user?.created_at 
-                  ? new Date(user.created_at).toLocaleDateString() 
-                  : 'Not available'}
-              </Text>
-            </View>
-
-            <View style={styles.profileDetailItem}>
-              <Ionicons 
-                name={user?.is_verified ? "shield-checkmark" : "shield-outline"} 
-                size={24} 
-                color={user?.is_verified ? colors.primary : colors.darkGray} 
-                style={styles.detailIcon} 
-              />
-              <Text style={styles.detailLabel}>Verification:</Text>
-              <View style={styles.verificationStatus}>
-                <Text style={[
-                  styles.detailValue, 
-                  user?.is_verified ? styles.verifiedText : styles.notVerifiedText
-                ]}>
-                  {user?.is_verified ? 'Verified' : 'Not Verified'}
-                </Text>
-                <VerifiedBadge 
-                  isVerified={!!user?.is_verified} 
-                  size="small"
-                  style={{ marginLeft: 8 }}
-                />
-              </View>
-            </View>
-
-            {user?.is_verified && user?.verified_at && (
-              <View style={styles.profileDetailItem}>
-                <Ionicons name="time" size={24} color={colors.darkGray} style={styles.detailIcon} />
-                <Text style={styles.detailLabel}>Verified on:</Text>
-                <Text style={styles.detailValue}>
-                  {new Date(user.verified_at).toLocaleDateString()}
-                </Text>
-              </View>
-            )}
-
-            <TouchableOpacity 
-              style={styles.editProfileButton}
-              onPress={() => {
-                setShowProfileDetails(false);
-                // Add functionality to navigate to edit profile screen
-              }}
-            >
-              <Text style={styles.editProfileButtonText}>Edit Profile</Text>
-            </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -455,20 +562,31 @@ export default function SettingsScreen() {
         visible={showProfileImageModal}
         transparent={true}
         animationType="fade"
-        onRequestClose={() => setShowProfileImageModal(false)}
+        onRequestClose={handleCloseImageModal}
+        statusBarTranslucent={true}
       >
         <View style={styles.fullScreenModalContainer}>
           <TouchableOpacity 
             style={styles.fullScreenCloseButton}
-            onPress={() => setShowProfileImageModal(false)}
+            onPress={handleCloseImageModal}
+            activeOpacity={0.7}
+            hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
           >
             <Ionicons name="close-circle" size={36} color="#FFFFFF" />
           </TouchableOpacity>
-          <Image 
-            source={{ uri: user?.photo_url || authUser?.photoURL || '' }}
-            style={styles.fullScreenImage}
-            resizeMode="contain"
-          />
+          <TouchableOpacity
+            activeOpacity={1}
+            style={{ width: '100%', height: '100%', justifyContent: 'center' }}
+            onPress={handleCloseImageModal}
+          >
+            <Image 
+              source={{ uri: user?.photo_url || authUser?.photoURL || '' }}
+              style={styles.fullScreenImage}
+              resizeMode="contain"
+              progressiveRenderingEnabled={true}
+              fadeDuration={300}
+            />
+          </TouchableOpacity>
         </View>
       </Modal>
     </ScrollView>
@@ -578,20 +696,25 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: colors.background,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    height: '90%',
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 15,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: colors.lightGray,
   },
@@ -600,14 +723,24 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.text,
   },
+  modalScrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
   fullProfileCard: {
     width: '100%',
-    height: 400,
+    height: 240,
     borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 20,
+    marginBottom: 16,
     position: 'relative',
     backgroundColor: '#2A2A2A',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   fullProfileImageContainer: {
     width: '100%',
@@ -631,47 +764,55 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    padding: 16,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   fullProfileName: {
     color: '#FFFFFF',
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: 'bold',
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: colors.text,
-    marginBottom: 12,
+    marginBottom: 8,
     marginTop: 8,
+    marginLeft: 16,
   },
   profileDetailItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.lightGray,
   },
   detailIcon: {
-    marginRight: 12,
+    marginRight: 10,
+    width: 24,
   },
   detailLabel: {
-    fontSize: 16,
+    fontSize: 14,
     color: colors.darkGray,
-    width: 100,
+    width: 80,
   },
   detailValue: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 14,
     color: colors.text,
   },
   editProfileButton: {
     backgroundColor: colors.primary,
     borderRadius: 30,
-    padding: 16,
+    padding: 12,
     alignItems: 'center',
-    marginTop: 24,
+    marginTop: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
   },
   editProfileButtonText: {
     color: '#FFFFFF',

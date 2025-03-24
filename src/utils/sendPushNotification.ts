@@ -10,6 +10,12 @@ type PushMessage = {
   sound?: 'default' | null;
   badge?: number;
   channelId?: string; // For Android
+  priority?: string;
+  ttl?: number;
+  expiration?: number;
+  categoryId?: string;
+  mutableContent?: boolean;
+  contentAvailable?: boolean;
 };
 
 /**
@@ -34,18 +40,29 @@ export const sendPushNotification = async (
       return false;
     }
     
-    console.log(`Sending push notification to token: ${pushToken}`);
+    console.log(`Sending high-priority push notification to token: ${pushToken}`);
     
-    // Format the message
+    // Format the message with high-priority settings
     const message: PushMessage = {
       to: pushToken,
       title,
       body,
       data: {
         ...data,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        priority: 'high',
+        urgent: true,
+        contentAvailable: true,
       },
       sound: 'default',
+      // Priority fields for faster delivery
+      priority: 'high',
+      ttl: 60, // seconds
+      expiration: 60, // seconds
+      // iOS specific fields for faster delivery
+      categoryId: 'time_sensitive',
+      mutableContent: true,
+      contentAvailable: true,
     };
     
     // Add Android channel ID if on Android
@@ -53,18 +70,18 @@ export const sendPushNotification = async (
       message.channelId = 'messages';
     }
     
-    // Send the push notification via Expo's push API
+    // Send the push notification via Expo's push API with high priority
     const response = await fetch(EXPO_PUSH_ENDPOINT, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
+        'Priority': 'high',
       },
       body: JSON.stringify(message),
     });
     
     const result = await response.json();
-    console.log('Push notification sent result:', result);
     
     // If there are errors, log them
     if (result.errors && result.errors.length > 0) {

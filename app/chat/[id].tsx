@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { 
   StyleSheet, 
   View, 
@@ -22,6 +22,7 @@ import { Ionicons, FontAwesome } from '@expo/vector-icons';
 import colors from '../../src/theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useUnreadMessages } from '../(tabs)/_layout';
+import { setViewingConversation } from '../../src/lib/notifications';
 
 type Message = {
   id: string;
@@ -36,6 +37,43 @@ interface Conversation {
   status: string;
   isInitiator: boolean;
 }
+
+// Memoize the message component to prevent unnecessary rerenders
+const MessageItem = memo(({ 
+  message,
+  isUserMessage,
+  isFirstInGroup
+}: { 
+  message: Message,
+  isUserMessage: boolean,
+  isFirstInGroup: boolean
+}) => {
+  const messageStyles = [
+    styles.messageContainer, 
+    isUserMessage ? styles.userMessage : styles.otherMessage,
+    isFirstInGroup && (isUserMessage ? styles.firstInGroupUser : styles.firstInGroupOther)
+  ];
+
+  const bubbleStyles = [
+    styles.messageBubble,
+    isUserMessage ? styles.userBubble : styles.otherBubble,
+  ];
+
+  return (
+    <View style={messageStyles}>
+      <View style={bubbleStyles}>
+        <Text style={styles.messageText}>{message.content}</Text>
+      </View>
+    </View>
+  );
+}, (prevProps, nextProps) => {
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.isUserMessage === nextProps.isUserMessage &&
+    prevProps.isFirstInGroup === nextProps.isFirstInGroup
+  );
+});
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams();
@@ -72,6 +110,16 @@ export default function ChatScreen() {
       setMessageLimitReached(false);
     }
   }, [isInitiator, conversationStatus]);
+
+  useEffect(() => {
+    if (id) {
+      setViewingConversation(id as string);
+    }
+    
+    return () => {
+      setViewingConversation(null);
+    };
+  }, [id]);
 
   useEffect(() => {
     fetchMessages();
@@ -125,13 +173,13 @@ export default function ChatScreen() {
     if (flatListRef.current && messages.length > 0) {
       setTimeout(() => {
         try {
-          flatListRef.current?.scrollToEnd({ animated: true });
+          flatListRef.current?.scrollToEnd({ animated: false });
         } catch (error) {
           console.log("Scroll error:", error);
         }
-      }, 100);
+      }, 300);
     }
-  }, [isInputFocused, messages.length]);
+  }, [messages.length]);
 
   const fetchConversationDetails = async () => {
     try {
@@ -188,9 +236,29 @@ export default function ChatScreen() {
       return;
     }
     
+    const messageContent = newMessage.trim();
+    
+    // Create optimistic message
+    const optimisticMessage: Message = {
+      id: `temp-${Date.now()}`,
+      content: messageContent,
+      created_at: new Date().toISOString(), // Still need this for message order but we won't display it
+      sender_id: auth.currentUser?.uid || '',
+    };
+
+    // Set the new message first
+    setNewMessage('');
+    
+    // Then update the messages array with the optimistic message
+    setMessages(prev => [...prev, optimisticMessage]);
+    
+    // Scroll to bottom immediately after adding the message
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: false });
+    }, 50);
+    
     try {
-      await sendMessage(id as string, newMessage.trim());
-      setNewMessage('');
+      await sendMessage(id as string, messageContent);
       
       try {
         await markMessagesAsRead(id as string);
@@ -199,6 +267,8 @@ export default function ChatScreen() {
         console.error('Error marking messages as read after sending:', error);
       }
     } catch (error) {
+      // Remove the optimistic message if sending fails
+      setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
       console.error('Error sending message:', error);
       if (error instanceof Error) {
         Alert.alert('Error', error.message);
@@ -224,30 +294,6 @@ export default function ChatScreen() {
       }
     } finally {
       setIsResponding(false);
-    }
-  };
-
-  const formatTime = (timestamp: string) => {
-    try {
-      const date = new Date(timestamp);
-      if (isNaN(date.getTime())) {
-        return '';
-      }
-      
-      const now = new Date();
-      const diff = now.getTime() - date.getTime();
-      const oneDay = 24 * 60 * 60 * 1000;
-
-      if (diff < oneDay) {
-        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      } else if (diff < 7 * oneDay) {
-        return `${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${date.toLocaleDateString([], { weekday: 'short' })}`;
-      } else {
-        return `${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}`;
-      }
-    } catch (e) {
-      console.error("Error formatting date:", e);
-      return '';
     }
   };
 
@@ -297,106 +343,36 @@ export default function ChatScreen() {
     );
   };
 
-  const renderMessage = ({ item, index }: { item: Message, index: number }) => {
+  // Use a memoized renderItem function for FlatList
+  const renderMessage = useCallback(({ item, index }: { item: Message, index: number }) => {
+    const isUserMessage = item.sender_id === auth.currentUser?.uid;
     const isSystemMessage = item.sender_id === 'system';
     
-    const isCurrentUser = !isSystemMessage && item.sender_id === auth.currentUser?.uid;
-    
-    const isFirstInSequence = index === 0 || 
-      messages[index - 1]?.sender_id !== item.sender_id ||
-      isSystemMessage || 
-      messages[index - 1]?.sender_id === 'system';
-    
-    const isLastInSequence = index === messages.length - 1 || 
-      messages[index + 1]?.sender_id !== item.sender_id ||
-      isSystemMessage || 
-      messages[index + 1]?.sender_id === 'system';
-    
-    const showTimestamp = isLastInSequence;
-    
+    // Handle system messages
     if (isSystemMessage) {
       return (
         <View style={styles.systemMessageContainer}>
-          <View style={styles.systemMessageBubble}>
-            <Text style={styles.systemMessageText}>{item.content}</Text>
-          </View>
-          <Text style={styles.systemMessageTime}>{formatTime(item.created_at)}</Text>
+          <Text style={styles.systemMessageText}>{item.content}</Text>
         </View>
       );
     }
     
+    // Check if this message is the first in a group
+    const isFirstInGroup = index === 0 || 
+      messages[index - 1].sender_id !== item.sender_id || 
+      (new Date(item.created_at).getTime() - new Date(messages[index - 1].created_at).getTime() > 5 * 60 * 1000);
+    
     return (
-      <View style={[
-        styles.messageRow,
-        isCurrentUser ? styles.sentMessageRow : styles.receivedMessageRow,
-        isFirstInSequence && { marginTop: 8 }
-      ]}>
-        {!isCurrentUser ? (
-          <View style={[
-            styles.avatarContainer,
-            !isFirstInSequence && { opacity: 0 }
-          ]}>
-            {isFirstInSequence && otherUser && (
-              otherUser.photo_url ? (
-                <Image 
-                  source={{ uri: otherUser.photo_url }} 
-                  style={styles.avatar} 
-                  onError={(e) => console.error("Error loading message avatar:", e.nativeEvent.error)}
-                />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Text style={styles.avatarInitial}>
-                    {otherUser?.display_name?.charAt(0) || '?'}
-                  </Text>
-                </View>
-              )
-            )}
-          </View>
-        ) : (
-          <View style={styles.spacer} />
-        )}
-        
-        <View style={[
-          styles.messageContainer,
-          isCurrentUser ? styles.sentMessage : styles.receivedMessage,
-          !isLastInSequence && { marginBottom: 2 },
-          isFirstInSequence && !isLastInSequence && (
-            isCurrentUser 
-              ? { borderBottomRightRadius: 4 } 
-              : { borderBottomLeftRadius: 4 }
-          ),
-          !isFirstInSequence && !isLastInSequence && { borderRadius: 12 },
-          !isFirstInSequence && isLastInSequence && (
-            isCurrentUser 
-              ? { borderTopRightRadius: 4 } 
-              : { borderTopLeftRadius: 4 }
-          )
-        ]}>
-          <Text style={[
-            styles.messageText,
-            isCurrentUser ? styles.sentMessageText : styles.receivedMessageText
-          ]}>
-            {item.content}
-          </Text>
-          {showTimestamp && (
-            <Text style={[
-              styles.messageTime,
-              isCurrentUser ? styles.sentMessageTime : styles.receivedMessageTime
-            ]}>
-              {formatTime(item.created_at)}
-            </Text>
-          )}
-        </View>
-        
-        {isCurrentUser && (
-          <View style={[
-            styles.avatarContainer,
-            { opacity: 0 }
-          ]} />
-        )}
-      </View>
+      <MessageItem 
+        message={item}
+        isUserMessage={isUserMessage}
+        isFirstInGroup={isFirstInGroup}
+      />
     );
-  };
+  }, [messages]);
+
+  // Use key extractor for FlatList optimization
+  const keyExtractor = useCallback((item: Message) => item.id, []);
 
   const renderPendingBanner = () => {
     return (
@@ -497,10 +473,21 @@ export default function ChatScreen() {
           ref={flatListRef}
           data={messages}
           renderItem={renderMessage}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.listContent, { flexGrow: 1, justifyContent: 'flex-end' }]}
+          keyExtractor={keyExtractor}
+          contentContainerStyle={[styles.messagesContainer, { flexGrow: 1, justifyContent: 'flex-end' }]}
+          onLayout={() => {
+            if (messages.length > 0) {
+              flatListRef.current?.scrollToEnd({ animated: false });
+            }
+          }}
+          windowSize={5}
+          maxToRenderPerBatch={5}
+          initialNumToRender={10}
+          removeClippedSubviews={Platform.OS === 'android'}
           inverted={false}
-          ListHeaderComponent={renderHeader}
+          onContentSizeChange={() => {
+            flatListRef.current?.scrollToEnd({ animated: false });
+          }}
         />
         
         {(conversationStatus === 'accepted' || isInitiator) && (
@@ -688,43 +675,38 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   messageContainer: {
-    maxWidth: '75%',
-    minWidth: 40,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginBottom: 4,
+    marginVertical: 2,
+    paddingHorizontal: 12,
   },
-  sentMessage: {
-    backgroundColor: colors.primary,
+  userMessage: {
+    alignSelf: 'flex-end',
+  },
+  otherMessage: {
+    alignSelf: 'flex-start',
+  },
+  firstInGroupUser: {
+    marginTop: 12,
+  },
+  firstInGroupOther: {
+    marginTop: 12,
+  },
+  messageBubble: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    maxWidth: '80%',
+  },
+  userBubble: {
+    backgroundColor: '#5EB1BF',
     borderBottomRightRadius: 4,
-    marginLeft: 8,
   },
-  receivedMessage: {
-    backgroundColor: colors.lightGray,
+  otherBubble: {
+    backgroundColor: '#000000',
     borderBottomLeftRadius: 4,
-    marginRight: 8,
   },
   messageText: {
     fontSize: 16,
-    lineHeight: 22,
-  },
-  sentMessageText: {
-    color: colors.background,
-  },
-  receivedMessageText: {
-    color: colors.text,
-  },
-  messageTime: {
-    fontSize: 11,
-    marginTop: 4,
-    alignSelf: 'flex-end',
-  },
-  sentMessageTime: {
-    color: 'rgba(255, 255, 255, 0.7)',
-  },
-  receivedMessageTime: {
-    color: colors.darkGray,
+    color: '#fff',
   },
   inputContainer: {
     flexDirection: 'row',
@@ -892,15 +874,10 @@ const styles = StyleSheet.create({
     color: colors.darkGray,
     textAlign: 'center',
   },
-  systemMessageTime: {
-    fontSize: 10,
-    color: colors.darkGray,
-    marginTop: 4,
-  },
   keyboardAvoidView: {
     flex: 1,
   },
-  listContent: {
+  messagesContainer: {
     paddingBottom: 20,
     paddingTop: 8,
   },

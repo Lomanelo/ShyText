@@ -766,14 +766,43 @@ export async function sendMessage(conversationId: string, content: string) {
 // Subscribe to messages in a conversation
 export function subscribeToMessages(conversationId: string, callback: (messages: any[]) => void) {
   const messagesRef = collection(db, 'conversations', conversationId, 'messages');
-  const q = query(messagesRef, orderBy('timestamp', 'asc'));
+  
+  // Add limit to initial query to load faster, and order by timestamp descending to get newest messages first
+  const q = query(messagesRef, orderBy('timestamp', 'desc'), limit(30));
+  
+  // Use a local cache to prevent unnecessary redraws
+  let previousMessages: any[] = [];
   
   return onSnapshot(q, (snapshot) => {
-    const messages = snapshot.docs.map(doc => ({
+    if (snapshot.empty && previousMessages.length === 0) {
+      // No messages to display
+      callback([]);
+      return;
+    }
+    
+    // Get new messages
+    const newMessages = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
-    callback(messages);
+    
+    // Reverse to get chronological order again
+    newMessages.reverse();
+    
+    // Check if anything changed before triggering a re-render
+    const messagesChanged = previousMessages.length !== newMessages.length || 
+      JSON.stringify(newMessages.map(m => m.id)) !== JSON.stringify(previousMessages.map(m => m.id));
+    
+    if (messagesChanged) {
+      previousMessages = [...newMessages];
+      callback(newMessages);
+    }
+  }, 
+  // Error handling callback
+  (error) => {
+    console.error('Error subscribing to messages:', error);
+    // Still return empty array to prevent UI from hanging
+    callback([]);
   });
 }
 
