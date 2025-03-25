@@ -142,8 +142,8 @@ export default function TabLayout() {
           name="settings"
           options={{
             title: 'Settings',
-            tabBarIcon: ({ color, focused }) => (
-              <TabBarIcon name="person-circle" color={color} isProfile={true} focused={focused} />
+            tabBarIcon: ({ color }) => (
+              <TabBarIcon name="settings" color={color} />
             ),
           }}
         />

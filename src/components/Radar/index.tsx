@@ -14,8 +14,8 @@ const { teal, white, darkGray } = {
 };
 
 const { width, height } = Dimensions.get('window');
-const RADAR_SIZE = width * 0.9; // 90% of screen width
-const BUBBLE_SIZE = 60; // Increased bubble size for better visibility
+const RADAR_SIZE = width * 0.97; // 90% of screen width
+const BUBBLE_SIZE = 70; // Increased bubble size for better visibility
 const MIN_DISTANCE = BUBBLE_SIZE * 1.8; // Further increased minimum distance between bubbles
 const CENTER_BUFFER = 100; // Buffer around center to prevent overlapping with current user
 const DROP_TARGET_SIZE = 70; // Smaller visual circle with the plus icon
@@ -92,7 +92,6 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend }: 
     for (let i = 0; i < numSlots; i++) {
       // Calculate angle for evenly distributed points around a circle
       // Starting from the top (270 degrees or -90 degrees) and going clockwise
-      // We're using -90 degrees (top of the circle) as the starting point
       const angle = ((i * 2 * Math.PI) / numSlots) - Math.PI/2;
       
       // Convert polar coordinates to cartesian
@@ -147,23 +146,23 @@ const Radar = ({ users, currentUser, maxDistance, onUserPress, onMessageSend }: 
   
   return (
     <View style={styles.container}>
-      {/* Current User (Top) */}
-      <View style={styles.currentUserSection}>
-        <UserBubble
-          user={{
-            id: currentUser.id,
-            display_name: currentUser.display_name || 'You',
-            photo_url: currentUser.photo_url,
-            isCurrentUser: true,
-            is_verified: currentUser.is_verified
-          }}
-          onPress={() => {}}
-          size={BUBBLE_SIZE * 1.4}
-        />
-      </View>
-      
       {/* Radar Area */}
       <View style={[styles.radarBackground, { width: RADAR_SIZE, height: RADAR_SIZE }]}>
+        {/* Current User (Center) */}
+        <View style={styles.currentUserContainer}>
+          <UserBubble
+            user={{
+              id: currentUser.id,
+              display_name: currentUser.display_name || 'You',
+              photo_url: currentUser.photo_url,
+              isCurrentUser: true,
+              is_verified: currentUser.is_verified
+            }}
+            onPress={() => {}}
+            size={BUBBLE_SIZE * 1.4}
+          />
+        </View>
+        
         {/* Nearby Users */}
         {Object.entries(userPositions).map(([userId, position]) => {
           // Find the user data based on userId

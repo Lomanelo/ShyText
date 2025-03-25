@@ -55,8 +55,8 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible', // Allow bubbles to slightly overflow
-    borderWidth: 1,
-    borderColor: colors.mediumGray,
+    borderWidth: 2, // Increased from 1 for better visibility
+    borderColor: '#000000', // Changed to black
     backgroundColor: colors.lightGray,
     position: 'relative', // Ensures absolute positioning of children works correctly
     marginTop: 10, // Add some space from the current user
@@ -73,6 +73,9 @@ export const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 20, // Ensure it's above other users
+    left: '50%',
+    top: '50%',
+    transform: [{ translateX: -40 }, { translateY: -40 }], // Half of the bubble size to ensure it's centered
   },
   
   // User bubble styles
