@@ -469,17 +469,18 @@ const styles = StyleSheet.create({
     height: 50,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: 30
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 70,
+    height: 70,
+    borderRadius: 50,
   },
   avatarPlaceholder: {
     backgroundColor: colors.lightGray,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 70,
+    height: 70,
+    borderRadius: 50,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -527,9 +528,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   lastMessage: {
-    fontSize: 15,
+    fontSize: 20,
     color: colors.darkGray,
     flex: 1,
+    paddingLeft: 10,
+    paddingTop: 10,
   },
   status: {
     fontSize: 15,
