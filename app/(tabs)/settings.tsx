@@ -713,10 +713,6 @@ export default function SettingsScreen() {
         />
       }
     >
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Settings</Text>
-      </View>
-
       {/* Profile Section */}
       <TouchableOpacity
         style={styles.profileSection}

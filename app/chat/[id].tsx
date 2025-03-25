@@ -23,6 +23,7 @@ import colors from '../../src/theme/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useUnreadMessages } from '../(tabs)/_layout';
 import { setViewingConversation } from '../../src/lib/notifications';
+import VerifiedBadge from '../../src/components/VerifiedBadge';
 
 type Message = {
   id: string;
@@ -536,6 +537,13 @@ export default function ChatScreen() {
                 <Ionicons name="close" size={24} color="white" />
               </TouchableOpacity>
               
+              {/* Verification Badge */}
+              {otherUser?.is_verified && (
+                <View style={styles.verificationBadgeContainer}>
+                  <VerifiedBadge isVerified={true} size="large" />
+                </View>
+              )}
+              
               {otherUser?.photo_url ? (
                 <Image 
                   source={{ uri: otherUser.photo_url }} 
@@ -987,5 +995,19 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginLeft: 8,
     flex: 1,
+  },
+  verificationBadgeContainer: {
+    position: 'absolute',
+    top: 15,
+    left: 15,
+    zIndex: 50,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 16,
+    padding: 6,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.5,
+    shadowRadius: 3,
   },
 });

@@ -199,7 +199,7 @@ export default function LoginScreen() {
             <View style={styles.noteContainer}>
               <Ionicons name="information-circle-outline" size={16} color="rgba(0,0,0,0.6)" style={{marginRight: 8, marginTop: 2}} />
               <Text style={styles.noteText}>
-                Your device name must match your full username including @shytext to enable Bluetooth discovery.
+                Your device name must match your full username including @shytext to enable discovery.
               </Text>
             </View>
             

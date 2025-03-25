@@ -113,7 +113,9 @@ export default function TabLayout() {
           headerTintColor: colors.text,
           headerTitleStyle: {
             fontWeight: '600',
+            fontSize: 24,
           },
+          headerShown: true,
         }}>
         <Tabs.Screen
           name="index"

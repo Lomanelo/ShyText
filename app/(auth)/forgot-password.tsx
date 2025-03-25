@@ -109,14 +109,6 @@ export default function ForgotPasswordScreen() {
       <SafeAreaView style={styles.safeAreaContainer}>
         <StatusBar style="dark" />
         
-        <View style={styles.header}>
-          <TouchableOpacity onPress={handleBack} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Reset Password</Text>
-          <View style={styles.placeholderView} />
-        </View>
-        
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.logoContainer}>
             <Image 
@@ -127,7 +119,7 @@ export default function ForgotPasswordScreen() {
           </View>
           
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Forgot Password</Text>
+            <Text style={styles.cardTitle}>Forgot My Passwordbv</Text>
             
             {!success ? (
               <>
@@ -208,31 +200,18 @@ const styles = StyleSheet.create({
   safeAreaContainer: {
     flex: 1,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.mediumGray,
-  },
-  backButton: {
+  floatingBackButton: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    zIndex: 10,
     padding: 5,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: colors.text,
-  },
-  placeholderView: {
-    width: 34,
   },
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 20,
     paddingBottom: 20,
+    paddingTop: 20, // Reduced padding since we no longer need space for the floating button
   },
   logoContainer: {
     alignItems: 'center',

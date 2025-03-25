@@ -334,14 +334,6 @@ export default function SignupScreen() {
           </View>
         </Modal>
         
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color={colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Create Account</Text>
-          <View style={styles.placeholderView} />
-        </View>
-
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.logoContainer}>
             <Image 
@@ -416,7 +408,7 @@ export default function SignupScreen() {
             <View style={styles.noteContainer}>
               <Ionicons name="information-circle-outline" size={16} color="rgba(0,0,0,0.6)" style={{marginRight: 8, marginTop: 2}} />
               <Text style={styles.noteText}>
-                Your device name must match your username@shytext
+              Your device name must match your full username including @shytext to enable discovery.
               </Text>
             </View>
 

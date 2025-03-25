@@ -342,9 +342,6 @@ export default function ChatsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Chats</Text>
-      </View>
       <FlatList
         data={conversations}
         renderItem={renderConversationItem}

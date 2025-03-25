@@ -81,6 +81,18 @@ export default function AuthLayout() {
           title: 'Complete Profile',
         }}
       />
+      <Stack.Screen
+        name="signup"
+        options={{
+          title: 'Sign Up',
+        }}
+      />
+      <Stack.Screen
+        name="forgot-password"
+        options={{
+          title: 'Password Recovery',
+        }}
+      />
     </Stack>
   );
 }
