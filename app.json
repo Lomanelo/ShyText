@@ -8,6 +8,11 @@
     "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/darkbgwithlogo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
     "notification": {
       "icon": "./assets/images/translogoWhite.png",
       "color": "#00ADAD",

@@ -7,6 +7,10 @@ import * as Notifications from 'expo-notifications';
 import { defineNotificationChannels, setupNotificationListeners } from '../src/lib/notifications';
 import { startScanning, stopScanning } from '../src/hooks/useNearbyUsers';
 import { useAuth } from '../src/hooks/useAuth';
+import * as SplashScreen from 'expo-splash-screen';
+
+// Keep the splash screen visible while we fetch resources
+SplashScreen.preventAutoHideAsync();
 
 // Create a Profile Image context to help with caching
 export const ProfileImageContext = createContext<{
@@ -26,6 +30,7 @@ export default function RootLayout() {
   const [isLoading, setIsLoading] = useState(false);
   const [nearbyUsers, setNearbyUsers] = useState<any[]>([]);
   const [notificationsInitialized, setNotificationsInitialized] = useState(false);
+  const [appIsReady, setAppIsReady] = useState(false);
 
   // Function to refresh and preload profile image
   const refreshProfileImage = () => {
@@ -37,6 +42,32 @@ export default function RootLayout() {
         .catch(error => console.error('Error prefetching profile image:', error));
     }
   };
+
+  // Hide splash screen once app is ready
+  useEffect(() => {
+    async function prepare() {
+      try {
+        // Artificial delay to show the splash screen for a bit longer
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Any app initialization logic can go here
+      } catch (e) {
+        console.warn('Error preparing app:', e);
+      } finally {
+        // Tell the application to render
+        setAppIsReady(true);
+      }
+    }
+
+    prepare();
+  }, []);
+
+  useEffect(() => {
+    if (appIsReady) {
+      // This tells the splash screen to hide immediately
+      SplashScreen.hideAsync();
+    }
+  }, [appIsReady]);
 
   // Preload user profile image when it changes
   useEffect(() => {
