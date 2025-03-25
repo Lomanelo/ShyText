@@ -27,6 +27,7 @@ import BleService from '../../src/services/BleService';
 
 export default function SignupScreen() {
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -140,6 +141,20 @@ export default function SignupScreen() {
         setLoading(false);
         return;
       }
+
+      if (!email.trim()) {
+        setError('Please enter your email');
+        setLoading(false);
+        return;
+      }
+
+      // Basic email validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email.trim())) {
+        setError('Please enter a valid email address');
+        setLoading(false);
+        return;
+      }
       
       if (!password.trim()) {
         setError('Please enter a password');
@@ -189,13 +204,10 @@ export default function SignupScreen() {
     try {
       setLoading(true);
       
-      // Create temporary email using username with @shytext suffix (will not be shown to user or used for login)
-      const tempEmail = `${username.trim().toLowerCase()}@shytext.temp`;
-      
-      // Create user account in Firebase (required for authentication system)
+      // Create user account in Firebase with provided email
       const userCredential = await createUserWithEmailAndPassword(
         getAuth(),
-        tempEmail,
+        email.trim().toLowerCase(),
         password.trim()
       );
       
@@ -203,6 +215,7 @@ export default function SignupScreen() {
       const db = getFirestore();
       await setDoc(doc(db, 'profiles', userCredential.user.uid), {
         username: `${username.trim()}@shytext`,
+        email: email.trim().toLowerCase(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         last_active: new Date().toISOString(),
@@ -364,6 +377,23 @@ export default function SignupScreen() {
                   />
                   <Text style={styles.usernameSuffix}>@shytext</Text>
                 </View>
+              </View>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Email</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="mail-outline" size={20} color="rgba(0,0,0,0.6)" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="Enter your email"
+                  placeholderTextColor="rgba(0,0,0,0.4)"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
               </View>
             </View>
 

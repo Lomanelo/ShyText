@@ -65,8 +65,9 @@ export default function ProfileImageScreen() {
     // Parse the date parts
     const [day, month, year] = dateStr.split('/').map(Number);
     
-    // Create date and check if it's valid
-    const dateObj = new Date(year, month - 1, day);
+    // Create date with time set to noon to avoid timezone issues
+    // This prevents dates from shifting to the previous day due to timezone conversions
+    const dateObj = new Date(year, month - 1, day, 12, 0, 0);
     
     // Check if the date is valid (e.g., not 31/02/2023)
     if (
@@ -79,7 +80,9 @@ export default function ProfileImageScreen() {
     }
     
     // Check if date is not in the future
-    if (dateObj > new Date()) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (dateObj > today) {
       setBirthDateError('Birth date cannot be in the future');
       return false;
     }
@@ -87,6 +90,7 @@ export default function ProfileImageScreen() {
     // Check if user is at least 13 years old
     const minAgeDate = new Date();
     minAgeDate.setFullYear(minAgeDate.getFullYear() - 13);
+    minAgeDate.setHours(0, 0, 0, 0);
     if (dateObj > minAgeDate) {
       setBirthDateError('You must be at least 13 years old to use this app');
       return false;
@@ -198,34 +202,47 @@ export default function ProfileImageScreen() {
             resolve({ success: false, error });
           },
           async () => {
-            // Upload completed successfully
+            // Upload complete, get download URL
             try {
-              console.log('Upload completed, getting download URL');
               const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              console.log('Got download URL:', downloadURL);
+              console.log('File available at', downloadURL);
               
-              // Update user profile with photo URL
+              // Update auth profile photoURL
               const auth = getAuth();
-              if (auth.currentUser) {
-                console.log('Updating user auth profile with photo URL');
-                await updateProfile(auth.currentUser, {
-                  photoURL: downloadURL,
+              const user = auth.currentUser;
+              
+              if (user) {
+                console.log('Updating user profile with photo URL');
+                await updateProfile(user, {
+                  photoURL: downloadURL
                 });
                 
-                // Also update user document in Firestore
                 try {
+                  // Update user profile in Firestore
                   const db = getFirestore();
+                  const userRef = doc(db, 'profiles', user.uid);
                   
-                  // Format birth date for Firestore
-                  const birthDateString = birthDate ? birthDate.toISOString().split('T')[0] : null;
+                  const updateData: any = {
+                    photoURL: downloadURL,
+                    updated_at: new Date().toISOString()
+                  };
                   
-                  // Try to update in both profile collections for compatibility
+                  // Add birth date to profile if provided
+                  if (birthDate) {
+                    // Store as ISO string to prevent timezone issues
+                    updateData.birthDate = birthDate.toISOString().split('T')[0];
+                  }
+                  
+                  await updateDoc(userRef, updateData);
+                  console.log('User profile updated with photo URL and birth date');
+                  
+                  // Also update user document in Firestore
                   try {
                     console.log('Updating Firestore profiles collection with photo URL and birth date');
                     await updateDoc(doc(db, 'profiles', userId), {
                       photoURL: downloadURL,
                       photo_url: downloadURL,
-                      birth_date: birthDateString,
+                      birth_date: updateData.birthDate,
                       updated_at: new Date().toISOString()
                     });
                   } catch (profileError) {
@@ -238,7 +255,7 @@ export default function ProfileImageScreen() {
                     await updateDoc(doc(db, 'users', userId), {
                       photoURL: downloadURL,
                       photo_url: downloadURL,
-                      birth_date: birthDateString,
+                      birth_date: updateData.birthDate,
                       updatedAt: new Date().toISOString()
                     });
                   } catch (userError) {

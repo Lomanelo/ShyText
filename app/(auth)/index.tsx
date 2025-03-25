@@ -23,6 +23,7 @@ import * as DeviceInfo from 'react-native-device-info';
 import BleService from '../../src/services/BleService';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { useAuth } from '../../src/hooks/useAuth';
+import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
 
 export default function LoginScreen() {
   const [username, setUsername] = useState('');
@@ -74,12 +75,34 @@ export default function LoginScreen() {
         usernameForAuth = usernameForAuth.split('@shytext')[0];
       }
       
-      const tempEmail = `${usernameForAuth.toLowerCase()}@shytext.temp`;
+      // Format the username with the @shytext suffix for the database query
+      const formattedUsername = `${usernameForAuth}@shytext`;
       
       try {
-        // Attempt to sign in with the temporary email and password
+        // Fetch the user's email from Firestore profiles collection
+        const db = getFirestore();
+        const profilesRef = collection(db, 'profiles');
+        const q = query(profilesRef, where('username', '==', formattedUsername));
+        const querySnapshot = await getDocs(q);
+        
+        if (querySnapshot.empty) {
+          setError('Invalid username or password. Please try again.');
+          setLoading(false);
+          return;
+        }
+        
+        // Get the email from the user's profile
+        const userEmail = querySnapshot.docs[0].data().email;
+        
+        if (!userEmail) {
+          setError('Account error. Please contact support.');
+          setLoading(false);
+          return;
+        }
+        
+        // Attempt to sign in with the email and password
         const auth = getAuth();
-        const userCredential = await signInWithEmailAndPassword(auth, tempEmail, password);
+        const userCredential = await signInWithEmailAndPassword(auth, userEmail, password);
         
         // Success! Navigate to main app
         console.log('Successfully authenticated');
@@ -158,6 +181,12 @@ export default function LoginScreen() {
                   autoCapitalize="none"
                 />
               </View>
+              <TouchableOpacity 
+                style={styles.forgotPasswordContainer}
+                onPress={() => router.push('/(auth)/forgot-password' as any)}
+              >
+                <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+              </TouchableOpacity>
             </View>
             
             {error && (
@@ -374,5 +403,15 @@ const styles = StyleSheet.create({
     color: colors.darkGray,
     textAlign: 'center',
     marginTop: 24,
+  },
+  forgotPasswordContainer: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  forgotPasswordText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

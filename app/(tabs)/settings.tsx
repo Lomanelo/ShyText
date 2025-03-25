@@ -47,15 +47,15 @@ export default function SettingsScreen() {
       try {
         // Get BleService instance
         const bleService = BleService.getInstance();
-        
+
         // Start by initializing - needed for other state checks
         const isEnabled = await bleService.initialize();
         setBluetoothEnabled(isEnabled);
-        
+
         // Now check authorization separately - this is what determines visibility
         const isAuthorized = bleService.isBluetoothAuthorized();
         setBleAuthorized(isAuthorized);
-        
+
         // Log both states for debugging
         console.log(`BT Status - Enabled: ${isEnabled}, Authorized: ${isAuthorized}`);
       } catch (error) {
@@ -64,12 +64,12 @@ export default function SettingsScreen() {
         setBleAuthorized(false);
       }
     };
-    
+
     checkBluetoothStatus();
-    
+
     // Set up a periodic check every 3 seconds
     const statusInterval = setInterval(checkBluetoothStatus, 3000);
-    
+
     return () => {
       clearInterval(statusInterval);
     };
@@ -98,26 +98,26 @@ export default function SettingsScreen() {
     }
 
     setIsDeleting(true);
-    
+
     try {
       const currentUser = auth.currentUser;
       if (!currentUser || !currentUser.email) {
         throw new Error('User not authenticated or email not available');
       }
-      
+
       // Re-authenticate before deleting
       const credential = EmailAuthProvider.credential(currentUser.email, password);
       await reauthenticateWithCredential(currentUser, credential);
-      
+
       // Delete the user
       await deleteUser(currentUser);
-      
+
       Alert.alert('Account Deleted', 'Your account has been deleted successfully');
       router.replace('/(auth)');
     } catch (error: any) {
       console.error('Error deleting account:', error);
       let errorMessage = 'Failed to delete account';
-      
+
       if (error.code === 'auth/wrong-password') {
         errorMessage = 'Incorrect password. Please try again.';
       } else if (error.code === 'auth/too-many-requests') {
@@ -125,7 +125,7 @@ export default function SettingsScreen() {
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
+
       Alert.alert('Error', errorMessage);
     } finally {
       setIsDeleting(false);
@@ -140,28 +140,28 @@ export default function SettingsScreen() {
       Alert.alert('Error', 'Please enter your current password');
       return;
     }
-    
+
     if (!newPassword || !confirmNewPassword) {
       Alert.alert('Error', 'Please enter and confirm your new password');
       return;
     }
-    
+
     if (newPassword !== confirmNewPassword) {
       Alert.alert('Error', 'New passwords do not match');
       return;
     }
-    
+
     if (newPassword.length < 6) {
       Alert.alert('Error', 'New password must be at least 6 characters');
       return;
     }
-    
+
     setIsChangingPassword(true);
-    
+
     try {
       // Call the firebase function to update password
       const result = await updateUserPassword(currentPassword, newPassword);
-      
+
       if (result.success) {
         Alert.alert('Success', 'Your password has been updated successfully');
         // Close modal and clear fields
@@ -187,19 +187,19 @@ export default function SettingsScreen() {
       Alert.alert('Error', 'Please enter a subject for your support message');
       return;
     }
-    
+
     if (!supportMessage.trim()) {
       Alert.alert('Error', 'Please enter your message');
       return;
     }
-    
+
     if (!supportEmail.trim() || !supportEmail.includes('@')) {
       Alert.alert('Error', 'Please enter a valid email address');
       return;
     }
-    
+
     setIsSendingSupport(true);
-    
+
     try {
       // Get device info for better support context
       let deviceInfo = {};
@@ -216,7 +216,7 @@ export default function SettingsScreen() {
       } catch (error) {
         console.warn('Could not get full device info:', error);
       }
-      
+
       // Submit support message
       const result = await submitSupportMessage({
         subject: supportSubject,
@@ -224,18 +224,20 @@ export default function SettingsScreen() {
         contactEmail: supportEmail,
         deviceInfo
       });
-      
+
       if (result.success) {
         Alert.alert(
           'Message Sent',
           'Your support request has been submitted. We will contact you via email soon.',
-          [{ text: 'OK', onPress: () => {
-            // Clear form and close modal
-            setSupportSubject('');
-            setSupportMessage('');
-            setSupportEmail('');
-            setShowSupportForm(false);
-          }}]
+          [{
+            text: 'OK', onPress: () => {
+              // Clear form and close modal
+              setSupportSubject('');
+              setSupportMessage('');
+              setSupportEmail('');
+              setShowSupportForm(false);
+            }
+          }]
         );
       } else {
         Alert.alert('Error', result.error?.toString() || 'Failed to send support message. Please try again.');
@@ -257,7 +259,7 @@ export default function SettingsScreen() {
           // Calculate age from birth_date if available
           let age = null;
           let formattedBirthDate = 'Not available';
-          
+
           if (profile.birth_date) {
             try {
               const birthDate = new Date(profile.birth_date);
@@ -269,7 +271,7 @@ export default function SettingsScreen() {
                 if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
                   age--;
                 }
-                
+
                 // Format date for display (e.g., "January 1, 1990")
                 formattedBirthDate = birthDate.toLocaleDateString(undefined, {
                   year: 'numeric',
@@ -282,10 +284,10 @@ export default function SettingsScreen() {
               formattedBirthDate = 'Invalid date format';
             }
           }
-          
+
           // Prefer the auth profile photoURL because it's always the most current
           const photoUrl = authUser?.photoURL || profile.photo_url;
-          
+
           setUser({
             ...profile,
             photo_url: photoUrl,
@@ -303,15 +305,15 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     let mounted = true;
-    
+
     const loadUserProfile = async () => {
       if (mounted) {
         await fetchUserProfile();
       }
     };
-    
+
     loadUserProfile();
-    
+
     // Clean up function
     return () => {
       mounted = false;
@@ -320,7 +322,7 @@ export default function SettingsScreen() {
       setShowProfileImageModal(false);
     };
   }, [authUser]); // Refetch when authUser changes
-  
+
   const onRefresh = async () => {
     setRefreshing(true);
     // Force refresh the auth object to get the latest photoURL
@@ -358,11 +360,11 @@ export default function SettingsScreen() {
 
   const handleProfilePress = () => {
     if (isActionInProgress || !modalAnimationComplete) return;
-    
+
     setIsActionInProgress(true);
     setModalAnimationComplete(false);
     setShowProfileDetails(true);
-    
+
     // Reset action lock after a short delay
     setTimeout(() => {
       setIsActionInProgress(false);
@@ -371,10 +373,10 @@ export default function SettingsScreen() {
 
   const handleCloseProfileModal = () => {
     if (isActionInProgress || !modalAnimationComplete) return;
-    
+
     setIsActionInProgress(true);
     setShowProfileDetails(false);
-    
+
     // Reset action lock after animation completes
     setTimeout(() => {
       setIsActionInProgress(false);
@@ -383,11 +385,11 @@ export default function SettingsScreen() {
 
   const handleProfileImagePress = () => {
     if (isActionInProgress) return;
-    
+
     if (user?.photo_url || authUser?.photoURL) {
       setIsActionInProgress(true);
       setShowProfileImageModal(true);
-      
+
       // Reset action lock after a short delay
       setTimeout(() => {
         setIsActionInProgress(false);
@@ -397,10 +399,10 @@ export default function SettingsScreen() {
 
   const handleCloseImageModal = () => {
     if (isActionInProgress) return;
-    
+
     setIsActionInProgress(true);
     setShowProfileImageModal(false);
-    
+
     // Reset action lock after animation completes
     setTimeout(() => {
       setIsActionInProgress(false);
@@ -409,9 +411,9 @@ export default function SettingsScreen() {
 
   const handleChangeProfileImage = async () => {
     if (isActionInProgress || uploadingImage) return;
-    
+
     setIsActionInProgress(true);
-    
+
     try {
       // Request permission if needed
       if (Platform.OS !== 'web') {
@@ -441,7 +443,7 @@ export default function SettingsScreen() {
             onPress: () => setIsActionInProgress(false),
           },
         ],
-        { 
+        {
           cancelable: true,
           onDismiss: () => setIsActionInProgress(false)
         }
@@ -460,7 +462,7 @@ export default function SettingsScreen() {
         aspect: [1, 1],
         quality: 0.7,
       });
-      
+
       if (!result.canceled && result.assets && result.assets.length > 0) {
         uploadProfilePicture(result.assets[0].uri);
       } else {
@@ -477,19 +479,19 @@ export default function SettingsScreen() {
   const takePicture = async () => {
     try {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      
+
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Sorry, we need camera permissions to take a picture!');
         setIsActionInProgress(false);
         return;
       }
-      
+
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.7,
       });
-      
+
       if (!result.canceled && result.assets && result.assets.length > 0) {
         uploadProfilePicture(result.assets[0].uri);
       } else {
@@ -517,12 +519,12 @@ export default function SettingsScreen() {
 
       // Upload the image
       const result = await uploadProfileImage(imageUri, currentUser.uid);
-      
+
       if (result.success) {
         // Refresh the user profile to get the updated image URL
         await fetchUserProfile();
         Alert.alert('Success', 'Your profile picture has been updated.');
-        
+
         // Close profile details modal after successful upload
         setShowProfileDetails(false);
       } else {
@@ -560,7 +562,7 @@ export default function SettingsScreen() {
   });
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
       refreshControl={
         <RefreshControl
@@ -576,34 +578,34 @@ export default function SettingsScreen() {
       </View>
 
       {/* Profile Section */}
-      <TouchableOpacity 
-        style={styles.profileSection} 
+      <TouchableOpacity
+        style={styles.profileSection}
         onPress={handleProfilePress}
         activeOpacity={0.7}
         disabled={isActionInProgress || !modalAnimationComplete}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.profileImageContainer}
           onPress={handleProfileImagePress}
         >
-          <ProfileImage 
-            photoUrl={user?.photo_url || authUser?.photoURL} 
-            displayName={user?.display_name} 
+          <ProfileImage
+            photoUrl={user?.photo_url || authUser?.photoURL}
+            displayName={user?.display_name}
           />
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.editProfileImageButton}
             onPress={handleChangeProfileImage}
           >
             <Ionicons name="camera" size={16} color="#FFFFFF" />
           </TouchableOpacity>
         </TouchableOpacity>
-        
+
         <View style={styles.profileInfo}>
           <View style={styles.profileNameContainer}>
             <Text style={styles.profileName}>{user?.display_name || authUser?.displayName || 'User'}</Text>
-            <VerifiedBadge 
-              isVerified={!!user?.is_verified} 
+            <VerifiedBadge
+              isVerified={!!user?.is_verified}
               size="small"
             />
           </View>
@@ -625,7 +627,7 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.settingsItem}
           onPress={() => setShowGhostModeInfo(true)}
         >
@@ -634,7 +636,7 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.settingsItem}
           onPress={() => setShowAccountOptions(true)}
         >
@@ -643,7 +645,7 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.settingsItem}
           onPress={() => setShowSupportForm(true)}
         >
@@ -652,7 +654,7 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={24} color={colors.darkGray} />
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.settingsItem, styles.signOutButton]}
           onPress={handleSignOut}
         >
@@ -681,15 +683,15 @@ export default function SettingsScreen() {
               <View style={styles.ghostModeIcon}>
                 <Ionicons name="eye-off" size={60} color={colors.primary} />
               </View>
-              
+
               <Text style={styles.ghostModeTitle}>How to Go Invisible</Text>
-              
+
               <Text style={styles.ghostModeDescription}>
-                {Platform.OS === 'ios' 
+                {Platform.OS === 'ios'
                   ? "To become invisible to other users, don't allow Bluetooth permissions for ShyText. When the app doesn't have Bluetooth permissions, other users won't be able to detect you."
                   : "To become invisible to other users, simply toggle off Bluetooth in your device settings. When Bluetooth is off, other users won't be able to detect you on the radar."}
               </Text>
-              
+
               <View style={styles.deviceInfoCard}>
                 <Text style={styles.deviceInfoLabel}>Your current status:</Text>
                 <View style={styles.statusContainer}>
@@ -697,15 +699,15 @@ export default function SettingsScreen() {
                   <Text style={styles.deviceInfoValue}>{bleAuthorized ? 'Visible to others' : 'Invisible to others'}</Text>
                 </View>
               </View>
-              
+
               <Text style={styles.ghostModeDescription}>
                 {Platform.OS === 'ios'
                   ? "When you want to be visible again, allow Bluetooth permissions for ShyText in your device settings."
                   : "When you want to be visible again, simply turn Bluetooth back on in your device settings."}
               </Text>
-              
+
               <Text style={styles.ghostModeInstructions}>
-                {Platform.OS === 'ios' ? 
+                {Platform.OS === 'ios' ?
                   `To toggle Bluetooth permissions:
                   \n\n1. Go to your device's Settings
                   \n2. Scroll down and tap on "ShyText"
@@ -721,8 +723,8 @@ export default function SettingsScreen() {
                   \n\nNote: You won't be able to see other users while Bluetooth is off.`
                 }
               </Text>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.ghostModeButton}
                 onPress={() => {
                   Linking.openSettings();
@@ -756,10 +758,10 @@ export default function SettingsScreen() {
               <View style={styles.accountIcon}>
                 <Ionicons name="person-circle" size={60} color={colors.primary} />
               </View>
-              
+
               <Text style={styles.accountOptionsTitle}>Account Options</Text>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.accountOption}
                 onPress={() => {
                   setShowAccountOptions(false);
@@ -769,8 +771,8 @@ export default function SettingsScreen() {
                 <Ionicons name="key-outline" size={24} color={colors.primary} />
                 <Text style={styles.accountOptionText}>Change Password</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.accountOption}
                 onPress={() => {
                   setShowAccountOptions(false);
@@ -799,7 +801,7 @@ export default function SettingsScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Delete Account</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => {
                   setShowDeleteAccount(false);
                   setPassword('');
@@ -813,24 +815,24 @@ export default function SettingsScreen() {
               <View style={styles.warningIcon}>
                 <Ionicons name="warning" size={60} color={colors.error} />
               </View>
-              
+
               <Text style={styles.warningTitle}>Warning: This Cannot Be Undone</Text>
-              
+
               <Text style={styles.warningDescription}>
                 Deleting your account will permanently remove all your data, including:
               </Text>
-              
+
               <View style={styles.bulletPointsContainer}>
                 <Text style={styles.bulletPoint}>• Profile information</Text>
                 <Text style={styles.bulletPoint}>• Messages and conversations</Text>
                 <Text style={styles.bulletPoint}>• Account settings</Text>
                 <Text style={styles.bulletPoint}>• All other associated data</Text>
               </View>
-              
+
               <Text style={styles.confirmationText}>
                 To confirm deletion, please enter your password:
               </Text>
-              
+
               <TextInput
                 style={styles.passwordInput}
                 placeholder="Enter your password"
@@ -840,8 +842,8 @@ export default function SettingsScreen() {
                 onChangeText={setPassword}
                 editable={!isDeleting}
               />
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={[
                   styles.deleteButton,
                   (isDeleting || !password) && styles.disabledButton
@@ -855,8 +857,8 @@ export default function SettingsScreen() {
                   <Text style={styles.deleteButtonText}>Delete My Account</Text>
                 )}
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={() => {
                   setShowDeleteAccount(false);
@@ -887,7 +889,7 @@ export default function SettingsScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Change Password</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => {
                   setShowChangePassword(false);
                   setCurrentPassword('');
@@ -903,13 +905,13 @@ export default function SettingsScreen() {
               <View style={styles.passwordIcon}>
                 <Ionicons name="lock-closed" size={60} color={colors.primary} />
               </View>
-              
+
               <Text style={styles.passwordTitle}>Update Your Password</Text>
-              
+
               <Text style={styles.passwordDescription}>
                 Please enter your current password and a new password.
               </Text>
-              
+
               <Text style={styles.inputLabel}>Current Password:</Text>
               <TextInput
                 style={styles.passwordInput}
@@ -920,7 +922,7 @@ export default function SettingsScreen() {
                 onChangeText={setCurrentPassword}
                 editable={!isChangingPassword}
               />
-              
+
               <Text style={styles.inputLabel}>New Password:</Text>
               <TextInput
                 style={styles.passwordInput}
@@ -931,7 +933,7 @@ export default function SettingsScreen() {
                 onChangeText={setNewPassword}
                 editable={!isChangingPassword}
               />
-              
+
               <Text style={styles.inputLabel}>Confirm New Password:</Text>
               <TextInput
                 style={styles.passwordInput}
@@ -942,8 +944,8 @@ export default function SettingsScreen() {
                 onChangeText={setConfirmNewPassword}
                 editable={!isChangingPassword}
               />
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={[
                   styles.changePasswordButton,
                   (isChangingPassword || !currentPassword || !newPassword || !confirmNewPassword) && styles.disabledButton
@@ -957,8 +959,8 @@ export default function SettingsScreen() {
                   <Text style={styles.changePasswordButtonText}>Update Password</Text>
                 )}
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={() => {
                   setShowChangePassword(false);
@@ -988,7 +990,7 @@ export default function SettingsScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Contact Support</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => setShowSupportForm(false)}
                 disabled={isSendingSupport}
               >
@@ -1000,13 +1002,13 @@ export default function SettingsScreen() {
               <View style={styles.supportIcon}>
                 <Ionicons name="chatbubble-ellipses" size={60} color={colors.primary} />
               </View>
-              
+
               <Text style={styles.supportTitle}>How can we help?</Text>
-              
+
               <Text style={styles.supportDescription}>
                 Please fill out the form below and our support team will get back to you as soon as possible.
               </Text>
-              
+
               <Text style={styles.inputLabel}>Email Address:</Text>
               <TextInput
                 style={styles.supportInput}
@@ -1018,7 +1020,7 @@ export default function SettingsScreen() {
                 onChangeText={setSupportEmail}
                 editable={!isSendingSupport}
               />
-              
+
               <Text style={styles.inputLabel}>Subject:</Text>
               <TextInput
                 style={styles.supportInput}
@@ -1028,7 +1030,7 @@ export default function SettingsScreen() {
                 onChangeText={setSupportSubject}
                 editable={!isSendingSupport}
               />
-              
+
               <Text style={styles.inputLabel}>Message:</Text>
               <TextInput
                 style={[styles.supportInput, styles.messageInput]}
@@ -1041,8 +1043,8 @@ export default function SettingsScreen() {
                 onChangeText={setSupportMessage}
                 editable={!isSendingSupport}
               />
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={[
                   styles.sendSupportButton,
                   (isSendingSupport || !supportSubject || !supportMessage || !supportEmail) && styles.disabledButton
@@ -1056,8 +1058,8 @@ export default function SettingsScreen() {
                   <Text style={styles.sendSupportButtonText}>Send Message</Text>
                 )}
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={() => {
                   setShowSupportForm(false);
@@ -1090,7 +1092,7 @@ export default function SettingsScreen() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Profile</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={handleCloseProfileModal}
                 disabled={isActionInProgress || !modalAnimationComplete}
                 activeOpacity={0.7}
@@ -1099,7 +1101,7 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView 
+            <ScrollView
               style={styles.modalScrollContent}
               bounces={false}
               showsVerticalScrollIndicator={false}
@@ -1107,7 +1109,7 @@ export default function SettingsScreen() {
             >
               {/* Full Profile Image Card */}
               <View style={styles.fullProfileCard}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.fullProfileImageContainer}
                   onPress={handleProfileImagePress}
                 >
@@ -1125,14 +1127,14 @@ export default function SettingsScreen() {
                     </View>
                   )}
                 </TouchableOpacity>
-                
+
                 <View style={styles.profileDetailsOverlay}>
                   <Text style={styles.fullProfileName}>
                     {user?.display_name || authUser?.displayName || 'User'}
                     {user?.age ? `, ${user.age}` : ''}
                   </Text>
-                  <VerifiedBadge 
-                    isVerified={!!user?.is_verified} 
+                  <VerifiedBadge
+                    isVerified={!!user?.is_verified}
                     size="medium"
                   />
                 </View>
@@ -1146,22 +1148,22 @@ export default function SettingsScreen() {
               </View>
 
               <View style={styles.profileDetailItem}>
-                <Ionicons 
-                  name={user?.is_verified ? "shield-checkmark" : "shield-outline"} 
-                  size={24} 
-                  color={user?.is_verified ? colors.primary : colors.darkGray} 
-                  style={styles.detailIcon} 
+                <Ionicons
+                  name={user?.is_verified ? "shield-checkmark" : "shield-outline"}
+                  size={24}
+                  color={user?.is_verified ? colors.primary : colors.darkGray}
+                  style={styles.detailIcon}
                 />
                 <Text style={styles.detailLabel}>Verification:</Text>
                 <View style={styles.verificationStatus}>
                   <Text style={[
-                    styles.detailValue, 
+                    styles.detailValue,
                     user?.is_verified ? styles.verifiedText : styles.notVerifiedText
                   ]}>
                     {user?.is_verified ? 'Verified' : 'Not Verified'}
                   </Text>
-                  <VerifiedBadge 
-                    isVerified={!!user?.is_verified} 
+                  <VerifiedBadge
+                    isVerified={!!user?.is_verified}
                     size="small"
                     style={{ marginLeft: 8 }}
                   />
@@ -1178,7 +1180,7 @@ export default function SettingsScreen() {
                 </View>
               )}
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.editProfileButton}
                 onPress={handleChangeProfileImage}
                 disabled={isActionInProgress || uploadingImage || !modalAnimationComplete}
@@ -1204,7 +1206,7 @@ export default function SettingsScreen() {
         statusBarTranslucent={true}
       >
         <View style={styles.fullScreenModalContainer}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.fullScreenCloseButton}
             onPress={handleCloseImageModal}
             activeOpacity={0.7}
@@ -1217,7 +1219,7 @@ export default function SettingsScreen() {
             style={{ width: '100%', height: '100%', justifyContent: 'center' }}
             onPress={handleCloseImageModal}
           >
-            <Image 
+            <Image
               source={{ uri: user?.photo_url || authUser?.photoURL || '' }}
               style={styles.fullScreenImage}
               resizeMode="contain"
@@ -1664,7 +1666,7 @@ const styles = StyleSheet.create({
     marginLeft: 12,
     fontWeight: '500',
   },
-  
+
   // Change password modal styles
   passwordIcon: {
     alignItems: 'center',
