@@ -11,6 +11,8 @@ import { useAuth } from '../../src/hooks/useAuth';
 import VerifiedBadge from '../../src/components/VerifiedBadge';
 import * as DeviceInfo from 'react-native-device-info';
 import BleService from '../../src/services/BleService';
+import { getFirestore, doc, deleteDoc, getDoc, collection, query, where, getDocs, writeBatch, DocumentReference } from 'firebase/firestore';
+import { getStorage, ref, deleteObject } from 'firebase/storage';
 
 export default function SettingsScreen() {
   const { user: authUser, loading: authLoading } = useAuth();
@@ -109,10 +111,148 @@ export default function SettingsScreen() {
       const credential = EmailAuthProvider.credential(currentUser.email, password);
       await reauthenticateWithCredential(currentUser, credential);
 
-      // Delete the user
+      // Store user ID for Firestore cleanup
+      const userId = currentUser.uid;
+
+      // Initialize Firestore and Storage
+      const db = getFirestore();
+      const storage = getStorage();
+
+      // 1. Delete user profile image from storage (if exists)
+      try {
+        const profileImageRef = ref(storage, `profile_images/${userId}`);
+        await deleteObject(profileImageRef);
+        console.log('Profile image deleted from storage');
+      } catch (imageError) {
+        console.log('No profile image found in storage or error deleting:', imageError);
+        // Continue with deletion even if image deletion fails
+      }
+
+      // Function to delete document with error handling
+      const safeDeleteDoc = async (docRef: DocumentReference) => {
+        try {
+          await deleteDoc(docRef);
+          return true;
+        } catch (error) {
+          console.error(`Error deleting document ${docRef.path}:`, error);
+          return false;
+        }
+      };
+
+      // 2. Delete data from Firestore collections individually instead of batch
+      
+      // 2.1 Delete profile document
+      try {
+        const profileRef = doc(db, 'profiles', userId);
+        const profileDoc = await getDoc(profileRef);
+        if (profileDoc.exists()) {
+          const deleted = await safeDeleteDoc(profileRef);
+          console.log(`Profile document ${deleted ? 'deleted' : 'failed to delete'}`);
+        }
+      } catch (profileError) {
+        console.error('Error checking/deleting profile document:', profileError);
+      }
+
+      // 2.2 Delete from users collection (if exists)
+      try {
+        const userRef = doc(db, 'users', userId);
+        const userDoc = await getDoc(userRef);
+        if (userDoc.exists()) {
+          const deleted = await safeDeleteDoc(userRef);
+          console.log(`User document ${deleted ? 'deleted' : 'failed to delete'}`);
+        }
+      } catch (userError) {
+        console.error('Error checking/deleting user document:', userError);
+      }
+
+      // 2.3 Delete user device data
+      try {
+        const userDeviceRef = doc(db, 'user_devices', userId);
+        const userDeviceDoc = await getDoc(userDeviceRef);
+        if (userDeviceDoc.exists()) {
+          const deleted = await safeDeleteDoc(userDeviceRef);
+          console.log(`User device document ${deleted ? 'deleted' : 'failed to delete'}`);
+        }
+      } catch (deviceError) {
+        console.error('Error checking/deleting user device document:', deviceError);
+      }
+
+      // 2.4 Delete conversations and messages where user is a participant
+      try {
+        // Find conversations where user is a participant
+        const conversationsRef = collection(db, 'conversations');
+        const userConversationsQuery = query(
+          conversationsRef,
+          where('participants', 'array-contains', userId)
+        );
+        const conversationsSnapshot = await getDocs(userConversationsQuery);
+
+        // Delete each conversation and its messages individually
+        if (!conversationsSnapshot.empty) {
+          console.log(`Found ${conversationsSnapshot.size} conversations to delete`);
+          
+          for (const conversationDoc of conversationsSnapshot.docs) {
+            const conversationId = conversationDoc.id;
+            
+            // Delete messages in this conversation first
+            try {
+              const messagesRef = collection(db, 'messages');
+              const messagesQuery = query(
+                messagesRef,
+                where('conversation_id', '==', conversationId)
+              );
+              const messagesSnapshot = await getDocs(messagesQuery);
+              
+              let deletedMessageCount = 0;
+              for (const messageDoc of messagesSnapshot.docs) {
+                const deleted = await safeDeleteDoc(messageDoc.ref);
+                if (deleted) deletedMessageCount++;
+              }
+              
+              console.log(`Deleted ${deletedMessageCount} of ${messagesSnapshot.size} messages in conversation ${conversationId}`);
+            } catch (messagesError) {
+              console.error(`Error deleting messages for conversation ${conversationId}:`, messagesError);
+            }
+            
+            // Now delete the conversation itself
+            const deleted = await safeDeleteDoc(conversationDoc.ref);
+            console.log(`Conversation ${conversationId} ${deleted ? 'deleted' : 'failed to delete'}`);
+          }
+        }
+      } catch (conversationsError) {
+        console.error('Error deleting conversations:', conversationsError);
+      }
+
+      // 2.5 Delete user message counts
+      try {
+        const messageCountRef = doc(db, 'user_message_counts', userId);
+        const messageCountDoc = await getDoc(messageCountRef);
+        if (messageCountDoc.exists()) {
+          const deleted = await safeDeleteDoc(messageCountRef);
+          console.log(`Message count document ${deleted ? 'deleted' : 'failed to delete'}`);
+        }
+      } catch (messageCountError) {
+        console.error('Error deleting message counts:', messageCountError);
+      }
+
+      // 2.6 Delete unread message counts
+      try {
+        const unreadCountRef = doc(db, 'unread_message_counts', userId);
+        const unreadCountDoc = await getDoc(unreadCountRef);
+        if (unreadCountDoc.exists()) {
+          const deleted = await safeDeleteDoc(unreadCountRef);
+          console.log(`Unread message count document ${deleted ? 'deleted' : 'failed to delete'}`);
+        }
+      } catch (unreadCountError) {
+        console.error('Error deleting unread message counts:', unreadCountError);
+      }
+
+      console.log('Finished deletion attempts for all user data');
+
+      // Finally delete the Firebase Auth user
       await deleteUser(currentUser);
 
-      Alert.alert('Account Deleted', 'Your account has been deleted successfully');
+      Alert.alert('Account Deleted', 'Your account and all associated data have been deleted successfully');
       router.replace('/(auth)');
     } catch (error: any) {
       console.error('Error deleting account:', error);

@@ -16,6 +16,8 @@ service cloud.firestore {
         request.auth.uid == userId || 
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['is_verified', 'mac_address', 'verified_at', 'updatedAt', 'createdAt', 'discovered_device_id']))
       );
+      // Allow users to delete their own data
+      allow delete: if isSignedIn() && request.auth.uid == userId;
       
       // Allow access to unread message counts
       match /unread_counts/{conversationId} {
@@ -34,6 +36,8 @@ service cloud.firestore {
         request.auth.uid == userId || 
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['is_verified', 'mac_address', 'verified_at', 'updated_at', 'created_at', 'discovered_device_id']))
       );
+      // Allow users to delete their own profile
+      allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
     // Device UUIDs collection - allow broader read access for discovery
@@ -42,18 +46,24 @@ service cloud.firestore {
       allow read: if true;
       // Only allow the owner to write their own device UUID
       allow write: if isSignedIn() && (request.auth.uid == docId);
+      // Allow users to delete their own device UUID
+      allow delete: if isSignedIn() && request.auth.uid == docId;
     }
     
     // Specific rule for querying device UUIDs by value
     match /device_uuids_by_value/{docId} {
       allow read: if true;
       allow write: if isSignedIn();
+      // Allow users to delete their own entries
+      allow delete: if isSignedIn();
     }
     
     // User devices collection for BLE authentication
     match /user_devices/{docId} {
       allow read: if true;
       allow write: if isSignedIn();
+      // Allow users to delete their own devices
+      allow delete: if isSignedIn() && request.auth.uid == docId;
     }
 
     // Unread message counters collection
@@ -61,6 +71,8 @@ service cloud.firestore {
       // Allow any signed-in user to read, only user to write
       allow read: if isSignedIn();
       allow write: if isSignedIn() && request.auth.uid == userId;
+      // Allow users to delete their own message counts
+      allow delete: if isSignedIn() && request.auth.uid == userId;
     }
     
     // Unread initiator subscriptions - make more permissive
@@ -80,6 +92,8 @@ service cloud.firestore {
       // Allow any signed-in user to read, only user to write
       allow read: if isSignedIn();
       allow write: if isSignedIn() && request.auth.uid == userId;
+      // Allow users to delete their own message counts
+      allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
     // Message count transactions - allow all operations for signed-in users
@@ -105,8 +119,8 @@ service cloud.firestore {
       // Allow updates with no field restrictions
       allow update: if isSignedIn();
       
-      // No delete for conversations
-      allow delete: if false;
+      // Allow deletion if user is a participant in the conversation
+      allow delete: if isSignedIn() && isParticipant();
       
       // Messages subcollection
       match /messages/{messageId} {
@@ -121,7 +135,17 @@ service cloud.firestore {
       // Unread count subcollection
       match /unread/{userId} {
         allow read, write: if isSignedIn();
+        // Allow deletion if it's the user's own unread count
+        allow delete: if isSignedIn() && userId == request.auth.uid;
       }
+    }
+    
+    // Messages collection (if stored at root level)
+    match /messages/{messageId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && request.auth.uid == resource.data.sender_id;
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.sender_id;
     }
   }
 } 
