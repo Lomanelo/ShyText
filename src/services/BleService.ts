@@ -14,7 +14,6 @@ class BleService {
   private isAdvertising: boolean = false;
   private isScanning: boolean = false;
   private companyId: number = 0x1234; // Unique company ID for ShyText
-  private scanTimeout: NodeJS.Timeout | null = null;
   private advertiserInitialized: boolean = false;
   private supportsAdvertising: boolean = false;
   private isInitialized: boolean = false;
@@ -29,7 +28,6 @@ class BleService {
     this.supportsAdvertising = Platform.OS === 'android';
     
     // We no longer initialize BleManager here - we'll do it lazily
-    console.log('BLE Service created, will initialize on demand');
   }
 
   public static getInstance(): BleService {
@@ -42,7 +40,6 @@ class BleService {
   // Add this method to lazily initialize and return the BleManager
   private getBleManager(): BleManager {
     if (!this.bleManager) {
-      console.log('Lazily initializing BleManager');
       this.bleManager = new BleManager();
     }
     return this.bleManager;
@@ -63,10 +60,8 @@ class BleService {
         );
         
         if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-          console.log('Location permission granted');
           return true;
         } else {
-          console.log('Location permission denied');
           return false;
         }
       } catch (err) {
@@ -79,7 +74,6 @@ class BleService {
 
   // Handler for BLE state changes
   private handleStateChange = (state: State): void => {
-    console.log('BLE state changed to:', state);
     if (state === State.PoweredOn && !this.isInitialized) {
       // Now that BT is on, try initializing again
       this.isInitializing = false;
@@ -93,28 +87,22 @@ class BleService {
     }
     
     if (this.isInitializing) {
-      console.log('BLE initialization already in progress');
       return false;
     }
     
     this.isInitializing = true;
     
     try {
-      // Print BLE availability information
-      console.log('Platform:', Platform.OS, Platform.Version);
-      
       // Get the BleManager instance
       const bleManager = this.getBleManager();
       
       // When reinitializing, we'll try to clear any authorization errors if the system's Bluetooth is actually on
       if (this.authorizationErrorDetected) {
         const state = await bleManager.state();
-        console.log('Current BLE state while authorization errors exist:', state);
         
         // If the system shows Bluetooth is on but we've detected authorization errors previously,
         // we should re-test to see if permissions have been granted
         if (state === State.PoweredOn) {
-          console.log('Bluetooth appears to be on, clearing previous authorization errors to recheck');
           this.resetAuthorizationError();
         }
       }
@@ -125,19 +113,15 @@ class BleService {
       // Force BLE to be enabled on iOS since state detection can be unreliable
       if (Platform.OS === 'ios') {
         // On iOS, we'll assume BLE is available and proceed
-        console.log('Running on iOS - bypassing state check and assuming Bluetooth is enabled');
         
         // Request permissions through Info.plist (handled by the system)
         const hasPermission = await this.requestPermissions();
         if (!hasPermission) {
-          console.error('Location permission not granted');
           this.isInitializing = false;
           return false;
         }
         
-        console.log('Permissions granted, setting BLE as initialized');
         this.isInitialized = true;
-        this.printDeviceInfo();
         this.isInitializing = false;
         return true;
       }
@@ -146,7 +130,6 @@ class BleService {
       
       // Get current state
       const state = await bleManager.state();
-      console.log('Current BLE state:', state);
       
       if (state === State.PoweredOff) {
         // Bluetooth is off, alert user
@@ -162,7 +145,6 @@ class BleService {
       }
       
       if (state !== State.PoweredOn) {
-        console.log('BLE not powered on, current state:', state);
         // State subscription already set up earlier
         this.isInitializing = false;
         return false;
@@ -173,7 +155,6 @@ class BleService {
       // Request permissions first
       const hasPermission = await this.requestPermissions();
       if (!hasPermission) {
-        console.error('Location permission not granted');
         this.isInitializing = false;
         return false;
       }
@@ -185,7 +166,6 @@ class BleService {
               typeof BleAdvertiser.setCompanyId === 'function') {
             BleAdvertiser.setCompanyId(this.companyId);
             this.advertiserInitialized = true;
-            console.log('BLE Advertiser initialized successfully');
           } else {
             console.warn('BLE Advertiser module not properly initialized');
           }
@@ -193,15 +173,9 @@ class BleService {
           console.error('Failed to initialize BLE Advertiser:', error);
           // Non-fatal, continue
         }
-      } else {
-        console.log('Running on iOS: BLE Advertising is not supported, scanning only mode enabled');
       }
       
       this.isInitialized = true;
-      console.log('BLE initialized successfully, ready for scanning/advertising');
-      
-      // Print device info to help debug
-      this.printDeviceInfo();
       
       this.isInitializing = false;
       return true;
@@ -243,26 +217,12 @@ class BleService {
 
   // Helper method to print device info for debugging
   private printDeviceInfo = async (): Promise<void> => {
-    try {
-      console.log('----------- DEVICE INFO -----------');
-      console.log('Platform:', Platform.OS);
-      console.log('Version:', Platform.Version);
-      console.log('BT State:', await this.getBleManager().state());
-      console.log('Bluetooth Authorized:', this.isBluetoothAuthorized());
-      console.log('Advertising Supported:', this.supportsAdvertising);
-      console.log('Advertising Initialized:', this.advertiserInitialized);
-      console.log('BLE Initialized:', this.isInitialized);
-      console.log('Last Authorization Error:', this.lastAuthorizationError);
-      console.log('---------------------------------');
-    } catch (error) {
-      console.error('Error printing device info:', error);
-    }
+    // We're simplifying logging, so this method is left empty
   }
 
   public async startAdvertising(): Promise<boolean> {
     try {
       if (!await this.initialize()) {
-        console.log('Cannot start advertising - BLE not initialized');
         return false;
       }
       
@@ -274,12 +234,10 @@ class BleService {
 
       if (!this.supportsAdvertising) {
         // iOS doesn't support advertising but we'll return true
-        console.log('Advertising not supported on iOS, skipping advertising');
         return true;
       }
 
       if (!this.advertiserInitialized) {
-        console.warn('Cannot start advertising: BLE Advertiser not initialized');
         return false;
       }
       
@@ -299,7 +257,6 @@ class BleService {
       });
       
       this.isAdvertising = true;
-      console.log('Started BLE advertising with aggressive mode as:', userIdentifier);
       return true;
     } catch (error) {
       console.error('Failed to start advertising:', error);
@@ -320,7 +277,6 @@ class BleService {
 
       await BleAdvertiser.stop();
       this.isAdvertising = false;
-      console.log('Stopped BLE advertising');
       return true;
     } catch (error) {
       console.error('Failed to stop advertising:', error);
@@ -341,21 +297,6 @@ class BleService {
         return;
       }
       
-      // More aggressive logging to debug discovery issues
-      const deviceInfo = {
-        id: enhancedDevice.id,
-        name: enhancedDevice.name || 'unnamed',
-        localName: enhancedDevice.localName || 'no-local-name',
-        rssi: enhancedDevice.rssi,
-        manufactureData: enhancedDevice.manufacturerData ? 'present' : 'none',
-        serviceUUIDs: enhancedDevice.serviceUUIDs ? enhancedDevice.serviceUUIDs.join(',') : 'none',
-        isConnectable: enhancedDevice.isConnectable,
-        lastSeen: enhancedDevice.lastSeen
-      };
-      
-      // Log all discovered devices
-      console.log(`[${Platform.OS}] Device details:`, JSON.stringify(deviceInfo));
-      
       // Get device name - this is the primary identifier now
       const deviceName = enhancedDevice.name || '';
       const localName = enhancedDevice.localName || '';
@@ -373,8 +314,8 @@ class BleService {
       // Mark device as found
       this.foundDevices.add(enhancedDevice.id);
       
-      // Log found device with name for username matching
-      console.log(`[${Platform.OS}] Found device that might be a user:`, deviceName || localName, 'with ID:', enhancedDevice.id, 'RSSI:', enhancedDevice.rssi);
+      // Log only found devices with names
+      console.log(`FOUND_DEVICE: ${deviceName || localName} (ID: ${enhancedDevice.id}, RSSI: ${enhancedDevice.rssi})`);
       
       // Pass device to callback for user association
       if (this.onDeviceFoundCallback) {
@@ -387,7 +328,7 @@ class BleService {
 
   public async startScanning(
     onDeviceFound: (device: Device) => void,
-    scanDuration: number = 10000 // Reduced from 60s to 10s for more frequent restarts
+    scanDuration: number = 10000 // Parameter kept for API compatibility
   ): Promise<boolean> {
     try {
       if (!await this.initialize()) {
@@ -396,7 +337,6 @@ class BleService {
       }
 
       if (this.isScanning) {
-        console.log('Already scanning');
         return true;
       }
 
@@ -407,7 +347,6 @@ class BleService {
       // Get current user ID to filter out self-detection
       const currentUser = getCurrentUser();
       const currentUserId = currentUser?.uid || '';
-      console.log(`Current user ID for filtering: ${currentUserId}`);
       
       // Platform-specific optimized scan options - disable duplicates
       const scanOptions = Platform.OS === 'ios' 
@@ -418,8 +357,6 @@ class BleService {
             allowDuplicates: false, // Changed to false to prevent duplicate detections
             scanMode: 2 // SCAN_MODE_LOW_LATENCY on Android
           };
-          
-      console.log(`Started ${Platform.OS} scanning with options:`, JSON.stringify(scanOptions));
 
       // Start device scan with platform-specific configuration
       this.getBleManager().startDeviceScan(
@@ -445,26 +382,9 @@ class BleService {
               for (const message of errorMessages) {
                 if (error.message.includes(message)) {
                   this.authorizationErrorDetected = true;
-                  console.log(`Bluetooth authorization error detected: ${message}, updating visibility status`);
                   break;
                 }
               }
-            }
-            
-            // On iOS, just log the error but continue scanning
-            if (Platform.OS === 'ios') {
-              return;
-            }
-            
-            // On Android, we can try to recover from some errors
-            if (Platform.OS === 'android') {
-              // Try restarting scan after a short delay
-              setTimeout(() => {
-                if (this.isInitialized && this.isScanning) {
-                  this.stopScanning();
-                  this.startScanning(onDeviceFound, scanDuration);
-                }
-              }, 2000);
             }
             return;
           }
@@ -477,16 +397,7 @@ class BleService {
             if (device.id.includes(currentUserId) || 
                 deviceName.includes(currentUserId) ||
                 (currentUser?.displayName && deviceName.includes(currentUser.displayName))) {
-              console.log(`[${Platform.OS}] Skipping own device: ${deviceName} (${device.id})`);
               return;
-            }
-            
-            // Create a timestamp but don't modify the device directly
-            const timestamp = Date.now();
-            
-            // Log found devices
-            if (device.name || device.localName) {
-              console.log(`[${Platform.OS}] Found device: ${device.id}, Name: ${device.name || device.localName || 'unnamed'}, RSSI: ${device.rssi}, Time: ${new Date(timestamp).toLocaleTimeString()}`);
             }
             
             // Pass the original device - our handler will add the timestamp
@@ -494,28 +405,10 @@ class BleService {
           }
         }
       );
-
-      // Set timeout to stop and restart scanning periodically to refresh the device list
-      if (this.scanTimeout) {
-        clearTimeout(this.scanTimeout);
-      }
-      
-      this.scanTimeout = setTimeout(() => {
-        console.log(`[${Platform.OS}] Scan cycle complete, restarting scan...`);
-        this.stopScanning();
-        
-        // Automatically restart scanning after a short break
-        setTimeout(() => {
-          if (this.isInitialized) {
-            console.log(`[${Platform.OS}] Starting new scan cycle...`);
-            this.startScanning(onDeviceFound, scanDuration);
-          }
-        }, 1000); // Reduced from 2000ms to 1000ms for faster restarts
-      }, scanDuration);
       
       return true;
     } catch (error) {
-      console.error(`[${Platform.OS}] Failed to start scanning:`, error);
+      console.error(`Failed to start scanning:`, error);
       this.isScanning = false;
       return false;
     }
@@ -529,13 +422,6 @@ class BleService {
     this.getBleManager().stopDeviceScan();
     this.isScanning = false;
     this.onDeviceFoundCallback = null;
-
-    if (this.scanTimeout) {
-      clearTimeout(this.scanTimeout);
-      this.scanTimeout = null;
-    }
-
-    console.log('Stopped scanning for devices');
   }
 
   public isCurrentlyAdvertising(): boolean {
@@ -551,8 +437,6 @@ class BleService {
   }
 
   public cleanUp(): void {
-    console.log('Cleaning up BLE service...');
-    
     try {
       // Stop scanning
       if (this.isScanning) {
@@ -577,17 +461,9 @@ class BleService {
       // Clear callbacks
       this.onDeviceFoundCallback = null;
       
-      // Clear timeouts
-      if (this.scanTimeout) {
-        clearTimeout(this.scanTimeout);
-        this.scanTimeout = null;
-      }
-      
       // Reset flags
       this.isInitialized = false;
       this.isInitializing = false;
-      
-      console.log('BLE service cleaned up successfully');
     } catch (error) {
       console.error('Error during BLE cleanup:', error);
     }
@@ -695,7 +571,6 @@ class BleService {
   public resetAuthorizationError(): void {
     this.lastAuthorizationError = null;
     this.authorizationErrorDetected = false;
-    console.log('Reset Bluetooth authorization errors');
   }
 }
 

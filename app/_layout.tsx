@@ -155,13 +155,6 @@ export default function RootLayout() {
 
   // Handle BLE scanning based on app state
   useEffect(() => {
-    // Start scanning when app starts
-    const currentUser = getCurrentUser();
-    if (currentUser) {
-      startScanning();
-      console.log('BLE scanning started from root layout');
-    }
-    
     // Handle app state changes to manage BLE scanning
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
       const currentUser = getCurrentUser();
@@ -169,8 +162,8 @@ export default function RootLayout() {
       
       if (nextAppState === 'active') {
         // App came to foreground
-        console.log('App is now active, starting BLE scanning');
-        startScanning();
+        console.log('App is now active, BLE scanning will be managed by individual components');
+        // We no longer automatically start scanning here
       } else if (nextAppState === 'background') {
         // App went to background
         console.log('App is now in background, stopping BLE scanning');

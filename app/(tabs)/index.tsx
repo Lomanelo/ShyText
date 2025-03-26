@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Modal, ActivityIndicator, SafeAreaView, Image, RefreshControl, Alert, TextInput, KeyboardAvoidingView, Platform, ScrollView as RNScrollView, BackHandler, Linking } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Radar from '../../src/components/Radar';
 import { useNearbyUsers } from '../../src/hooks/useNearbyUsers';
@@ -51,21 +51,20 @@ export default function NearbyScreen() {
     }
   }, []);
 
-  // Start scanning when component is visible and Bluetooth is enabled
-  useEffect(() => {
-    if (btEnabled) {
-      console.log('Bluetooth enabled, starting scanning...');
-      startScanning();
-    }
-
-    // Cleanup
-    return () => {
-      if (isScanning) {
-        console.log('Component unmounting, stopping scanning...');
-        stopScanning();
+  // Start scanning only when the tab is focused and stop when unfocused
+  useFocusEffect(
+    useCallback(() => {
+      if (btEnabled) {
+        console.log('Tab focused, starting BLE scanning...');
+        startScanning();
       }
-    };
-  }, [btEnabled, startScanning, stopScanning, isScanning]);
+
+      return () => {
+        console.log('Tab unfocused, stopping BLE scanning...');
+        stopScanning();
+      };
+    }, [btEnabled, startScanning, stopScanning])
+  );
 
   // Add this useEffect for handling hardware back button
   useEffect(() => {

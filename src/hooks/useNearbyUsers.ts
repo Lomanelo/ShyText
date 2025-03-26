@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Device } from 'react-native-ble-plx';
 import { 
   getProfile, 
@@ -54,12 +54,25 @@ const rssiToDistance = (rssi: number): number => {
   return Math.round(Math.pow(10, (referenceRssi - rssi) / (10 * pathLossFactor)));
 };
 
+// Store scanning state at the module level
+let isCurrentlyScanning = false;
+
 // Simple wrapper functions for BleService
 export const startScanning = async () => {
+  // Prevent multiple start calls
+  if (isCurrentlyScanning) {
+    console.log('Already scanning globally, ignoring duplicate start request');
+    return true;
+  }
+  
   const bleService = BleService.getInstance();
   try {
     // We ignore the device found callback since we handle that in the hook
-    return await bleService.startScanning(() => {});
+    const success = await bleService.startScanning(() => {});
+    if (success) {
+      isCurrentlyScanning = true;
+    }
+    return success;
   } catch (error) {
     console.error('Error starting scanning from exported function:', error);
     return false;
@@ -67,9 +80,16 @@ export const startScanning = async () => {
 };
 
 export const stopScanning = () => {
+  // Prevent multiple stop calls
+  if (!isCurrentlyScanning) {
+    console.log('Not scanning globally, ignoring duplicate stop request');
+    return;
+  }
+  
   const bleService = BleService.getInstance();
   try {
     bleService.stopScanning();
+    isCurrentlyScanning = false;
   } catch (error) {
     console.error('Error stopping scanning from exported function:', error);
   }
@@ -84,6 +104,9 @@ export function useNearbyUsers() {
   const [isAuthorized, setIsAuthorized] = useState(true);
   const [deviceInfo, setDeviceInfo] = useState<any>(null);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  
+  // Add a ref to track scanning state to prevent multiple start/stop calls
+  const scanningStateRef = useRef<boolean>(false);
   
   // Function to get all users from Firebase
   const fetchAllUsers = useCallback(async () => {
@@ -374,6 +397,13 @@ export function useNearbyUsers() {
   // Function to start scanning for devices
   const startScanningForDevices = useCallback(async () => {
     try {
+      // Prevent duplicate start calls
+      if (scanningStateRef.current) {
+        console.log('Already scanning, ignoring duplicate start request');
+        return;
+      }
+      
+      scanningStateRef.current = true;
       setLoading(true);
       setError(null);
       setIsScanning(true);
@@ -417,6 +447,7 @@ export function useNearbyUsers() {
         
         setError('Could not start scanning. Please ensure Bluetooth is enabled.');
         setIsScanning(false);
+        scanningStateRef.current = false;
       }
       
       setLoading(false);
@@ -438,18 +469,27 @@ export function useNearbyUsers() {
       setError('Failed to start scanning. Please try again.');
       setLoading(false);
       setIsScanning(false);
+      scanningStateRef.current = false;
     }
   }, [handleDeviceFound, isAuthorized]);
 
   // Function to stop scanning and advertising
   const stopScanningAndAdvertising = useCallback(() => {
     try {
+      // Prevent duplicate stop calls
+      if (!scanningStateRef.current) {
+        console.log('Not scanning, ignoring duplicate stop request');
+        return;
+      }
+      
       const bleService = BleService.getInstance();
       bleService.stopScanning();
       bleService.stopAdvertising();
       setIsScanning(false);
+      scanningStateRef.current = false;
     } catch (err) {
       console.error('Error stopping scanning:', err);
+      scanningStateRef.current = false;
     }
   }, []);
 
