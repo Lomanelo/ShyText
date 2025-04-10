@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { supabase } from '../../src/lib/supabase';
+import { getDatabase, ref, push, onValue, query, orderByChild, get, set } from 'firebase/database';
 import { Ionicons } from '@expo/vector-icons';
+import { auth } from '../../src/lib/firebase';
 
 type Message = {
   id: string;
   content: string;
-  created_at: string;
-  sender_id: string;
+  createdAt: string;
+  senderId: string;
 };
 
 export default function ChatScreen() {
@@ -20,31 +21,76 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
+    if (!id || typeof id !== 'string') return;
+    
+    const db = getDatabase();
+    const messagesRef = ref(db, `messages/${id}`);
+    
+    // Initial fetch of messages
     fetchMessages();
     
-    const subscription = supabase
-      .from(`messages:conversation_id=eq.${id}`)
-      .on('INSERT', (payload) => {
-        setMessages((current) => [...current, payload.new as Message]);
-        flatListRef.current?.scrollToEnd({ animated: true });
-      })
-      .subscribe();
+    // Listen for new messages
+    const messagesQuery = query(messagesRef, orderByChild('createdAt'));
+    const unsubscribe = onValue(messagesQuery, (snapshot) => {
+      if (snapshot.exists()) {
+        const messagesData = snapshot.val();
+        const messagesList: Message[] = [];
+        
+        // Convert to array and add IDs
+        Object.entries(messagesData).forEach(([key, value]) => {
+          messagesList.push({
+            id: key,
+            ...value as any
+          });
+        });
+        
+        // Sort by timestamp
+        messagesList.sort((a, b) => 
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+        
+        setMessages(messagesList);
+      } else {
+        setMessages([]);
+      }
+      
+      setLoading(false);
+    });
 
     return () => {
-      subscription.unsubscribe();
+      unsubscribe();
     };
   }, [id]);
 
   const fetchMessages = async () => {
+    if (!id || typeof id !== 'string') return;
+    
     try {
-      const { data, error: fetchError } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('conversation_id', id)
-        .order('created_at', { ascending: true });
-
-      if (fetchError) throw fetchError;
-      setMessages(data || []);
+      const db = getDatabase();
+      const messagesRef = ref(db, `messages/${id}`);
+      const messagesQuery = query(messagesRef, orderByChild('createdAt'));
+      
+      const snapshot = await get(messagesQuery);
+      if (snapshot.exists()) {
+        const messagesData = snapshot.val();
+        const messagesList: Message[] = [];
+        
+        // Convert to array and add IDs
+        Object.entries(messagesData).forEach(([key, value]) => {
+          messagesList.push({
+            id: key,
+            ...value as any
+          });
+        });
+        
+        // Sort by timestamp
+        messagesList.sort((a, b) => 
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+        
+        setMessages(messagesList);
+      }
+      
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -53,17 +99,24 @@ export default function ChatScreen() {
   };
 
   const handleSend = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !id || typeof id !== 'string') return;
 
     try {
-      const { error: sendError } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id: id,
-          content: newMessage.trim(),
-        });
-
-      if (sendError) throw sendError;
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('You must be logged in');
+      
+      const db = getDatabase();
+      const messagesRef = ref(db, `messages/${id}`);
+      const newMessageRef = push(messagesRef);
+      
+      const messageData = {
+        content: newMessage.trim(),
+        senderId: currentUser.uid,
+        createdAt: new Date().toISOString()
+      };
+      
+      await set(newMessageRef, messageData);
+      
       setNewMessage('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message');
@@ -97,13 +150,13 @@ export default function ChatScreen() {
         renderItem={({ item }) => (
           <View style={[
             styles.messageContainer,
-            item.sender_id === supabase.auth.user()?.id ? 
+            item.senderId === auth.currentUser?.uid ? 
               styles.sentMessage : 
               styles.receivedMessage
           ]}>
             <Text style={styles.messageText}>{item.content}</Text>
             <Text style={styles.messageTime}>
-              {new Date(item.created_at).toLocaleTimeString([], {
+              {new Date(item.createdAt).toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',
               })}
@@ -112,7 +165,8 @@ export default function ChatScreen() {
         )}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messagesList}
-        onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
       />
 
       <View style={styles.inputContainer}>
@@ -144,43 +198,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1a1a1a',
   },
-  loadingText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  errorText: {
-    color: '#ff4444',
-    fontSize: 16,
-    textAlign: 'center',
-    marginTop: 20,
-  },
   messagesList: {
     padding: 15,
   },
   messageContainer: {
     maxWidth: '80%',
-    marginVertical: 5,
     padding: 12,
-    borderRadius: 16,
+    borderRadius: 20,
+    marginBottom: 10,
   },
   sentMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#007AFF',
+    backgroundColor: '#0055FF',
+    borderBottomRightRadius: 5,
   },
   receivedMessage: {
     alignSelf: 'flex-start',
     backgroundColor: '#2a2a2a',
+    borderBottomLeftRadius: 5,
   },
   messageText: {
     color: '#fff',
     fontSize: 16,
   },
   messageTime: {
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: 'rgba(255,255,255,0.6)',
     fontSize: 12,
-    marginTop: 4,
+    marginTop: 5,
     alignSelf: 'flex-end',
   },
   inputContainer: {
@@ -189,6 +233,7 @@ const styles = StyleSheet.create({
     padding: 10,
     borderTopWidth: 1,
     borderTopColor: '#333',
+    backgroundColor: '#1a1a1a',
   },
   input: {
     flex: 1,
@@ -202,9 +247,23 @@ const styles = StyleSheet.create({
     maxHeight: 100,
   },
   sendButton: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2a2a2a',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  errorText: {
+    color: '#ff4444',
+    fontSize: 16,
+    textAlign: 'center',
+    marginTop: 20,
   },
 });

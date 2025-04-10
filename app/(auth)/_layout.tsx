@@ -21,12 +21,6 @@ export default function AuthLayout() {
         }}
       />
       <Stack.Screen
-        name="phone"
-        options={{
-          title: 'Phone Verification',
-        }}
-      />
-      <Stack.Screen
         name="profile"
         options={{
           title: 'Complete Profile',

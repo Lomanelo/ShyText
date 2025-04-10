@@ -3,8 +3,48 @@ import { StyleSheet, View, Text, Platform, TouchableOpacity } from 'react-native
 import * as Location from 'expo-location';
 import { router } from 'expo-router';
 import { useNearbyUsers } from '../../src/hooks/useNearbyUsers';
-import { supabase, startConversation } from '../../src/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getDatabase, ref, push, set } from 'firebase/database';
+import { auth } from '../../src/lib/firebase';
+
+// Firebase function to start a conversation
+async function startConversation(otherUserId: string, initialMessage: string) {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('You must be logged in');
+
+  const db = getDatabase();
+  const conversationsRef = ref(db, 'conversations');
+  
+  // Create a new conversation
+  const newConversationRef = push(conversationsRef);
+  const conversationId = newConversationRef.key;
+  
+  if (!conversationId) throw new Error('Failed to create conversation');
+  
+  // Set conversation data
+  await set(newConversationRef, {
+    initiatorId: currentUser.uid,
+    receiverId: otherUserId,
+    createdAt: new Date().toISOString(),
+    // Create a participants object for easy querying
+    participants: {
+      [currentUser.uid]: true,
+      [otherUserId]: true
+    }
+  });
+  
+  // Add initial message
+  const messagesRef = ref(db, `messages/${conversationId}`);
+  const newMessageRef = push(messagesRef);
+  
+  await set(newMessageRef, {
+    senderId: currentUser.uid,
+    content: initialMessage,
+    createdAt: new Date().toISOString()
+  });
+  
+  return conversationId;
+}
 
 // Lazy load platform-specific components
 const WebMap = Platform.select({
@@ -41,92 +81,79 @@ const WebMap = Platform.select({
       );
 
       return (
-        <div style={{ height: '100%', width: '100%' }}>
-          <GoogleMapReact
-            bootstrapURLKeys={{ key: '' }}
-            defaultCenter={{
-              lat: location.coords.latitude,
-              lng: location.coords.longitude
-            }}
-            defaultZoom={19}
-            options={{
-              styles: [
-                {
-                  featureType: 'all',
-                  elementType: 'all',
-                  stylers: [{ saturation: -100 }]
-                }
-              ]
-            }}
-          >
+        <GoogleMapReact
+          bootstrapURLKeys={{ key: 'YOUR_GOOGLE_MAPS_API_KEY' }}
+          defaultCenter={{
+            lat: location.coords.latitude,
+            lng: location.coords.longitude
+          }}
+          defaultZoom={15}
+          style={{ width: '100%', height: '100%' }}
+        >
+          <MapMarker
+            lat={location.coords.latitude}
+            lng={location.coords.longitude}
+            text="You"
+            isUser
+          />
+          
+          {nearbyUsers.map(user => (
             <MapMarker
-              lat={location.coords.latitude}
-              lng={location.coords.longitude}
-              text="You"
-              isUser
+              key={user.id}
+              lat={user.latitude}
+              lng={user.longitude}
+              text={user.firstName || 'User'}
+              onClick={() => onUserPress(user.id)}
             />
-            {nearbyUsers.map((user) => (
-              <MapMarker
-                key={user.id}
-                lat={user.latitude}
-                lng={user.longitude}
-                text={user.first_name}
-                onClick={() => onUserPress(user.id)}
-              />
-            ))}
-          </GoogleMapReact>
-        </div>
+          ))}
+        </GoogleMapReact>
       );
     };
+
     return MapComponent;
   },
-  default: () => () => null,
-})();
+  default: null
+});
 
-// Separate native map implementation
+// Native map for iOS/Android
 const NativeMap = Platform.select({
   native: () => {
-    const MapComponent = ({ location, nearbyUsers, onUserPress }: {
+    const MapView = require('react-native-maps').default;
+    const { Marker } = require('react-native-maps');
+
+    const MapComponent = ({ location, nearbyUsers, onUserPress }: { 
       location: Location.LocationObject;
       nearbyUsers: any[];
       onUserPress: (userId: string) => void;
-    }) => {
-      const { MapView, Marker } = require('react-native-maps');
-
-      return (
-        <MapView
-          style={styles.map}
-          initialRegion={{
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            latitudeDelta: 0.001,
-            longitudeDelta: 0.001,
-          }}>
+    }) => (
+      <MapView
+        style={styles.map}
+        initialRegion={{
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        }}
+        showsUserLocation
+      >
+        {nearbyUsers.map(user => (
           <Marker
+            key={user.id}
             coordinate={{
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
+              latitude: user.latitude,
+              longitude: user.longitude,
             }}
-            title="You"
+            title={user.firstName || 'User'}
+            onPress={() => onUserPress(user.id)}
           />
-          {nearbyUsers.map((user) => (
-            <Marker
-              key={user.id}
-              coordinate={{
-                latitude: user.latitude,
-                longitude: user.longitude,
-              }}
-              title={user.first_name}
-              onPress={() => onUserPress(user.id)}
-            />
-          ))}
-        </MapView>
-      );
-    };
+        ))}
+      </MapView>
+    );
+
     return MapComponent;
   },
-  default: () => () => null,
-})();
+  default: null
+});
 
 export default function NearbyScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
@@ -156,8 +183,8 @@ export default function NearbyScreen() {
     if (!selectedUser) return;
     
     try {
-      await startConversation(selectedUser.id, 'Hi! Would you like to chat?');
-      router.push('/chats');
+      const conversationId = await startConversation(selectedUser.id, 'Hi! Would you like to chat?');
+      router.push(`/chat/${conversationId}`);
     } catch (error) {
       console.error('Error starting conversation:', error);
     }
@@ -181,31 +208,29 @@ export default function NearbyScreen() {
     );
   }
 
+  const Map = Platform.OS === 'web' ? WebMap : NativeMap;
+
   return (
     <View style={styles.container}>
-      {Platform.OS === 'web' ? (
-        <WebMap 
-          location={location} 
-          nearbyUsers={nearbyUsers}
-          onUserPress={handleUserPress}
-        />
-      ) : (
-        <NativeMap 
-          location={location}
-          nearbyUsers={nearbyUsers}
-          onUserPress={handleUserPress}
-        />
-      )}
+      {Map && <Map 
+        location={location} 
+        nearbyUsers={nearbyUsers}
+        onUserPress={handleUserPress}
+      />}
       
       {selectedUser && (
         <View style={styles.userCard}>
-          <Text style={styles.userName}>{selectedUser.first_name}</Text>
-          <TouchableOpacity style={styles.chatButton} onPress={handleStartChat}>
+          <Text style={styles.userName}>{selectedUser.firstName}</Text>
+          <TouchableOpacity 
+            style={styles.chatButton}
+            onPress={handleStartChat}
+          >
             <LinearGradient
               colors={['#007AFF', '#0055FF']}
               style={styles.gradient}
               start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}>
+              end={{ x: 1, y: 0 }}
+            >
               <Text style={styles.chatButtonText}>Start Chat</Text>
             </LinearGradient>
           </TouchableOpacity>

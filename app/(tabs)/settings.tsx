@@ -1,7 +1,20 @@
-import { StyleSheet, View, Text, TouchableOpacity, Image } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Image, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { auth, cacheAuthState } from '../../src/lib/firebase';
 
 export default function SettingsScreen() {
+  const handleSignOut = async () => {
+    try {
+      await auth.signOut();
+      await cacheAuthState(null); // Clear cached user data
+      router.replace('/(auth)');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+      console.error('Sign out error:', error);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.profileSection}>
@@ -36,7 +49,9 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={24} color="#666" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.settingsItem, styles.signOutButton]}>
+        <TouchableOpacity 
+          style={[styles.settingsItem, styles.signOutButton]}
+          onPress={handleSignOut}>
           <Ionicons name="log-out" size={24} color="#ff4444" />
           <Text style={[styles.settingsText, styles.signOutText]}>Sign Out</Text>
         </TouchableOpacity>
