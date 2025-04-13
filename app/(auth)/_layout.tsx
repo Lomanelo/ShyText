@@ -2,28 +2,17 @@ import { Stack } from 'expo-router';
 
 export default function AuthLayout() {
   return (
-    <Stack screenOptions={{
-      headerStyle: {
-        backgroundColor: '#1a1a1a',
-      },
-      headerTintColor: '#fff',
-      headerTitleStyle: {
-        fontWeight: 'bold',
-      },
-      contentStyle: {
-        backgroundColor: '#1a1a1a',
-      },
-    }}>
+    <Stack>
       <Stack.Screen
         name="index"
         options={{
-          title: 'Welcome to ShyText',
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="profile"
         options={{
-          title: 'Complete Profile',
+          headerShown: false,
         }}
       />
     </Stack>

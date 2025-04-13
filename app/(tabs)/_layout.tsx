@@ -9,7 +9,7 @@ export default function TabLayout() {
           backgroundColor: '#1a1a1a',
           borderTopColor: '#333',
         },
-        tabBarActiveTintColor: '#fff',
+        tabBarActiveTintColor: '#007AFF',
         tabBarInactiveTintColor: '#888',
         headerStyle: {
           backgroundColor: '#1a1a1a',
@@ -19,9 +19,9 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Nearby',
-          tabBarIcon: ({ size, color }) => (
-            <Ionicons name="map" size={size} color={color} />
+          title: 'Home',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home" size={size} color={color} />
           ),
         }}
       />
@@ -29,7 +29,7 @@ export default function TabLayout() {
         name="chats"
         options={{
           title: 'Chats',
-          tabBarIcon: ({ size, color }) => (
+          tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubbles" size={size} color={color} />
           ),
         }}
@@ -38,7 +38,7 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: 'Settings',
-          tabBarIcon: ({ size, color }) => (
+          tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings" size={size} color={color} />
           ),
         }}
