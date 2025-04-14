@@ -424,14 +424,41 @@ export default function NearbyConnectionsComponent() {
       });
 
       const onPeerFoundListener = NearbyConnections.onPeerFound((data: ConnectionData) => {
-        console.log('Peer found:', data.name, 'peerId:', data.peerId);
+        console.log('Peer found:', data.name, 'peerId:', data.peerId, 'myPeerId:', myPeerId);
+        
+        // Early check - if peerId matches, definitely skip
+        if (data.peerId === myPeerId) {
+          console.log('Skipping self-discovery - exact peerId match');
+          return;
+        }
         
         const peerIdentity = parsePeerIdentity(data.name);
+        console.log('Parsed peer identity:', peerIdentity, 'My userData:', userData);
         
-        // Update discovered peers with user data
+        // Skip if this is the current user based on userId or peerId
+        if (peerIdentity.userId === userData?.userId) {
+          console.log('Skipping self-discovery - exact userId match');
+          return;
+        }
+        
+        // Additional check for name similarity in case userId doesn't match
+        if (peerIdentity.name === userData?.displayName) {
+          console.log('Skipping self-discovery - name match');
+          return;
+        }
+        
+        // Update discovered peers with user data, with final self-check
         setDiscoveredPeers(prev => {
+          // Check for existing entry to avoid duplicates
           const existing = prev.find(p => p.peerId === data.peerId);
           if (existing) return prev;
+          
+          // Final check to ensure we don't add ourselves
+          if (data.peerId === myPeerId || peerIdentity.userId === userData?.userId) {
+            console.log('Caught self-discovery in final check');
+            return prev;
+          }
+          
           return [...prev, { ...peerIdentity, peerId: data.peerId }];
         });
       });
@@ -461,6 +488,8 @@ export default function NearbyConnectionsComponent() {
           // Stop discovery and advertising if active on unmount
           if (isDiscovering && NearbyConnections) {
             NearbyConnections.stopDiscovery().catch((error: Error) => console.error('Error stopping discovery:', error));
+            // Clear discovered peers on unmount
+            setDiscoveredPeers([]);
           }
           if (isAdvertising && NearbyConnections) {
             NearbyConnections.stopAdvertise().catch((error: Error) => console.error('Error stopping advertising:', error));
@@ -484,6 +513,20 @@ export default function NearbyConnectionsComponent() {
     }
   }, [libraryReady, permissionsGranted]);
 
+  // Add effect to clean up any self-entries from discovered peers
+  useEffect(() => {
+    if (!userData || !myPeerId) return;
+    
+    // Filter out self from discovered peers if somehow added
+    setDiscoveredPeers(prev => 
+      prev.filter(peer => 
+        peer.peerId !== myPeerId && 
+        peer.userId !== userData.userId && 
+        peer.name !== userData.displayName
+      )
+    );
+  }, [userData, myPeerId, discoveredPeers.length]);
+  
   // Show error screen if library is not ready
   if (!libraryReady) {
     return (
