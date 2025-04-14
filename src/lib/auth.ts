@@ -7,7 +7,7 @@ import { router } from 'expo-router';
 import { User, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
 import Constants from 'expo-constants';
 
-import { auth, signInWithGoogleCredential, cacheAuthState } from './firebase';
+import { auth, signInWithGoogleCredential, cacheAuthState, checkUserProfileExists } from './firebase';
 
 // Register web browser for redirect login flow
 WebBrowser.maybeCompleteAuthSession();
@@ -80,8 +80,17 @@ export function useGoogleAuth() {
           
           setUserInfo(user);
           
-          // Navigate to the profile completion screen or main app
-          router.replace('/(auth)/profile');
+          // Check if user profile already exists
+          const profileExists = await checkUserProfileExists(user.uid);
+          
+          // Navigate to the profile completion screen or main app based on profile existence
+          if (profileExists) {
+            console.log("User profile exists, redirecting to main app");
+            router.replace('/(tabs)');
+          } else {
+            console.log("User profile does not exist, redirecting to profile completion");
+            router.replace('/(auth)/profile');
+          }
         } catch (firebaseError) {
           console.error("Firebase sign-in error:", firebaseError);
           setError(`Firebase authentication failed: ${
@@ -160,7 +169,17 @@ export function useEmailAuth() {
       await cacheAuthState(user);
       setUserInfo(user);
       
-      router.replace('/(auth)/profile');
+      // Check if user profile already exists
+      const profileExists = await checkUserProfileExists(user.uid);
+      
+      // Navigate to the profile completion screen or main app based on profile existence
+      if (profileExists) {
+        console.log("User profile exists, redirecting to main app");
+        router.replace('/(tabs)');
+      } else {
+        console.log("User profile does not exist, redirecting to profile completion");
+        router.replace('/(auth)/profile');
+      }
     } catch (e) {
       console.error("Email sign-in error:", e);
       setError(e instanceof Error ? e.message : "Failed to sign in");
@@ -191,6 +210,7 @@ export function useEmailAuth() {
       await cacheAuthState(user);
       setUserInfo(user);
       
+      // For new sign-ups, always go to profile completion
       router.replace('/(auth)/profile');
     } catch (e) {
       console.error("Email sign-up error:", e);

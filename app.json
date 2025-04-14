@@ -28,7 +28,10 @@
         "NSLocalNetworkUsageDescription": "This app uses nearby connections to discover and connect with other devices",
         "NSBonjourServices": ["_nearby._tcp"],
         "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to discover and connect with nearby devices",
-        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to discover and connect with nearby devices"
+        "NSBluetoothPeripheralUsageDescription": "This app uses Bluetooth to discover and connect with nearby devices",
+        "NSPhotoLibraryUsageDescription": "ShyText needs access to your photos so you can upload a profile picture",
+        "NSCameraUsageDescription": "ShyText needs access to your camera so you can take a profile picture",
+        "NSMicrophoneUsageDescription": "ShyText needs access to your microphone when you record videos for your profile"
       }
     },
     "android": {
@@ -59,7 +62,11 @@
         "android.permission.CHANGE_WIFI_STATE",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.INTERNET"
+        "android.permission.INTERNET",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
       ]
     },
     "web": {
@@ -92,6 +99,14 @@
               "android.permission.INTERNET"
             ]
           }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ShyText needs access to your photos so you can upload a profile picture.",
+          "cameraPermission": "ShyText needs access to your camera so you can take a profile picture.",
+          "microphonePermission": "ShyText needs access to your microphone when you record videos for your profile."
         }
       ]
     ],

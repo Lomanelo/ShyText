@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, TextInput, Alert, Platform, PermissionsAndroid, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, TextInput, Alert, Platform, PermissionsAndroid } from 'react-native';
 import { Strategy } from 'expo-nearby-connections';
 import { auth } from '../../src/lib/firebase';
-import { getDatabase, ref, onValue } from 'firebase/database';
+import { getDatabase, ref, onValue, get, set } from 'firebase/database';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
 
 // Import NearbyConnections in a try-catch block to handle potential import errors
 let NearbyConnections: any = null;
@@ -36,6 +35,7 @@ interface Peer {
   peerId: string;
   name: string;
   userId?: string;
+  photoURL?: string | null;
 }
 
 interface Message {
@@ -43,7 +43,7 @@ interface Message {
   text: string;
   timestamp: number;
   senderName?: string;
-  isSelf: boolean;
+  photoURL?: string | null;
 }
 
 export default function NearbyConnectionsComponent() {
@@ -60,6 +60,7 @@ export default function NearbyConnectionsComponent() {
   const [userData, setUserData] = useState<{
     userId: string;
     displayName: string;
+    photoURL?: string | null;
   } | null>(null);
   
   // Load persistent peerId from storage if available when component mounts
@@ -149,26 +150,79 @@ export default function NearbyConnectionsComponent() {
   useEffect(() => {
     if (!permissionsGranted) return;
     
-    const currentUser = auth.currentUser;
-    if (currentUser) {
-      const db = getDatabase();
-      const userRef = ref(db, `users/${currentUser.uid}`);
-      
-      onValue(userRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
+    const fetchUserProfile = async () => {
+      try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          console.error('No authenticated user found');
+          return;
+        }
+        
+        const db = getDatabase();
+        const userProfileRef = ref(db, `profiles/${currentUser.uid}`);
+        
+        // Get user profile from Firebase
+        const snapshot = await get(userProfileRef);
+        
+        if (snapshot.exists()) {
+          const profileData = snapshot.val();
+          console.log('Found user profile:', profileData);
+          
           setUserData({
             userId: currentUser.uid,
-            displayName: data.first_name || currentUser.displayName || 'Anonymous',
+            displayName: profileData.firstName || currentUser.displayName || 'Anonymous',
+            photoURL: profileData.photoURL || currentUser.photoURL
           });
         } else {
+          // No profile found, try to get cached profile
+          const cachedProfile = await AsyncStorage.getItem('userProfile');
+          
+          if (cachedProfile) {
+            const profileData = JSON.parse(cachedProfile);
+            console.log('Using cached profile:', profileData);
+            
+            setUserData({
+              userId: currentUser.uid,
+              displayName: profileData.firstName || currentUser.displayName || 'Anonymous',
+              photoURL: profileData.photoURL || currentUser.photoURL
+            });
+          } else {
+            // Fallback to Firebase user data
+            setUserData({
+              userId: currentUser.uid,
+              displayName: currentUser.displayName || 'Anonymous',
+              photoURL: currentUser.photoURL
+            });
+          }
+          
+          // Update status in real-time database
+          onValue(userProfileRef, (snapshot) => {
+            if (snapshot.exists()) {
+              const data = snapshot.val();
+              setUserData({
+                userId: currentUser.uid,
+                displayName: data.firstName || currentUser.displayName || 'Anonymous',
+                photoURL: data.photoURL || currentUser.photoURL
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching user profile:', error);
+        
+        // Fallback to current user basic data
+        const currentUser = auth.currentUser;
+        if (currentUser) {
           setUserData({
             userId: currentUser.uid,
             displayName: currentUser.displayName || 'Anonymous',
+            photoURL: currentUser.photoURL
           });
         }
-      });
-    }
+      }
+    };
+    
+    fetchUserProfile();
   }, [permissionsGranted]);
   
   // Safely start advertising and discovering when user data is available
@@ -199,8 +253,8 @@ export default function NearbyConnectionsComponent() {
       
       setIsAdvertising(true);
       
-      // Create a simple payload with user data
-      // Using a simple string format to avoid JSON parsing issues
+      // Create a simple payload with user ID and display name only
+      // DO NOT include the photoURL in the payload to avoid crashes with long URLs
       const payload = `${userData.userId}|${userData.displayName}`;
       
       console.log('Starting advertising with payload:', payload);
@@ -233,6 +287,9 @@ export default function NearbyConnectionsComponent() {
       }
       
       setMyPeerId(peerId);
+      
+      // Update Firebase with user's profile info
+      updateUserProfileInFirebase(userData);
     } catch (error) {
       console.error('Error starting advertising:', error);
       setIsAdvertising(false);
@@ -251,8 +308,8 @@ export default function NearbyConnectionsComponent() {
       
       setIsDiscovering(true);
       
-      // Create a simple payload with user data
-      // Using a simple string format to avoid JSON parsing issues
+      // Create a simple payload with user ID and display name only
+      // DO NOT include the photoURL in the payload to avoid crashes with long URLs
       const payload = `${userData.userId}|${userData.displayName}`;
       
       console.log('Starting discovery with payload:', payload);
@@ -264,6 +321,9 @@ export default function NearbyConnectionsComponent() {
       
       console.log('Discovery started, peerId:', peerId);
       setMyPeerId(peerId);
+      
+      // Update Firebase with user's profile info
+      updateUserProfileInFirebase(userData);
     } catch (error) {
       console.error('Error starting discovery:', error);
       setIsDiscovering(false);
@@ -271,16 +331,42 @@ export default function NearbyConnectionsComponent() {
     }
   };
 
+  // Update user profile info in Firebase
+  const updateUserProfileInFirebase = async (userProfile: {
+    userId: string;
+    displayName: string;
+    photoURL?: string | null;
+  }) => {
+    try {
+      if (!userProfile.userId) return;
+      
+      const db = getDatabase();
+      const userProfileRef = ref(db, `users/${userProfile.userId}`);
+      
+      // Update user profile data in Firebase
+      await set(userProfileRef, {
+        displayName: userProfile.displayName,
+        photoURL: userProfile.photoURL || null,
+        lastSeen: new Date().toISOString(),
+        peerId: myPeerId || null
+      });
+      
+      console.log('User profile updated in Firebase');
+    } catch (error) {
+      console.error('Error updating user profile in Firebase:', error);
+    }
+  };
+  
   // Start advertising
   const startAdvertising = async () => {
     handleStartAdvertising();
   };
-
+ 
   // Start discovering
   const startDiscovering = async () => {
     handleStartDiscovery();
   };
-
+ 
   // Stop advertising
   const stopAdvertising = async () => {
     try {
@@ -291,7 +377,7 @@ export default function NearbyConnectionsComponent() {
       console.error('Error stopping advertising:', error);
     }
   };
-
+ 
   // Stop discovering
   const stopDiscovering = async () => {
     try {
@@ -313,7 +399,7 @@ export default function NearbyConnectionsComponent() {
       setErrorMessage('Could not connect to user');
     }
   };
-
+        
   // Accept connection
   const acceptConnection = async (peerId: string) => {
     try {
@@ -323,30 +409,25 @@ export default function NearbyConnectionsComponent() {
       console.error('Error accepting connection:', error);
     }
   };
-
-  // Send message
-  const sendMessage = async (peerId: string) => {
-    if (!messageText.trim() || !NearbyConnections) return;
-    
+  
+  // Fetch user profile from Firebase
+  const fetchUserProfileFromFirebase = async (userId: string): Promise<{
+    displayName?: string;
+    photoURL?: string | null;
+  }> => {
     try {
-      // Create message with metadata (simple format)
-      const messageWithMetadata = `${messageText}|${userData?.displayName || 'Anonymous'}|${Date.now()}`;
+      const db = getDatabase();
+      const userProfileRef = ref(db, `users/${userId}`);
       
-      await NearbyConnections.sendText(peerId, messageWithMetadata);
+      const snapshot = await get(userProfileRef);
+      if (snapshot.exists()) {
+        return snapshot.val();
+      }
       
-      // Add to local messages
-      setMessages(prev => [...prev, { 
-        peerId, 
-        text: messageText,
-        timestamp: Date.now(),
-        senderName: userData?.displayName || 'Anonymous',
-        isSelf: true
-      }]);
-      
-      setMessageText('');
+      return {};
     } catch (error) {
-      console.error('Error sending message:', error);
-      setErrorMessage('Could not send message');
+      console.error('Error fetching user profile from Firebase:', error);
+      return {};
     }
   };
 
@@ -356,28 +437,40 @@ export default function NearbyConnectionsComponent() {
       // Try to parse as pipe-delimited string: userId|displayName
       const parts = name.split('|');
       if (parts.length >= 2) {
-        return {
-          peerId: '',
-          name: parts[1] || 'Unknown',
-          userId: parts[0] || '',
+        const userId = parts[0] || '';
+        const displayName = parts[1] || 'Unknown';
+        
+        // Create peer object with user ID and display name
+        const peer: Peer = {
+          peerId: '',  // This will be set later
+          name: displayName,
+          userId: userId
         };
+        
+        // Fetch profile photo from Firebase if we have a userId
+        if (userId) {
+          fetchUserProfileFromFirebase(userId).then(profile => {
+            if (profile.photoURL) {
+              // Find and update the discovered or connected peer with the photo URL
+              setDiscoveredPeers(peers => 
+                peers.map(p => p.userId === userId ? { ...p, photoURL: profile.photoURL } : p)
+              );
+              
+              setConnectedPeers(peers => 
+                peers.map(p => p.userId === userId ? { ...p, photoURL: profile.photoURL } : p)
+              );
+            }
+          });
+        }
+        
+        return peer;
       }
       
-      // Try to parse JSON data as fallback
-      try {
-        const userData = JSON.parse(name);
-        return {
-          peerId: userData.peerId || '',
-          name: userData.name || 'Unknown',
-          userId: userData.userId || '',
-        };
-      } catch (jsonError) {
-        // If not JSON or pipe-delimited, use as-is
-        return {
-          peerId: '',
-          name: name || 'Unknown'
-        };
-      }
+      // Fallback to just using the name as-is
+      return {
+        peerId: '',
+        name: name || 'Unknown'
+      };
     } catch (e) {
       // If any error occurs, use as-is
       return {
@@ -387,8 +480,58 @@ export default function NearbyConnectionsComponent() {
     }
   };
 
+  // Send message
+  const sendMessage = async (peerId: string) => {
+    if (!messageText.trim() || !NearbyConnections) return;
+    
+    try {
+      // Create message with metadata (simple format)
+      // Don't include photoURL in the message payload
+      const messageWithMetadata = `${messageText}|${userData?.displayName || 'Anonymous'}|${Date.now()}`;
+      
+      await NearbyConnections.sendText(peerId, messageWithMetadata);
+      
+      // Find the connected peer to get their userId
+      const targetPeer = connectedPeers.find(p => p.peerId === peerId);
+      
+      // Add to local messages
+      const newMessage = { 
+        peerId, 
+        text: messageText,
+        timestamp: Date.now(),
+        senderName: userData?.displayName || 'Anonymous',
+        photoURL: userData?.photoURL
+      };
+      
+      setMessages(prev => [...prev, newMessage]);
+      
+      setMessageText('');
+      
+      // If we have the peer's userId, also store the message in Firebase for reliability
+      if (targetPeer?.userId) {
+        try {
+          const db = getDatabase();
+          const messageRef = ref(db, `messages/${userData?.userId}/${targetPeer.userId}/${Date.now()}`);
+          
+          await set(messageRef, {
+            text: messageText,
+            timestamp: Date.now(),
+            senderName: userData?.displayName || 'Anonymous',
+            senderId: userData?.userId,
+            receiverId: targetPeer.userId
+          });
+        } catch (dbError) {
+          console.error('Error saving message to Firebase:', dbError);
+        }
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setErrorMessage('Could not send message');
+    }
+  };
+
   // Parse message text
-  const parseMessageText = (text: string): { text: string; senderName: string; timestamp: number } => {
+  const parseMessageText = (text: string): { text: string; senderName: string; timestamp: number; } => {
     try {
       // Try to parse as pipe-delimited string: text|senderName|timestamp
       const parts = text.split('|');
@@ -396,26 +539,16 @@ export default function NearbyConnectionsComponent() {
         return {
           text: parts[0] || '',
           senderName: parts[1] || 'Unknown',
-          timestamp: parseInt(parts[2]) || Date.now()
+          timestamp: parseInt(parts[2]) || Date.now(),
         };
       }
       
-      // Try to parse JSON data as fallback
-      try {
-        const messageData = JSON.parse(text);
-        return {
-          text: messageData.text || text,
-          senderName: messageData.senderName || 'Unknown',
-          timestamp: messageData.timestamp || Date.now()
-        };
-      } catch (jsonError) {
-        // If not JSON or pipe-delimited, use as-is
-        return {
-          text,
-          senderName: 'Unknown',
-          timestamp: Date.now()
-        };
-      }
+      // Fallback to just using the text as-is
+      return {
+        text,
+        senderName: 'Unknown',
+        timestamp: Date.now()
+      };
     } catch (e) {
       // If any error occurs, use as-is
       return {
@@ -530,13 +663,37 @@ export default function NearbyConnectionsComponent() {
         
         const { text: messageText, senderName, timestamp } = parseMessageText(data.text);
         
-        setMessages(prev => [...prev, { 
+        // Find the connected peer to get their userId for looking up photoURL
+        const sender = connectedPeers.find(p => p.peerId === data.peerId);
+        
+        // Add to local messages
+        const newMessage = { 
           peerId: data.peerId, 
           text: messageText,
           timestamp,
           senderName,
-          isSelf: false
-        }]);
+          photoURL: sender?.photoURL
+        };
+        
+        setMessages(prev => [...prev, newMessage]);
+        
+        // If we have the sender's userId, also fetch their profile photo if we don't have it yet
+        if (sender?.userId && !sender.photoURL) {
+          fetchUserProfileFromFirebase(sender.userId).then(profile => {
+            if (profile.photoURL) {
+              // Update the connected peer with the photo URL
+              setConnectedPeers(peers => 
+                peers.map(p => p.peerId === data.peerId ? { ...p, photoURL: profile.photoURL } : p)
+              );
+              
+              // Also update the message with the photo URL
+              setMessages(msgs => 
+                msgs.map(m => m.peerId === data.peerId && m.timestamp === timestamp ? 
+                  { ...m, photoURL: profile.photoURL } : m)
+              );
+            }
+          });
+        }
       });
 
       // Return cleanup function
@@ -648,198 +805,182 @@ export default function NearbyConnectionsComponent() {
 
   return (
     <View style={styles.container}>
-      {errorMessage ? (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorBannerText}>{errorMessage}</Text>
-          <TouchableOpacity
-            style={styles.errorBannerButton}
-            onPress={() => setErrorMessage(null)}
-          >
-            <Text style={styles.errorBannerButtonText}>Dismiss</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      <LinearGradient
-        colors={['#121212', '#1E2836']}
-        style={styles.gradientBackground}
-      >
-        <View style={styles.headerSection}>
-          <Text style={styles.headerTitle}>Nearby Connections</Text>
-          {userData ? (
+      <View style={styles.headerSection}>
+        <Text style={styles.headerTitle}>Nearby Connections</Text>
+        {userData && (
+          <View style={styles.userInfoContainer}>
+            {userData.photoURL ? (
+              <Image 
+                source={{ uri: userData.photoURL }} 
+                style={styles.userProfileImage} 
+              />
+            ) : (
+              <View style={styles.userProfilePlaceholder}>
+                <Text style={styles.userProfilePlaceholderText}>
+                  {userData.displayName.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+            )}
             <Text style={styles.userInfo}>
               Connected as: {userData.displayName}
             </Text>
-          ) : null}
+          </View>
+        )}
+      </View>
+      
+      {errorMessage && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{errorMessage}</Text>
+          <TouchableOpacity 
+            style={styles.errorBannerButton}
+            onPress={() => setErrorMessage(null)}>
+            <Text style={styles.errorBannerButtonText}>Dismiss</Text>
+          </TouchableOpacity>
         </View>
-
-        <View style={styles.statusCardContainer}>
-          <LinearGradient
-            colors={['#1E293B', '#334155']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.statusCard}
-          >
-            <View style={styles.statusContent}>
-              <View style={styles.statusIconContainer}>
-                <View style={[styles.statusIndicator, isAdvertising && styles.activeIndicator]} />
-                <Ionicons name="wifi" size={22} color="#fff" style={styles.statusIcon} />
-              </View>
-              <View style={styles.statusTextContainer}>
-                <Text style={styles.statusLabel}>Broadcasting</Text>
-                <Text style={styles.statusValue}>{isAdvertising ? 'Active' : 'Inactive'}</Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.actionButton, isAdvertising && styles.actionButtonActive]}
-                onPress={() => isAdvertising ? stopAdvertising() : handleStartAdvertising()}
-              >
-                <Text style={styles.actionButtonText}>
-                  {isAdvertising ? 'Stop' : 'Start'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
-
-          <LinearGradient
-            colors={['#1E293B', '#334155']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.statusCard}
-          >
-            <View style={styles.statusContent}>
-              <View style={styles.statusIconContainer}>
-                <View style={[styles.statusIndicator, isDiscovering && styles.activeIndicator]} />
-                <Ionicons name="search" size={22} color="#fff" style={styles.statusIcon} />
-              </View>
-              <View style={styles.statusTextContainer}>
-                <Text style={styles.statusLabel}>Discovering</Text>
-                <Text style={styles.statusValue}>{isDiscovering ? 'Active' : 'Inactive'}</Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.actionButton, isDiscovering && styles.actionButtonActive]}
-                onPress={() => isDiscovering ? stopDiscovering() : handleStartDiscovery()}
-              >
-                <Text style={styles.actionButtonText}>
-                  {isDiscovering ? 'Stop' : 'Start'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </LinearGradient>
-        </View>
-
-        <View style={styles.mainContent}>
-          <Text style={styles.sectionTitle}>
-            People Nearby ({discoveredPeers.length})
+      )}
+      
+      <View style={styles.statusSection}>
+        <View style={[styles.statusIndicator, isAdvertising ? styles.statusActive : styles.statusInactive]}>
+          <Text style={styles.statusText}>
+            {isAdvertising ? '✓ Visible to others' : '✗ Not visible to others'}
           </Text>
-          
-          {discoveredPeers.length === 0 ? (
-            <View style={styles.emptyStateContainer}>
-              <Ionicons name="people" size={50} color="#4285F4" style={styles.emptyStateIcon} />
-              <Text style={styles.emptyText}>
-                {isDiscovering ? "Searching for people nearby..." : "Start discovering to find people around you"}
-              </Text>
-            </View>
-          ) : (
-            <ScrollView style={styles.peersList}>
-              {discoveredPeers.map((peer) => {
-                const isConnected = connectedPeers.some(
-                  (p) => p.peerId === peer.peerId
-                );
-                return (
-                  <TouchableOpacity
-                    key={peer.peerId}
-                    onPress={() => !isConnected && requestConnection(peer.peerId)}
-                  >
-                    <LinearGradient
-                      colors={isConnected ? ['#214D76', '#1D4C7E'] : ['#292D3E', '#3A3F55']}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 0 }}
-                      style={[styles.peerItem, isConnected && styles.connectedPeerItemGradient]}
-                    >
-                      <View style={styles.peerAvatarContainer}>
-                        <Text style={styles.peerAvatar}>
-                          {peer.name ? peer.name.charAt(0).toUpperCase() : "?"}
-                        </Text>
-                      </View>
-                      <View style={styles.peerInfo}>
-                        <Text style={styles.peerName}>{peer.name || 'Unknown'}</Text>
-                        <Text style={styles.peerSubtext}>
-                          {isConnected ? 'Connected' : 'Tap to connect'}
-                        </Text>
-                      </View>
-                      <View style={styles.peerStatusIndicator}>
-                        <Ionicons 
-                          name={isConnected ? "checkmark-circle" : "arrow-forward-circle"} 
-                          size={24} 
-                          color={isConnected ? "#4ECCA3" : "#4285F4"} 
-                        />
-                      </View>
-                    </LinearGradient>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          )}
-
-          {connectedPeers.length > 0 && (
-            <View style={styles.chatSection}>
-              <Text style={styles.sectionTitle}>Messages</Text>
-              <ScrollView style={styles.messagesList}>
-                {messages.map((message, index) => (
-                  <LinearGradient
-                    key={index}
-                    colors={message.isSelf ? ['#4285F4', '#3367D6'] : ['#292D3E', '#3A3F55']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={[
-                      styles.messageItem,
-                      message.isSelf ? styles.sentMessage : styles.receivedMessage,
-                    ]}
-                  >
-                    <Text style={styles.messageSender}>
-                      {message.isSelf
-                        ? 'You'
-                        : connectedPeers.find((p) => p.peerId === message.peerId)
-                            ?.name || 'Unknown'}
-                    </Text>
-                    <Text style={styles.messageText}>{message.text}</Text>
-                    <Text style={styles.messageTimestamp}>
-                      {new Date(message.timestamp).toLocaleTimeString([], {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </Text>
-                  </LinearGradient>
-                ))}
-              </ScrollView>
-
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Type a message..."
-                  placeholderTextColor="#aaa"
-                  value={messageText}
-                  onChangeText={setMessageText}
-                />
-                <TouchableOpacity
-                  style={styles.sendButton}
-                  onPress={() => connectedPeers.length > 0 ? sendMessage(connectedPeers[0].peerId) : null}
-                  disabled={!messageText.trim() || !connectedPeers.length}
-                >
-                  <LinearGradient
-                    colors={['#4285F4', '#3367D6']}
-                    style={styles.sendButtonGradient}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                  >
-                    <Text style={styles.sendButtonText}>Send</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
         </View>
-      </LinearGradient>
+        <View style={[styles.statusIndicator, isDiscovering ? styles.statusActive : styles.statusInactive]}>
+          <Text style={styles.statusText}>
+            {isDiscovering ? '✓ Looking for people' : '✗ Not looking for people'}
+          </Text>
+        </View>
+      </View>
+      
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Nearby Users</Text>
+        {discoveredPeers.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No users found nearby yet. Please wait...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={discoveredPeers}
+            keyExtractor={(item, index) => `${item.peerId}-${index}`}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.peerItem}
+                onPress={() => requestConnection(item.peerId)}>
+                {item.photoURL ? (
+                  <Image source={{ uri: item.photoURL }} style={styles.peerImage} />
+                ) : (
+                  <View style={styles.peerImagePlaceholder}>
+                    <Text style={styles.peerImagePlaceholderText}>
+                      {item.name.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.peerInfo}>
+                  <Text style={styles.peerName}>{item.name}</Text>
+                  <Text style={styles.peerSubtext}>Tap to connect</Text>
+                </View>
+                <View style={styles.connectIconContainer}>
+                  <LinearGradient
+                    colors={['#3B82F6', '#1D4ED8']}
+                    style={styles.connectIcon}>
+                    <Text style={styles.connectIconText}>+</Text>
+                  </LinearGradient>
+                </View>
+              </TouchableOpacity>
+            )}
+          />
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Connected Users</Text>
+        {connectedPeers.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No connected users. Connect to someone nearby to chat.</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={connectedPeers}
+            keyExtractor={(item, index) => `${item.peerId}-${index}`}
+            renderItem={({ item }) => (
+              <View style={styles.connectedPeerItem}>
+                {item.photoURL ? (
+                  <Image source={{ uri: item.photoURL }} style={styles.peerImage} />
+                ) : (
+                  <View style={styles.peerImagePlaceholder}>
+                    <Text style={styles.peerImagePlaceholderText}>
+                      {item.name.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.peerInfo}>
+                  <Text style={styles.peerName}>{item.name}</Text>
+                  <Text style={styles.peerSubtext}>Connected</Text>
+                </View>
+                <View style={styles.connectedIndicator} />
+              </View>
+            )}
+          />
+        )}
+      </View>
+
+      {connectedPeers.length > 0 && (
+        <View style={styles.chatSection}>
+          <Text style={styles.sectionTitle}>Messages</Text>
+          <FlatList
+            data={messages}
+            keyExtractor={(item, index) => `${item.peerId}-${index}`}
+            renderItem={({ item }) => (
+              <View style={styles.messageItem}>
+                <View style={styles.messageHeader}>
+                  {item.photoURL ? (
+                    <Image source={{ uri: item.photoURL }} style={styles.messageSenderImage} />
+                  ) : (
+                    <View style={styles.messageSenderImagePlaceholder}>
+                      <Text style={styles.messageSenderImageText}>
+                        {(item.senderName || 'Unknown').charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={styles.messageSender}>{item.senderName || 'Unknown'}</Text>
+                </View>
+                <Text style={styles.messageText}>{item.text}</Text>
+                <Text style={styles.messageTimestamp}>
+                  {new Date(item.timestamp).toLocaleTimeString()}
+                </Text>
+              </View>
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No messages yet. Send a message to start a conversation.</Text>
+              </View>
+            }
+          />
+          
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.input}
+              value={messageText}
+              onChangeText={setMessageText}
+              placeholder="Type a message..."
+              placeholderTextColor="#888"
+            />
+            {connectedPeers.map((peer) => (
+              <TouchableOpacity
+                key={peer.peerId}
+                style={styles.sendButton}
+                onPress={() => sendMessage(peer.peerId)}
+                disabled={!messageText.trim()}>
+                <LinearGradient
+                  colors={['#3B82F6', '#1D4ED8']}
+                  style={styles.sendButtonGradient}>
+                  <Text style={styles.sendButtonText}>Send to {peer.name}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
     </View>
   );
 }
@@ -847,22 +988,19 @@ export default function NearbyConnectionsComponent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212',
-  },
-  gradientBackground: {
-    flex: 1,
     padding: 16,
+    backgroundColor: '#121212',
   },
   errorContainer: {
     flex: 1,
-    padding: 24,
+    padding: 20,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#121212',
   },
   errorTitle: {
-    color: '#ff5252',
-    fontSize: 24,
+    color: '#FF4444',
+    fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 16,
     textAlign: 'center',
@@ -870,299 +1008,285 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#fff',
     fontSize: 16,
-    marginBottom: 20,
+    marginBottom: 16,
     textAlign: 'center',
-    lineHeight: 22,
   },
   errorDetail: {
-    color: '#aaa',
+    color: '#888',
     fontSize: 14,
     textAlign: 'center',
-    lineHeight: 20,
   },
   errorBanner: {
-    backgroundColor: 'rgba(255, 82, 82, 0.9)',
+    backgroundColor: 'rgba(255, 68, 68, 0.15)',
     padding: 12,
     borderRadius: 12,
     marginBottom: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-    margin: 16,
+    borderLeftWidth: 3,
+    borderLeftColor: '#FF4444',
   },
   errorBannerText: {
-    color: '#fff',
+    color: '#FF4444',
     fontSize: 14,
     flex: 1,
-    fontWeight: '500',
   },
   errorBannerButton: {
-    backgroundColor: 'rgba(255,255,255,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
-    marginLeft: 10,
+    borderRadius: 6,
   },
   errorBannerButtonText: {
     color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '500',
   },
   headerSection: {
-    marginBottom: 20,
-    paddingBottom: 16,
+    marginBottom: 16,
   },
   headerTitle: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
-    letterSpacing: 0.5,
   },
-  userInfo: {
-    color: '#bbb',
-    fontSize: 15,
-    marginTop: 6,
-    fontWeight: '500',
-  },
-  statusCardContainer: {
-    marginBottom: 24,
-  },
-  statusCard: {
-    borderRadius: 16,
-    marginBottom: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  statusContent: {
-    padding: 16,
+  userInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 8,
   },
-  statusIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.2)',
+  userProfileImage: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  userProfilePlaceholder: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#3B82F6',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 14,
-    position: 'relative',
+    marginRight: 8,
+  },
+  userProfilePlaceholderText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  userInfo: {
+    color: '#A0A0A0',
+    fontSize: 14,
+  },
+  statusSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 24,
   },
   statusIndicator: {
-    position: 'absolute',
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#777',
-    top: 0,
-    right: 0,
-    borderWidth: 1,
-    borderColor: '#121212',
-  },
-  activeIndicator: {
-    backgroundColor: '#4ECCA3',
-  },
-  statusIcon: {
-    opacity: 0.9,
-  },
-  statusTextContainer: {
     flex: 1,
+    padding: 12,
+    borderRadius: 12,
+    marginHorizontal: 4,
   },
-  statusLabel: {
+  statusActive: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#3B82F6',
+  },
+  statusInactive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#666',
+  },
+  statusText: {
+    color: '#ccc',
+    fontSize: 14,
+  },
+  controls: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+  },
+  button: {
+    backgroundColor: '#333',
+    padding: 12,
+    borderRadius: 8,
+    minWidth: 150,
+    alignItems: 'center',
+  },
+  activeButton: {
+    backgroundColor: '#3B82F6',
+  },
+  buttonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-  statusValue: {
-    color: '#bbb',
-    fontSize: 13,
-    marginTop: 2,
-  },
-  actionButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: 'rgba(66, 133, 244, 0.2)',
-    borderWidth: 1,
-    borderColor: '#4285F4',
-  },
-  actionButtonActive: {
-    backgroundColor: 'rgba(255, 82, 82, 0.2)',
-    borderColor: '#ff5252',
-  },
-  actionButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  mainContent: {
+  section: {
+    marginBottom: 24,
     flex: 1,
-    borderRadius: 20,
-    backgroundColor: 'rgba(30, 30, 40, 0.6)',
-    padding: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 3,
+  },
+  chatSection: {
+    marginBottom: 20,
+    flex: 2,
   },
   sectionTitle: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 16,
-    letterSpacing: 0.3,
+    marginBottom: 12,
   },
-  emptyStateContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  emptyContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 24,
     alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyStateIcon: {
-    marginBottom: 16,
-    opacity: 0.8,
+    justifyContent: 'center',
   },
   emptyText: {
-    color: '#aaa',
-    fontSize: 15,
-    fontStyle: 'italic',
+    color: '#888',
+    fontSize: 14,
     textAlign: 'center',
-    marginTop: 10,
-    marginHorizontal: 20,
-    lineHeight: 22,
-  },
-  peersList: {
-    marginBottom: 20,
   },
   peerItem: {
-    borderRadius: 16,
-    marginBottom: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
-    overflow: 'hidden',
   },
-  connectedPeerItemGradient: {
-    borderWidth: 1,
-    borderColor: 'rgba(66, 133, 244, 0.5)',
+  peerImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 12,
   },
-  peerAvatarContainer: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  peerImagePlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#2A2A2A',
     justifyContent: 'center',
     alignItems: 'center',
-    margin: 12,
+    marginRight: 12,
   },
-  peerAvatar: {
-    color: '#fff',
-    fontSize: 20,
+  peerImagePlaceholderText: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: 'bold',
+  },
+  connectedPeerItem: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderLeftWidth: 3,
+    borderLeftColor: '#3B82F6',
   },
   peerInfo: {
     flex: 1,
-    paddingVertical: 16,
   },
   peerName: {
     color: '#fff',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
-    letterSpacing: 0.2,
   },
   peerSubtext: {
-    color: '#aaa',
-    fontSize: 13,
+    color: '#A0A0A0',
+    fontSize: 12,
     marginTop: 4,
-    fontWeight: '500',
   },
-  peerStatusIndicator: {
-    paddingRight: 16,
+  connectIconContainer: {
+    marginLeft: 8,
   },
-  chatSection: {
-    flex: 1,
-    marginTop: 20,
+  connectIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  messagesList: {
-    maxHeight: 250,
-    marginBottom: 10,
+  connectIconText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  connectedIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#3B82F6',
+    marginLeft: 8,
   },
   messageItem: {
-    padding: 14,
-    borderRadius: 16,
-    marginBottom: 10,
-    maxWidth: '85%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
-    elevation: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
   },
-  sentMessage: {
-    alignSelf: 'flex-end',
-    borderBottomRightRadius: 4,
+  messageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
   },
-  receivedMessage: {
-    alignSelf: 'flex-start',
-    borderBottomLeftRadius: 4,
+  messageSenderImage: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    marginRight: 8,
+  },
+  messageSenderImagePlaceholder: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  messageSenderImageText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   messageSender: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 15,
+    color: '#3B82F6',
+    fontSize: 14,
     fontWeight: 'bold',
-    marginBottom: 4,
   },
   messageText: {
     color: '#fff',
     fontSize: 16,
-    marginBottom: 6,
-    lineHeight: 22,
+    marginBottom: 8,
   },
   messageTimestamp: {
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: '#888',
     fontSize: 12,
     alignSelf: 'flex-end',
-    fontWeight: '500',
   },
   inputContainer: {
     flexDirection: 'column',
-    marginTop: 12,
+    marginTop: 16,
   },
   input: {
-    backgroundColor: 'rgba(30, 30, 40, 0.8)',
-    borderRadius: 20,
-    padding: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 12,
+    padding: 16,
     color: '#fff',
     fontSize: 16,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(80, 80, 80, 0.5)',
+    marginBottom: 12,
   },
   sendButton: {
-    height: 45,
-    borderRadius: 22,
+    height: 48,
+    borderRadius: 12,
     overflow: 'hidden',
-    marginBottom: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 3,
+    marginBottom: 8,
   },
   sendButtonGradient: {
     flex: 1,
@@ -1173,6 +1297,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-    letterSpacing: 0.5,
   },
 }); 

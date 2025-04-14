@@ -25,4 +25,4 @@ expo applications service. (testing on real ios device)
 colors :
 #ffffff
 #000000
-#0055FF
+#881CD5
