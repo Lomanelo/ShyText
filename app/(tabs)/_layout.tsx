@@ -6,13 +6,13 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         tabBarStyle: {
-          backgroundColor: '#1a1a1a',
+          backgroundColor: '#121212',
           borderTopColor: '#333',
         },
-        tabBarActiveTintColor: '#007AFF',
+        tabBarActiveTintColor: '#4285F4',
         tabBarInactiveTintColor: '#888',
         headerStyle: {
-          backgroundColor: '#1a1a1a',
+          backgroundColor: '#121212',
         },
         headerTintColor: '#fff',
       }}>
@@ -31,15 +31,6 @@ export default function TabLayout() {
           title: 'Chats',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubbles" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="nearby"
-        options={{
-          title: 'Nearby',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people" size={size} color={color} />
           ),
         }}
       />

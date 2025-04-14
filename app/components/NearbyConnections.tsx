@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, TextInput, Alert, Platform, PermissionsAndroid } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, TextInput, Alert, Platform, PermissionsAndroid, ScrollView } from 'react-native';
 import { Strategy } from 'expo-nearby-connections';
 import { auth } from '../../src/lib/firebase';
 import { getDatabase, ref, onValue } from 'firebase/database';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 
 // Import NearbyConnections in a try-catch block to handle potential import errors
 let NearbyConnections: any = null;
@@ -41,6 +43,7 @@ interface Message {
   text: string;
   timestamp: number;
   senderName?: string;
+  isSelf: boolean;
 }
 
 export default function NearbyConnectionsComponent() {
@@ -58,6 +61,23 @@ export default function NearbyConnectionsComponent() {
     userId: string;
     displayName: string;
   } | null>(null);
+  
+  // Load persistent peerId from storage if available when component mounts
+  useEffect(() => {
+    const loadSavedPeerId = async () => {
+      try {
+        const savedPeerId = await AsyncStorage.getItem('my_nearby_peer_id');
+        if (savedPeerId) {
+          console.log('Loaded saved peer ID:', savedPeerId);
+          setMyPeerId(savedPeerId);
+        }
+      } catch (error) {
+        console.error('Error loading saved peer ID:', error);
+      }
+    };
+    
+    loadSavedPeerId();
+  }, []);
   
   // Check if library is available
   useEffect(() => {
@@ -168,7 +188,7 @@ export default function NearbyConnectionsComponent() {
     return () => clearTimeout(timer);
   }, [userData, libraryReady, permissionsGranted]);
   
-  // Safe start advertising with error handling
+  // Safe start advertising with error handling (modified to use saved peerId)
   const handleStartAdvertising = async (e?: React.MouseEvent<HTMLButtonElement>) => {
     e?.preventDefault();
     try {
@@ -185,12 +205,33 @@ export default function NearbyConnectionsComponent() {
       
       console.log('Starting advertising with payload:', payload);
       
-      const peerId = await NearbyConnections.startAdvertise(
-        payload,
-        Strategy.P2P_STAR
-      );
+      // Use the saved peerId if available, otherwise let the library generate one
+      let peerId;
+      if (myPeerId) {
+        // Try to use existing peer ID
+        peerId = await NearbyConnections.startAdvertise(
+          payload,
+          Strategy.P2P_STAR,
+          myPeerId // Pass the saved ID as a hint (library may or may not use it)
+        );
+      } else {
+        // Generate a new ID
+        peerId = await NearbyConnections.startAdvertise(
+          payload,
+          Strategy.P2P_STAR
+        );
+      }
       
       console.log('Advertising started, peerId:', peerId);
+      
+      // Save the peer ID for future use
+      try {
+        await AsyncStorage.setItem('my_nearby_peer_id', peerId);
+        console.log('Saved peer ID to storage');
+      } catch (saveError) {
+        console.error('Failed to save peer ID:', saveError);
+      }
+      
       setMyPeerId(peerId);
     } catch (error) {
       console.error('Error starting advertising:', error);
@@ -298,7 +339,8 @@ export default function NearbyConnectionsComponent() {
         peerId, 
         text: messageText,
         timestamp: Date.now(),
-        senderName: userData?.displayName || 'Anonymous'
+        senderName: userData?.displayName || 'Anonymous',
+        isSelf: true
       }]);
       
       setMessageText('');
@@ -435,7 +477,7 @@ export default function NearbyConnectionsComponent() {
         const peerIdentity = parsePeerIdentity(data.name);
         console.log('Parsed peer identity:', peerIdentity, 'My userData:', userData);
         
-        // Skip if this is the current user based on userId or peerId
+        // Skip if this is the current user based on userId
         if (peerIdentity.userId === userData?.userId) {
           console.log('Skipping self-discovery - exact userId match');
           return;
@@ -447,11 +489,25 @@ export default function NearbyConnectionsComponent() {
           return;
         }
         
-        // Update discovered peers with user data, with final self-check
+        // Update discovered peers with user data, with more robust duplicate and self checks
         setDiscoveredPeers(prev => {
-          // Check for existing entry to avoid duplicates
-          const existing = prev.find(p => p.peerId === data.peerId);
-          if (existing) return prev;
+          // First check if we already have this peer by peerId
+          const existingByPeerId = prev.find(p => p.peerId === data.peerId);
+          if (existingByPeerId) {
+            console.log('Skipping duplicate peer (by peerId)');
+            return prev;
+          }
+          
+          // Then check if we already have this peer by userId (more reliable)
+          const existingByUserId = peerIdentity.userId && 
+                                   prev.find(p => p.userId === peerIdentity.userId);
+          if (existingByUserId) {
+            console.log('Removing older instance of same user (by userId)');
+            // Replace the old entry with the new one (fresher data)
+            return prev
+              .filter(p => p.userId !== peerIdentity.userId)
+              .concat([{ ...peerIdentity, peerId: data.peerId }]);
+          }
           
           // Final check to ensure we don't add ourselves
           if (data.peerId === myPeerId || peerIdentity.userId === userData?.userId) {
@@ -459,6 +515,7 @@ export default function NearbyConnectionsComponent() {
             return prev;
           }
           
+          // Add the new peer since it's not a duplicate
           return [...prev, { ...peerIdentity, peerId: data.peerId }];
         });
       });
@@ -477,7 +534,8 @@ export default function NearbyConnectionsComponent() {
           peerId: data.peerId, 
           text: messageText,
           timestamp,
-          senderName
+          senderName,
+          isSelf: false
         }]);
       });
 
@@ -526,6 +584,37 @@ export default function NearbyConnectionsComponent() {
       )
     );
   }, [userData, myPeerId, discoveredPeers.length]);
+
+  // Add a more aggressive deduplication effect
+  useEffect(() => {
+    if (!discoveredPeers.length) return;
+    
+    // Deduplicate peers by their userIds (most reliable)
+    const uniqueUserIds = new Set();
+    const deduplicatedPeers = [];
+    
+    for (const peer of discoveredPeers) {
+      if (peer.userId) {
+        // If the peer has a userId, use that for deduplication
+        if (!uniqueUserIds.has(peer.userId)) {
+          uniqueUserIds.add(peer.userId);
+          deduplicatedPeers.push(peer);
+        }
+      } else {
+        // If no userId, use peerId as fallback
+        if (!uniqueUserIds.has(peer.peerId)) {
+          uniqueUserIds.add(peer.peerId);
+          deduplicatedPeers.push(peer);
+        }
+      }
+    }
+    
+    // If we've removed duplicates, update the state
+    if (deduplicatedPeers.length !== discoveredPeers.length) {
+      console.log('Removed duplicate peers:', discoveredPeers.length - deduplicatedPeers.length);
+      setDiscoveredPeers(deduplicatedPeers);
+    }
+  }, [discoveredPeers.length]);
   
   // Show error screen if library is not ready
   if (!libraryReady) {
@@ -559,118 +648,198 @@ export default function NearbyConnectionsComponent() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerSection}>
-        <Text style={styles.headerTitle}>Nearby Connections</Text>
-        {userData && (
-          <Text style={styles.userInfo}>
-            Connected as: {userData.displayName}
-          </Text>
-        )}
-      </View>
-      
-      {errorMessage && (
+      {errorMessage ? (
         <View style={styles.errorBanner}>
           <Text style={styles.errorBannerText}>{errorMessage}</Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.errorBannerButton}
-            onPress={() => setErrorMessage(null)}>
+            onPress={() => setErrorMessage(null)}
+          >
             <Text style={styles.errorBannerButtonText}>Dismiss</Text>
           </TouchableOpacity>
         </View>
-      )}
-      
-      <View style={styles.statusSection}>
-        <Text style={styles.statusText}>
-          {isAdvertising ? '✅ Visible to others' : '❌ Not visible to others'}
-        </Text>
-        <Text style={styles.statusText}>
-          {isDiscovering ? '✅ Looking for people' : '❌ Not looking for people'}
-        </Text>
-      </View>
-      
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Nearby Users</Text>
-        {discoveredPeers.length === 0 ? (
-          <Text style={styles.emptyText}>No users found nearby yet. Please wait...</Text>
-        ) : (
-          <FlatList
-            data={discoveredPeers}
-            keyExtractor={(item, index) => `${item.peerId}-${index}`}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.peerItem}
-                onPress={() => requestConnection(item.peerId)}>
-                <View style={styles.peerInfo}>
-                  <Text style={styles.peerName}>{item.name}</Text>
-                  <Text style={styles.peerSubtext}>Tap to connect</Text>
-                </View>
-              </TouchableOpacity>
-            )}
-          />
-        )}
-      </View>
+      ) : null}
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Connected Users</Text>
-        {connectedPeers.length === 0 ? (
-          <Text style={styles.emptyText}>No connected users. Connect to someone nearby to chat.</Text>
-        ) : (
-          <FlatList
-            data={connectedPeers}
-            keyExtractor={(item, index) => `${item.peerId}-${index}`}
-            renderItem={({ item }) => (
-              <View style={styles.connectedPeerItem}>
-                <View style={styles.peerInfo}>
-                  <Text style={styles.peerName}>{item.name}</Text>
-                  <Text style={styles.peerSubtext}>Connected</Text>
-                </View>
-              </View>
-            )}
-          />
-        )}
-      </View>
-
-      {connectedPeers.length > 0 && (
-        <View style={styles.chatSection}>
-          <Text style={styles.sectionTitle}>Messages</Text>
-          <FlatList
-            data={messages}
-            keyExtractor={(item, index) => `${item.peerId}-${index}`}
-            renderItem={({ item }) => (
-              <View style={styles.messageItem}>
-                <Text style={styles.messageSender}>{item.senderName || 'Unknown'}</Text>
-                <Text style={styles.messageText}>{item.text}</Text>
-                <Text style={styles.messageTimestamp}>
-                  {new Date(item.timestamp).toLocaleTimeString()}
-                </Text>
-              </View>
-            )}
-          />
-          
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              value={messageText}
-              onChangeText={setMessageText}
-              placeholder="Type a message..."
-              placeholderTextColor="#666"
-            />
-            {connectedPeers.map((peer) => (
-              <TouchableOpacity
-                key={peer.peerId}
-                style={styles.sendButton}
-                onPress={() => sendMessage(peer.peerId)}
-                disabled={!messageText.trim()}>
-                <LinearGradient
-                  colors={['#007AFF', '#0055FF']}
-                  style={styles.sendButtonGradient}>
-                  <Text style={styles.sendButtonText}>Send to {peer.name}</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            ))}
-          </View>
+      <LinearGradient
+        colors={['#121212', '#1E2836']}
+        style={styles.gradientBackground}
+      >
+        <View style={styles.headerSection}>
+          <Text style={styles.headerTitle}>Nearby Connections</Text>
+          {userData ? (
+            <Text style={styles.userInfo}>
+              Connected as: {userData.displayName}
+            </Text>
+          ) : null}
         </View>
-      )}
+
+        <View style={styles.statusCardContainer}>
+          <LinearGradient
+            colors={['#1E293B', '#334155']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.statusCard}
+          >
+            <View style={styles.statusContent}>
+              <View style={styles.statusIconContainer}>
+                <View style={[styles.statusIndicator, isAdvertising && styles.activeIndicator]} />
+                <Ionicons name="wifi" size={22} color="#fff" style={styles.statusIcon} />
+              </View>
+              <View style={styles.statusTextContainer}>
+                <Text style={styles.statusLabel}>Broadcasting</Text>
+                <Text style={styles.statusValue}>{isAdvertising ? 'Active' : 'Inactive'}</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.actionButton, isAdvertising && styles.actionButtonActive]}
+                onPress={() => isAdvertising ? stopAdvertising() : handleStartAdvertising()}
+              >
+                <Text style={styles.actionButtonText}>
+                  {isAdvertising ? 'Stop' : 'Start'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+
+          <LinearGradient
+            colors={['#1E293B', '#334155']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.statusCard}
+          >
+            <View style={styles.statusContent}>
+              <View style={styles.statusIconContainer}>
+                <View style={[styles.statusIndicator, isDiscovering && styles.activeIndicator]} />
+                <Ionicons name="search" size={22} color="#fff" style={styles.statusIcon} />
+              </View>
+              <View style={styles.statusTextContainer}>
+                <Text style={styles.statusLabel}>Discovering</Text>
+                <Text style={styles.statusValue}>{isDiscovering ? 'Active' : 'Inactive'}</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.actionButton, isDiscovering && styles.actionButtonActive]}
+                onPress={() => isDiscovering ? stopDiscovering() : handleStartDiscovery()}
+              >
+                <Text style={styles.actionButtonText}>
+                  {isDiscovering ? 'Stop' : 'Start'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </View>
+
+        <View style={styles.mainContent}>
+          <Text style={styles.sectionTitle}>
+            People Nearby ({discoveredPeers.length})
+          </Text>
+          
+          {discoveredPeers.length === 0 ? (
+            <View style={styles.emptyStateContainer}>
+              <Ionicons name="people" size={50} color="#4285F4" style={styles.emptyStateIcon} />
+              <Text style={styles.emptyText}>
+                {isDiscovering ? "Searching for people nearby..." : "Start discovering to find people around you"}
+              </Text>
+            </View>
+          ) : (
+            <ScrollView style={styles.peersList}>
+              {discoveredPeers.map((peer) => {
+                const isConnected = connectedPeers.some(
+                  (p) => p.peerId === peer.peerId
+                );
+                return (
+                  <TouchableOpacity
+                    key={peer.peerId}
+                    onPress={() => !isConnected && requestConnection(peer.peerId)}
+                  >
+                    <LinearGradient
+                      colors={isConnected ? ['#214D76', '#1D4C7E'] : ['#292D3E', '#3A3F55']}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={[styles.peerItem, isConnected && styles.connectedPeerItemGradient]}
+                    >
+                      <View style={styles.peerAvatarContainer}>
+                        <Text style={styles.peerAvatar}>
+                          {peer.name ? peer.name.charAt(0).toUpperCase() : "?"}
+                        </Text>
+                      </View>
+                      <View style={styles.peerInfo}>
+                        <Text style={styles.peerName}>{peer.name || 'Unknown'}</Text>
+                        <Text style={styles.peerSubtext}>
+                          {isConnected ? 'Connected' : 'Tap to connect'}
+                        </Text>
+                      </View>
+                      <View style={styles.peerStatusIndicator}>
+                        <Ionicons 
+                          name={isConnected ? "checkmark-circle" : "arrow-forward-circle"} 
+                          size={24} 
+                          color={isConnected ? "#4ECCA3" : "#4285F4"} 
+                        />
+                      </View>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          {connectedPeers.length > 0 && (
+            <View style={styles.chatSection}>
+              <Text style={styles.sectionTitle}>Messages</Text>
+              <ScrollView style={styles.messagesList}>
+                {messages.map((message, index) => (
+                  <LinearGradient
+                    key={index}
+                    colors={message.isSelf ? ['#4285F4', '#3367D6'] : ['#292D3E', '#3A3F55']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={[
+                      styles.messageItem,
+                      message.isSelf ? styles.sentMessage : styles.receivedMessage,
+                    ]}
+                  >
+                    <Text style={styles.messageSender}>
+                      {message.isSelf
+                        ? 'You'
+                        : connectedPeers.find((p) => p.peerId === message.peerId)
+                            ?.name || 'Unknown'}
+                    </Text>
+                    <Text style={styles.messageText}>{message.text}</Text>
+                    <Text style={styles.messageTimestamp}>
+                      {new Date(message.timestamp).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </LinearGradient>
+                ))}
+              </ScrollView>
+
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Type a message..."
+                  placeholderTextColor="#aaa"
+                  value={messageText}
+                  onChangeText={setMessageText}
+                />
+                <TouchableOpacity
+                  style={styles.sendButton}
+                  onPress={() => connectedPeers.length > 0 ? sendMessage(connectedPeers[0].peerId) : null}
+                  disabled={!messageText.trim() || !connectedPeers.length}
+                >
+                  <LinearGradient
+                    colors={['#4285F4', '#3367D6']}
+                    style={styles.sendButtonGradient}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                  >
+                    <Text style={styles.sendButtonText}>Send</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+      </LinearGradient>
     </View>
   );
 }
@@ -678,191 +847,322 @@ export default function NearbyConnectionsComponent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#121212',
+  },
+  gradientBackground: {
+    flex: 1,
     padding: 16,
-    backgroundColor: '#1a1a1a',
   },
   errorContainer: {
     flex: 1,
-    padding: 20,
+    padding: 24,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    backgroundColor: '#121212',
   },
   errorTitle: {
-    color: '#ff4040',
-    fontSize: 22,
+    color: '#ff5252',
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 16,
     textAlign: 'center',
   },
   errorText: {
     color: '#fff',
     fontSize: 16,
-    marginBottom: 15,
+    marginBottom: 20,
     textAlign: 'center',
+    lineHeight: 22,
   },
   errorDetail: {
-    color: '#888',
+    color: '#aaa',
     fontSize: 14,
     textAlign: 'center',
+    lineHeight: 20,
   },
   errorBanner: {
-    backgroundColor: '#ff4040',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 10,
+    backgroundColor: 'rgba(255, 82, 82, 0.9)',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+    margin: 16,
   },
   errorBannerText: {
     color: '#fff',
     fontSize: 14,
     flex: 1,
+    fontWeight: '500',
   },
   errorBannerButton: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginLeft: 10,
   },
   errorBannerButtonText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 13,
+    fontWeight: '600',
   },
   headerSection: {
-    marginBottom: 10,
+    marginBottom: 20,
+    paddingBottom: 16,
   },
   headerTitle: {
     color: '#fff',
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
+    letterSpacing: 0.5,
   },
   userInfo: {
-    color: '#999',
-    fontSize: 14,
-    marginTop: 4,
+    color: '#bbb',
+    fontSize: 15,
+    marginTop: 6,
+    fontWeight: '500',
   },
-  statusSection: {
-    backgroundColor: '#272727',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 20,
+  statusCardContainer: {
+    marginBottom: 24,
   },
-  statusText: {
-    color: '#ccc',
-    fontSize: 14,
-    marginBottom: 4,
+  statusCard: {
+    borderRadius: 16,
+    marginBottom: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  controls: {
+  statusContent: {
+    padding: 16,
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 20,
-  },
-  button: {
-    backgroundColor: '#333',
-    padding: 12,
-    borderRadius: 8,
-    minWidth: 150,
     alignItems: 'center',
   },
-  activeButton: {
-    backgroundColor: '#007AFF',
+  statusIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+    position: 'relative',
   },
-  buttonText: {
+  statusIndicator: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#777',
+    top: 0,
+    right: 0,
+    borderWidth: 1,
+    borderColor: '#121212',
+  },
+  activeIndicator: {
+    backgroundColor: '#4ECCA3',
+  },
+  statusIcon: {
+    opacity: 0.9,
+  },
+  statusTextContainer: {
+    flex: 1,
+  },
+  statusLabel: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-  section: {
-    marginBottom: 20,
-    flex: 1,
+  statusValue: {
+    color: '#bbb',
+    fontSize: 13,
+    marginTop: 2,
   },
-  chatSection: {
-    marginBottom: 20,
-    flex: 2,
+  actionButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(66, 133, 244, 0.2)',
+    borderWidth: 1,
+    borderColor: '#4285F4',
+  },
+  actionButtonActive: {
+    backgroundColor: 'rgba(255, 82, 82, 0.2)',
+    borderColor: '#ff5252',
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  mainContent: {
+    flex: 1,
+    borderRadius: 20,
+    backgroundColor: 'rgba(30, 30, 40, 0.6)',
+    padding: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   sectionTitle: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 16,
+    letterSpacing: 0.3,
+  },
+  emptyStateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyStateIcon: {
+    marginBottom: 16,
+    opacity: 0.8,
   },
   emptyText: {
-    color: '#888',
-    fontSize: 14,
+    color: '#aaa',
+    fontSize: 15,
     fontStyle: 'italic',
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: 10,
+    marginHorizontal: 20,
+    lineHeight: 22,
+  },
+  peersList: {
+    marginBottom: 20,
   },
   peerItem: {
-    backgroundColor: '#333',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
+    borderRadius: 16,
+    marginBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+    overflow: 'hidden',
   },
-  connectedPeerItem: {
-    backgroundColor: '#1D4C7E',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    flexDirection: 'row',
+  connectedPeerItemGradient: {
+    borderWidth: 1,
+    borderColor: 'rgba(66, 133, 244, 0.5)',
+  },
+  peerAvatarContainer: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
     alignItems: 'center',
+    margin: 12,
+  },
+  peerAvatar: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   peerInfo: {
     flex: 1,
+    paddingVertical: 16,
   },
   peerName: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
+    letterSpacing: 0.2,
   },
   peerSubtext: {
-    color: '#999',
-    fontSize: 12,
-    marginTop: 2,
+    color: '#aaa',
+    fontSize: 13,
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  peerStatusIndicator: {
+    paddingRight: 16,
+  },
+  chatSection: {
+    flex: 1,
+    marginTop: 20,
+  },
+  messagesList: {
+    maxHeight: 250,
+    marginBottom: 10,
   },
   messageItem: {
-    backgroundColor: '#333',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
+    padding: 14,
+    borderRadius: 16,
+    marginBottom: 10,
+    maxWidth: '85%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 1,
+    elevation: 1,
+  },
+  sentMessage: {
+    alignSelf: 'flex-end',
+    borderBottomRightRadius: 4,
+  },
+  receivedMessage: {
+    alignSelf: 'flex-start',
+    borderBottomLeftRadius: 4,
   },
   messageSender: {
-    color: '#007AFF',
-    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.9)',
+    fontSize: 15,
     fontWeight: 'bold',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   messageText: {
     color: '#fff',
     fontSize: 16,
-    marginBottom: 4,
+    marginBottom: 6,
+    lineHeight: 22,
   },
   messageTimestamp: {
-    color: '#888',
+    color: 'rgba(255, 255, 255, 0.6)',
     fontSize: 12,
     alignSelf: 'flex-end',
+    fontWeight: '500',
   },
   inputContainer: {
     flexDirection: 'column',
-    marginTop: 8,
+    marginTop: 12,
   },
   input: {
-    backgroundColor: '#222',
-    borderRadius: 8,
-    padding: 12,
+    backgroundColor: 'rgba(30, 30, 40, 0.8)',
+    borderRadius: 20,
+    padding: 14,
     color: '#fff',
     fontSize: 16,
-    marginBottom: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(80, 80, 80, 0.5)',
   },
   sendButton: {
-    height: 40,
-    borderRadius: 20,
+    height: 45,
+    borderRadius: 22,
     overflow: 'hidden',
-    marginBottom: 4,
+    marginBottom: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 2,
+    elevation: 3,
   },
   sendButtonGradient: {
     flex: 1,
@@ -873,5 +1173,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
 }); 
