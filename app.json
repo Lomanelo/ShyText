@@ -22,6 +22,9 @@
             ]
           }
         ],
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to find nearby users",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to find nearby users even when in background",
+        "NSLocationAlwaysUsageDescription": "This app needs access to your location to find nearby users even when in background",
         "NSLocalNetworkUsageDescription": "This app uses nearby connections to discover and connect with other devices",
         "NSBonjourServices": ["_nearby._tcp"],
         "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to discover and connect with nearby devices",
@@ -49,6 +52,9 @@
       "permissions": [
         "android.permission.BLUETOOTH",
         "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.BLUETOOTH_ADVERTISE",
         "android.permission.ACCESS_WIFI_STATE",
         "android.permission.CHANGE_WIFI_STATE",
         "android.permission.ACCESS_FINE_LOCATION",
@@ -76,6 +82,9 @@
             "permissions": [
               "android.permission.BLUETOOTH",
               "android.permission.BLUETOOTH_ADMIN",
+              "android.permission.BLUETOOTH_CONNECT",
+              "android.permission.BLUETOOTH_SCAN",
+              "android.permission.BLUETOOTH_ADVERTISE",
               "android.permission.ACCESS_WIFI_STATE",
               "android.permission.CHANGE_WIFI_STATE",
               "android.permission.ACCESS_FINE_LOCATION",

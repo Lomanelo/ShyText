@@ -112,7 +112,7 @@ const WebMap = Platform.select({
 
     return MapComponent;
   },
-  default: null
+  default: () => null
 });
 
 // Native map for iOS/Android
@@ -152,7 +152,7 @@ const NativeMap = Platform.select({
 
     return MapComponent;
   },
-  default: null
+  default: () => null
 });
 
 export default function NearbyScreen() {
@@ -208,15 +208,17 @@ export default function NearbyScreen() {
     );
   }
 
-  const Map = Platform.OS === 'web' ? WebMap : NativeMap;
+  const MapComponent = Platform.OS === 'web' ? WebMap() : NativeMap();
 
   return (
     <View style={styles.container}>
-      {Map && <Map 
-        location={location} 
-        nearbyUsers={nearbyUsers}
-        onUserPress={handleUserPress}
-      />}
+      {MapComponent && (
+        <MapComponent 
+          location={location} 
+          nearbyUsers={nearbyUsers}
+          onUserPress={handleUserPress}
+        />
+      )}
       
       {selectedUser && (
         <View style={styles.userCard}>
