@@ -166,7 +166,13 @@ export default function NearbyConnectionsComponent() {
         
         if (snapshot.exists()) {
           const profileData = snapshot.val();
-          console.log('Found user profile:', profileData);
+          // Log only necessary profile data without the photoURL base64 string
+          console.log('Found user profile:', { 
+            firstName: profileData.firstName, 
+            email: profileData.email,
+            userId: currentUser.uid,
+            hasPhoto: !!profileData.photoURL
+          });
           
           setUserData({
             userId: currentUser.uid,
@@ -253,8 +259,8 @@ export default function NearbyConnectionsComponent() {
       
       setIsAdvertising(true);
       
-      // Create a simple payload with user ID and display name only
-      // DO NOT include the photoURL in the payload to avoid crashes with long URLs
+      // Create a unique payload with user ID and display name
+      // Use both userId and displayName to ensure uniqueness
       const payload = `${userData.userId}|${userData.displayName}`;
       
       console.log('Starting advertising with payload:', payload);
@@ -608,7 +614,15 @@ export default function NearbyConnectionsComponent() {
         }
         
         const peerIdentity = parsePeerIdentity(data.name);
-        console.log('Parsed peer identity:', peerIdentity, 'My userData:', userData);
+        
+        // Log peer identity without photoURL and only log necessary userData info
+        console.log('Parsed peer identity:', { 
+          name: peerIdentity.name, 
+          userId: peerIdentity.userId 
+        }, 'My user:', { 
+          displayName: userData?.displayName,
+          userId: userData?.userId
+        });
         
         // Skip if this is the current user based on userId
         if (peerIdentity.userId === userData?.userId) {
@@ -622,7 +636,7 @@ export default function NearbyConnectionsComponent() {
           return;
         }
         
-        // Update discovered peers with user data, with more robust duplicate and self checks
+        // Update discovered peers with user data, with enhanced duplicate prevention
         setDiscoveredPeers(prev => {
           // First check if we already have this peer by peerId
           const existingByPeerId = prev.find(p => p.peerId === data.peerId);
@@ -631,14 +645,24 @@ export default function NearbyConnectionsComponent() {
             return prev;
           }
           
-          // Then check if we already have this peer by userId (more reliable)
+          // Then check if we already have this peer by userId (most reliable)
           const existingByUserId = peerIdentity.userId && 
-                                   prev.find(p => p.userId === peerIdentity.userId);
+                                  prev.find(p => p.userId === peerIdentity.userId);
           if (existingByUserId) {
-            console.log('Removing older instance of same user (by userId)');
+            console.log('Replacing older instance of same user (by userId)');
             // Replace the old entry with the new one (fresher data)
             return prev
               .filter(p => p.userId !== peerIdentity.userId)
+              .concat([{ ...peerIdentity, peerId: data.peerId }]);
+          }
+          
+          // Then check for duplicate usernames - ensure username uniqueness
+          const existingByName = prev.find(p => p.name === peerIdentity.name);
+          if (existingByName) {
+            console.log('Found duplicate username, keeping most recent discovery');
+            // Replace existing entry with this one (newer discovery)
+            return prev
+              .filter(p => p.name !== peerIdentity.name)
               .concat([{ ...peerIdentity, peerId: data.peerId }]);
           }
           
@@ -742,29 +766,42 @@ export default function NearbyConnectionsComponent() {
     );
   }, [userData, myPeerId, discoveredPeers.length]);
 
-  // Add a more aggressive deduplication effect
+  // Update the deduplication effect with stronger username uniqueness enforcement
   useEffect(() => {
     if (!discoveredPeers.length) return;
     
-    // Deduplicate peers by their userIds (most reliable)
+    // Deduplicate peers with enhanced uniqueness rules
     const uniqueUserIds = new Set();
+    const uniqueUsernames = new Set();
     const deduplicatedPeers = [];
     
-    for (const peer of discoveredPeers) {
+    // Sort peers by most recently discovered first (assuming newer peers are at end of array)
+    const sortedPeers = [...discoveredPeers].reverse();
+    
+    for (const peer of sortedPeers) {
+      // First priority: userId-based uniqueness (most reliable)
       if (peer.userId) {
-        // If the peer has a userId, use that for deduplication
         if (!uniqueUserIds.has(peer.userId)) {
           uniqueUserIds.add(peer.userId);
           deduplicatedPeers.push(peer);
         }
-      } else {
-        // If no userId, use peerId as fallback
-        if (!uniqueUserIds.has(peer.peerId)) {
-          uniqueUserIds.add(peer.peerId);
+      } 
+      // Second priority: username-based uniqueness for peers without userId
+      else if (peer.name) {
+        if (!uniqueUsernames.has(peer.name.toLowerCase())) {
+          uniqueUsernames.add(peer.name.toLowerCase());
           deduplicatedPeers.push(peer);
         }
       }
+      // Fallback: peerId-based uniqueness for minimal information peers
+      else if (!uniqueUserIds.has(peer.peerId)) {
+        uniqueUserIds.add(peer.peerId);
+        deduplicatedPeers.push(peer);
+      }
     }
+    
+    // Revert the order to maintain discovery order
+    deduplicatedPeers.reverse();
     
     // If we've removed duplicates, update the state
     if (deduplicatedPeers.length !== discoveredPeers.length) {
