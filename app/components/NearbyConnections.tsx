@@ -1,11 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, TextInput, Alert, Platform, PermissionsAndroid } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, TextInput, Alert, Platform, PermissionsAndroid, ScrollView } from 'react-native';
 import { Strategy } from 'expo-nearby-connections';
 import { auth } from '../../src/lib/firebase';
 import { getDatabase, ref, onValue, get, set } from 'firebase/database';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 
 // Import NearbyConnections in a try-catch block to handle potential import errors
 let NearbyConnections: any = null;
@@ -62,6 +63,7 @@ export default function NearbyConnectionsComponent() {
     displayName: string;
     photoURL?: string | null;
   } | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
   
   // Load persistent peerId from storage if available when component mounts
   useEffect(() => {
@@ -248,7 +250,7 @@ export default function NearbyConnectionsComponent() {
     return () => clearTimeout(timer);
   }, [userData, libraryReady, permissionsGranted]);
   
-  // Safe start advertising with error handling (modified to use saved peerId)
+  // Update handleStartAdvertising to use only the Firebase UID for advertising
   const handleStartAdvertising = async (e?: React.MouseEvent<HTMLButtonElement>) => {
     e?.preventDefault();
     try {
@@ -259,11 +261,11 @@ export default function NearbyConnectionsComponent() {
       
       setIsAdvertising(true);
       
-      // Create a unique payload with user ID and display name
-      // Use both userId and displayName to ensure uniqueness
-      const payload = `${userData.userId}|${userData.displayName}`;
+      // Create a payload with ONLY the user ID - for maximum privacy and reliability
+      // The user details will be loaded from Firebase directly
+      const payload = userData.userId;
       
-      console.log('Starting advertising with payload:', payload);
+      console.log('Starting advertising with UID:', payload);
       
       // Use the saved peerId if available, otherwise let the library generate one
       let peerId;
@@ -282,20 +284,20 @@ export default function NearbyConnectionsComponent() {
         );
       }
       
-      console.log('Advertising started, peerId:', peerId);
+      // Avoid logging peerId details
+      console.log('Advertising started successfully');
       
       // Save the peer ID for future use
       try {
         await AsyncStorage.setItem('my_nearby_peer_id', peerId);
-        console.log('Saved peer ID to storage');
       } catch (saveError) {
         console.error('Failed to save peer ID:', saveError);
       }
       
       setMyPeerId(peerId);
       
-      // Update Firebase with user's profile info
-      updateUserProfileInFirebase(userData);
+      // Update Firebase with user's online status and peerId
+      updateUserOnlineStatus(userData.userId, peerId);
     } catch (error) {
       console.error('Error starting advertising:', error);
       setIsAdvertising(false);
@@ -303,7 +305,7 @@ export default function NearbyConnectionsComponent() {
     }
   };
   
-  // Safe start discovering with error handling
+  // Update handleStartDiscovery to also use only the Firebase UID
   const handleStartDiscovery = async (e?: React.MouseEvent<HTMLButtonElement>) => {
     e?.preventDefault();
     try {
@@ -314,22 +316,22 @@ export default function NearbyConnectionsComponent() {
       
       setIsDiscovering(true);
       
-      // Create a simple payload with user ID and display name only
-      // DO NOT include the photoURL in the payload to avoid crashes with long URLs
-      const payload = `${userData.userId}|${userData.displayName}`;
+      // Use only userId for maximum compatibility
+      const payload = userData.userId;
       
-      console.log('Starting discovery with payload:', payload);
+      console.log('Starting discovery with UID:', payload);
       
       const peerId = await NearbyConnections.startDiscovery(
         payload,
         Strategy.P2P_STAR
       );
       
-      console.log('Discovery started, peerId:', peerId);
+      // Avoid logging peerId details
+      console.log('Discovery started successfully');
       setMyPeerId(peerId);
       
-      // Update Firebase with user's profile info
-      updateUserProfileInFirebase(userData);
+      // Update Firebase with user's online status
+      updateUserOnlineStatus(userData.userId, peerId);
     } catch (error) {
       console.error('Error starting discovery:', error);
       setIsDiscovering(false);
@@ -337,32 +339,147 @@ export default function NearbyConnectionsComponent() {
     }
   };
 
-  // Update user profile info in Firebase
-  const updateUserProfileInFirebase = async (userProfile: {
-    userId: string;
-    displayName: string;
-    photoURL?: string | null;
-  }) => {
+  // Add new function to update user's online status in Firebase
+  const updateUserOnlineStatus = async (userId: string, peerId: string) => {
     try {
-      if (!userProfile.userId) return;
-      
       const db = getDatabase();
-      const userProfileRef = ref(db, `users/${userProfile.userId}`);
+      const userStatusRef = ref(db, `userStatus/${userId}`);
       
-      // Update user profile data in Firebase
-      await set(userProfileRef, {
-        displayName: userProfile.displayName,
-        photoURL: userProfile.photoURL || null,
-        lastSeen: new Date().toISOString(),
-        peerId: myPeerId || null
+      // Update online status
+      await set(userStatusRef, {
+        online: true,
+        peerId: peerId,
+        lastSeen: new Date().toISOString()
       });
       
-      console.log('User profile updated in Firebase');
+      // Set up automated cleanup on disconnect
+      const onlineRef = ref(db, '.info/connected');
+      onValue(onlineRef, (snapshot) => {
+        if (snapshot.val() === true) {
+          const userStatusOfflineRef = ref(db, `userStatus/${userId}`);
+          set(userStatusOfflineRef, {
+            online: false,
+            lastSeen: new Date().toISOString()
+          });
+        }
+      });
     } catch (error) {
-      console.error('Error updating user profile in Firebase:', error);
+      console.error('Error updating user status:', error);
     }
   };
-  
+
+  // Modify the loadUserFromFirebase function to return a success/failure result
+  const loadUserFromFirebase = async (userId: string): Promise<boolean> => {
+    try {
+      if (!userId) return false;
+      
+      const db = getDatabase();
+      
+      // First check profiles collection (where complete profiles are stored)
+      const profileRef = ref(db, `profiles/${userId}`);
+      const profileSnapshot = await get(profileRef);
+      
+      if (profileSnapshot.exists()) {
+        const profileData = profileSnapshot.val();
+        
+        // Update both discovered and connected peers with this user's data
+        const userData = {
+          name: profileData.firstName || '',
+          photoURL: profileData.photoURL || null,
+          userId: userId
+        };
+        
+        // Only update if we have a valid name
+        if (userData.name) {
+          updatePeerWithUserData(userId, userData);
+          return true;
+        }
+      }
+      
+      // Fallback to users collection (for basic data)
+      const userRef = ref(db, `users/${userId}`);
+      const userSnapshot = await get(userRef);
+      
+      if (userSnapshot.exists()) {
+        const userData = userSnapshot.val();
+        
+        // Only update if we have a valid displayName
+        if (userData.displayName) {
+          updatePeerWithUserData(userId, {
+            name: userData.displayName,
+            photoURL: userData.photoURL || null,
+            userId: userId
+          });
+          return true;
+        }
+      }
+      
+      // If no valid user data found, remove this peer
+      removePeerWithUserId(userId);
+      return false;
+      
+    } catch (error) {
+      console.error('Error loading user from Firebase:', error);
+      // Remove the peer since we couldn't verify it
+      removePeerWithUserId(userId);
+      return false;
+    }
+  };
+
+  // Add new function to remove peers that don't exist in Firebase
+  const removePeerWithUserId = (userId: string) => {
+    // Remove from discovered peers
+    setDiscoveredPeers(peers => 
+      peers.filter(p => p.userId !== userId)
+    );
+    
+    // Remove from connected peers
+    setConnectedPeers(peers => 
+      peers.filter(p => p.userId !== userId)
+    );
+  };
+
+  // Update parsePeerIdentity to prevent adding unrecognized users to the UI
+  const parsePeerIdentity = (name: string): Peer | null => {
+    try {
+      // The name is now just the Firebase UID
+      const userId = name.trim();
+      
+      if (!userId) {
+        return null;
+      }
+      
+      // Create a temporary peer object with minimal data
+      const tempPeer: Peer = {
+        peerId: '',
+        name: 'Loading...',
+        userId: userId
+      };
+      
+      // Immediately fetch the complete user profile from Firebase
+      // This will either update the peer with real data or remove it if not found
+      loadUserFromFirebase(userId);
+      
+      return tempPeer;
+    } catch (e) {
+      // If any parsing errors, don't add to the UI
+      return null;
+    }
+  };
+
+  // Helper to update peer lists with user data
+  const updatePeerWithUserData = (userId: string, userData: { name: string, photoURL: string | null, userId: string }) => {
+    // Update discovered peers
+    setDiscoveredPeers(peers => 
+      peers.map(p => p.userId === userId ? { ...p, name: userData.name, photoURL: userData.photoURL } : p)
+    );
+    
+    // Update connected peers
+    setConnectedPeers(peers => 
+      peers.map(p => p.userId === userId ? { ...p, name: userData.name, photoURL: userData.photoURL } : p)
+    );
+  };
+
   // Start advertising
   const startAdvertising = async () => {
     handleStartAdvertising();
@@ -434,55 +551,6 @@ export default function NearbyConnectionsComponent() {
     } catch (error) {
       console.error('Error fetching user profile from Firebase:', error);
       return {};
-    }
-  };
-
-  // Parse peer identity from the advertised/discovery name
-  const parsePeerIdentity = (name: string): Peer => {
-    try {
-      // Try to parse as pipe-delimited string: userId|displayName
-      const parts = name.split('|');
-      if (parts.length >= 2) {
-        const userId = parts[0] || '';
-        const displayName = parts[1] || 'Unknown';
-        
-        // Create peer object with user ID and display name
-        const peer: Peer = {
-          peerId: '',  // This will be set later
-          name: displayName,
-          userId: userId
-        };
-        
-        // Fetch profile photo from Firebase if we have a userId
-        if (userId) {
-          fetchUserProfileFromFirebase(userId).then(profile => {
-            if (profile.photoURL) {
-              // Find and update the discovered or connected peer with the photo URL
-              setDiscoveredPeers(peers => 
-                peers.map(p => p.userId === userId ? { ...p, photoURL: profile.photoURL } : p)
-              );
-              
-              setConnectedPeers(peers => 
-                peers.map(p => p.userId === userId ? { ...p, photoURL: profile.photoURL } : p)
-              );
-            }
-          });
-        }
-        
-        return peer;
-      }
-      
-      // Fallback to just using the name as-is
-      return {
-        peerId: '',
-        name: name || 'Unknown'
-      };
-    } catch (e) {
-      // If any error occurs, use as-is
-      return {
-        peerId: '',
-        name: name || 'Unknown'
-      };
     }
   };
 
@@ -571,25 +639,33 @@ export default function NearbyConnectionsComponent() {
     
     try {
       const onInvitationListener = NearbyConnections.onInvitationReceived((data: InvitationData) => {
-        console.log('Invitation received from:', data.name, 'peerId:', data.peerId);
-        
+        // Parse the peer identity (UID)
         const peerIdentity = parsePeerIdentity(data.name);
         
-        // Update discovered peers with user data
+        // Only proceed if we have a valid identity and it's not ourselves
+        if (!peerIdentity || peerIdentity.userId === userData?.userId) {
+          return;
+        }
+        
+        // Update discovered peers with user data if valid
         setDiscoveredPeers(prev => {
           const existing = prev.find(p => p.peerId === data.peerId);
           if (existing) return prev;
           return [...prev, { ...peerIdentity, peerId: data.peerId }];
         });
         
-        // Auto-accept connections for demo purposes
+        // Auto-accept connections for valid peers
         acceptConnection(data.peerId);
       });
 
       const onConnectedListener = NearbyConnections.onConnected((data: ConnectionData) => {
-        console.log('Connected to:', data.name, 'peerId:', data.peerId);
-        
+        // Parse the peer identity from the name (now just a Firebase UID)
         const peerIdentity = parsePeerIdentity(data.name);
+        
+        // Only proceed if we have a valid identity and it's not ourselves
+        if (!peerIdentity || peerIdentity.userId === userData?.userId) {
+          return;
+        }
         
         // Update connected peers with user data
         setConnectedPeers(prev => {
@@ -600,79 +676,49 @@ export default function NearbyConnectionsComponent() {
       });
 
       const onDisconnectedListener = NearbyConnections.onDisconnected((data: { peerId: string }) => {
-        console.log('Disconnected from peerId:', data.peerId);
+        // Remove the disconnected peer from connected peers list without logging
         setConnectedPeers(prev => prev.filter(peer => peer.peerId !== data.peerId));
       });
 
       const onPeerFoundListener = NearbyConnections.onPeerFound((data: ConnectionData) => {
-        console.log('Peer found:', data.name, 'peerId:', data.peerId, 'myPeerId:', myPeerId);
-        
         // Early check - if peerId matches, definitely skip
         if (data.peerId === myPeerId) {
-          console.log('Skipping self-discovery - exact peerId match');
           return;
         }
         
+        // Parse the peer identity (just Firebase UID now)
         const peerIdentity = parsePeerIdentity(data.name);
         
-        // Log peer identity without photoURL and only log necessary userData info
-        console.log('Parsed peer identity:', { 
-          name: peerIdentity.name, 
-          userId: peerIdentity.userId 
-        }, 'My user:', { 
-          displayName: userData?.displayName,
-          userId: userData?.userId
-        });
-        
-        // Skip if this is the current user based on userId
-        if (peerIdentity.userId === userData?.userId) {
-          console.log('Skipping self-discovery - exact userId match');
+        // Skip if no valid peer identity or if this is the current user
+        if (!peerIdentity || peerIdentity.userId === userData?.userId) {
           return;
         }
         
-        // Additional check for name similarity in case userId doesn't match
-        if (peerIdentity.name === userData?.displayName) {
-          console.log('Skipping self-discovery - name match');
-          return;
-        }
-        
-        // Update discovered peers with user data, with enhanced duplicate prevention
+        // Update discovered peers with minimal user data
+        // Full data will be loaded from Firebase by the parsePeerIdentity function
         setDiscoveredPeers(prev => {
           // First check if we already have this peer by peerId
           const existingByPeerId = prev.find(p => p.peerId === data.peerId);
           if (existingByPeerId) {
-            console.log('Skipping duplicate peer (by peerId)');
             return prev;
           }
           
-          // Then check if we already have this peer by userId (most reliable)
+          // Then check if we already have this peer by userId
           const existingByUserId = peerIdentity.userId && 
                                   prev.find(p => p.userId === peerIdentity.userId);
           if (existingByUserId) {
-            console.log('Replacing older instance of same user (by userId)');
-            // Replace the old entry with the new one (fresher data)
+            // Replace the old entry with the new one
             return prev
               .filter(p => p.userId !== peerIdentity.userId)
               .concat([{ ...peerIdentity, peerId: data.peerId }]);
           }
           
-          // Then check for duplicate usernames - ensure username uniqueness
-          const existingByName = prev.find(p => p.name === peerIdentity.name);
-          if (existingByName) {
-            console.log('Found duplicate username, keeping most recent discovery');
-            // Replace existing entry with this one (newer discovery)
-            return prev
-              .filter(p => p.name !== peerIdentity.name)
-              .concat([{ ...peerIdentity, peerId: data.peerId }]);
-          }
-          
           // Final check to ensure we don't add ourselves
           if (data.peerId === myPeerId || peerIdentity.userId === userData?.userId) {
-            console.log('Caught self-discovery in final check');
             return prev;
           }
           
-          // Add the new peer since it's not a duplicate
+          // Add the new peer
           return [...prev, { ...peerIdentity, peerId: data.peerId }];
         });
       });
@@ -840,8 +886,48 @@ export default function NearbyConnectionsComponent() {
     );
   }
 
+  // Function to connect and start chatting with a user
+  const connectAndChat = async (peerId: string, peerName: string) => {
+    try {
+      // Check if already connected
+      const alreadyConnected = connectedPeers.some(peer => peer.peerId === peerId);
+      
+      if (!alreadyConnected) {
+        // Show connecting message
+        setErrorMessage(`Connecting to ${peerName}...`);
+        
+        // Request connection
+        await requestConnection(peerId);
+        
+        // Wait briefly for connection to establish
+        setTimeout(() => {
+          setErrorMessage(null);
+          // Focus on the message input (handled by UI scroll)
+        }, 1500);
+      } else {
+        // Already connected, just scroll to chat
+        setErrorMessage(null);
+      }
+      
+      // Scroll to chat section
+      setTimeout(() => {
+        // Focus on chat section by scrolling to the bottom
+        if (scrollViewRef.current) {
+          scrollViewRef.current.scrollToEnd({ animated: true });
+        }
+      }, 500);
+    } catch (error) {
+      console.error('Error connecting to chat:', error);
+      setErrorMessage(`Failed to connect to ${peerName}`);
+    }
+  };
+
   return (
-    <View style={styles.container}>
+    <ScrollView 
+      style={styles.container}
+      ref={scrollViewRef}
+      contentContainerStyle={styles.contentContainer}
+    >
       <View style={styles.headerSection}>
         <Text style={styles.headerTitle}>Nearby Connections</Text>
         {userData && (
@@ -897,12 +983,12 @@ export default function NearbyConnectionsComponent() {
           </View>
         ) : (
           <FlatList
-            data={discoveredPeers}
+            data={discoveredPeers.filter(peer => peer.name !== 'Loading...')}
             keyExtractor={(item, index) => `${item.peerId}-${index}`}
             renderItem={({ item }) => (
               <TouchableOpacity
                 style={styles.peerItem}
-                onPress={() => requestConnection(item.peerId)}>
+                onPress={() => connectAndChat(item.peerId, item.name)}>
                 {item.photoURL ? (
                   <Image source={{ uri: item.photoURL }} style={styles.peerImage} />
                 ) : (
@@ -914,15 +1000,17 @@ export default function NearbyConnectionsComponent() {
                 )}
                 <View style={styles.peerInfo}>
                   <Text style={styles.peerName}>{item.name}</Text>
-                  <Text style={styles.peerSubtext}>Tap to connect</Text>
+                  <Text style={styles.peerSubtext}>Tap to chat</Text>
                 </View>
-                <View style={styles.connectIconContainer}>
+                <TouchableOpacity 
+                  style={styles.connectIconContainer}
+                  onPress={() => connectAndChat(item.peerId, item.name)}>
                   <LinearGradient
                     colors={['#3B82F6', '#1D4ED8']}
                     style={styles.connectIcon}>
-                    <Text style={styles.connectIconText}>+</Text>
+                    <Ionicons name="chatbubble-outline" size={16} color="#FFFFFF" />
                   </LinearGradient>
-                </View>
+                </TouchableOpacity>
               </TouchableOpacity>
             )}
           />
@@ -937,10 +1025,12 @@ export default function NearbyConnectionsComponent() {
           </View>
         ) : (
           <FlatList
-            data={connectedPeers}
+            data={connectedPeers.filter(peer => peer.name !== 'Loading...')}
             keyExtractor={(item, index) => `${item.peerId}-${index}`}
             renderItem={({ item }) => (
-              <View style={styles.connectedPeerItem}>
+              <TouchableOpacity 
+                style={styles.connectedPeerItem}
+                onPress={() => connectAndChat(item.peerId, item.name)}>
                 {item.photoURL ? (
                   <Image source={{ uri: item.photoURL }} style={styles.peerImage} />
                 ) : (
@@ -955,7 +1045,7 @@ export default function NearbyConnectionsComponent() {
                   <Text style={styles.peerSubtext}>Connected</Text>
                 </View>
                 <View style={styles.connectedIndicator} />
-              </View>
+              </TouchableOpacity>
             )}
           />
         )}
@@ -966,7 +1056,7 @@ export default function NearbyConnectionsComponent() {
           <Text style={styles.sectionTitle}>Messages</Text>
           <FlatList
             data={messages}
-            keyExtractor={(item, index) => `${item.peerId}-${index}`}
+            keyExtractor={(item, index) => `${item.peerId}-${item.timestamp}-${index}`}
             renderItem={({ item }) => (
               <View style={styles.messageItem}>
                 <View style={styles.messageHeader}>
@@ -1018,15 +1108,18 @@ export default function NearbyConnectionsComponent() {
           </View>
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
     backgroundColor: '#121212',
+  },
+  contentContainer: {
+    padding: 16,
+    paddingBottom: 100, // Extra padding at bottom for scrolling
   },
   errorContainer: {
     flex: 1,
