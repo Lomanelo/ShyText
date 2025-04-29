@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { SplashScreen, Stack } from 'expo-router';
+import { SplashScreen, Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { onAuthStateChanged } from 'firebase/auth';
-import { auth, getCachedAuthState, checkUserProfileExists } from '../src/lib/firebase';
+import { auth, checkUserProfileExists } from '../src/lib/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Prevent the splash screen from auto-hiding
@@ -10,39 +10,50 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [initialized, setInitialized] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     // Check for authentication state on app start
     const initAuth = async () => {
       try {
-        // First check the cached state for faster startup
-        const cachedUser = await getCachedAuthState();
-        
-        // Then listen for auth state changes from Firebase
+        // Listen for auth state changes from Firebase
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
-          // If we have a user, ensure their profile data is cached
+          // If we have a user, check profile data and navigate accordingly
           if (user) {
             try {
               // Check if the user has a profile
               const hasProfile = await checkUserProfileExists(user.uid);
               console.log(`User ${user.uid} has profile: ${hasProfile}`);
               
-              // You could store this information in AsyncStorage for later use
+              // Store profile status in AsyncStorage
               await AsyncStorage.setItem('userHasProfile', hasProfile ? 'true' : 'false');
+              
+              // Set authenticated state
+              setIsAuthenticated(true);
+              
+              // If a user is authenticated, redirect them to the main app
+              // Using setTimeout to ensure this happens after the component mounts
+              setTimeout(() => {
+                if (hasProfile) {
+                  console.log("User already authenticated, redirecting to main app");
+                  router.replace('/(tabs)');
+                } else {
+                  console.log("User authenticated but needs profile, redirecting to profile");
+                  router.replace('/(auth)/profile');
+                }
+              }, 100);
             } catch (profileError) {
               console.error('Error checking profile:', profileError);
             }
+          } else {
+            // No user is signed in
+            setIsAuthenticated(false);
+            console.log("No user is signed in, staying on auth screen");
           }
           
           setInitialized(true);
           SplashScreen.hideAsync();
         });
-        
-        // If we have cached user data, we can hide the splash screen early
-        if (cachedUser) {
-          setInitialized(true);
-          SplashScreen.hideAsync();
-        }
         
         return unsubscribe;
       } catch (e) {

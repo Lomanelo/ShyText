@@ -1,9 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AntDesign } from '@expo/vector-icons';
 import { useGoogleAuth, useEmailAuth } from '../../src/lib/auth';
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, checkUserProfileExists } from '../../src/lib/firebase';
 
 export default function WelcomeScreen() {
   const { signInWithGoogle, loading: googleLoading, error: googleError } = useGoogleAuth();
@@ -12,9 +15,38 @@ export default function WelcomeScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showEmailForm, setShowEmailForm] = useState(false);
+  const [initializing, setInitializing] = useState(true);
   
-  const loading = googleLoading || emailLoading;
+  const loading = googleLoading || emailLoading || initializing;
   const error = googleError || emailError;
+
+  // Check for authentication state when component mounts
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        console.log("User already signed in on auth screen, checking profile...");
+        try {
+          // Check if user profile exists
+          const hasProfile = await checkUserProfileExists(user.uid);
+          
+          // Redirect based on profile status
+          if (hasProfile) {
+            console.log("User profile exists, redirecting to main app from auth screen");
+            router.replace('/(tabs)');
+          } else {
+            console.log("User needs profile, redirecting to profile from auth screen");
+            router.replace('/(auth)/profile');
+          }
+        } catch (error) {
+          console.error("Error checking profile:", error);
+        }
+      }
+      
+      setInitializing(false);
+    });
+    
+    return unsubscribe;
+  }, []);
 
   const handleEmailAuth = async (type: 'signin' | 'signup') => {
     if (type === 'signin') {
@@ -25,6 +57,16 @@ export default function WelcomeScreen() {
   };
 
   const isExpoGo = Constants.appOwnership === 'expo';
+
+  // Show loading indicator while checking auth state
+  if (initializing) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#0055FF" />
+        <Text style={styles.loadingText}>Checking authentication state...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -270,5 +312,15 @@ const styles = StyleSheet.create({
   },
   link: {
     color: '#007AFF',
+  },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: 20,
   },
 });

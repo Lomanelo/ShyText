@@ -4,10 +4,10 @@ import { AuthSessionResult, makeRedirectUri } from 'expo-auth-session';
 import { useState, useEffect } from 'react';
 import { Platform, Alert } from 'react-native';
 import { router } from 'expo-router';
-import { User, createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { User, createUserWithEmailAndPassword, signInWithEmailAndPassword } from '@firebase/auth';
 import Constants from 'expo-constants';
 
-import { auth, signInWithGoogleCredential, cacheAuthState, checkUserProfileExists } from './firebase';
+import { auth, checkUserProfileExists, signInWithGoogleCredential } from './firebase';
 
 // Register web browser for redirect login flow
 WebBrowser.maybeCompleteAuthSession();
@@ -74,9 +74,6 @@ export function useGoogleAuth() {
           const user = userCredential.user;
           
           console.log("User signed in:", user.uid);
-          
-          // Cache the user data for persistence
-          await cacheAuthState(user);
           
           setUserInfo(user);
           
@@ -166,7 +163,6 @@ export function useEmailAuth() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      await cacheAuthState(user);
       setUserInfo(user);
       
       // Check if user profile already exists
@@ -195,11 +191,6 @@ export function useEmailAuth() {
       return;
     }
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
@@ -207,14 +198,14 @@ export function useEmailAuth() {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       
-      await cacheAuthState(user);
       setUserInfo(user);
       
-      // For new sign-ups, always go to profile completion
+      // New user, redirect to profile completion
+      console.log("New user created, redirecting to profile completion");
       router.replace('/(auth)/profile');
     } catch (e) {
       console.error("Email sign-up error:", e);
-      setError(e instanceof Error ? e.message : "Failed to sign up");
+      setError(e instanceof Error ? e.message : "Failed to create account");
     } finally {
       setLoading(false);
     }

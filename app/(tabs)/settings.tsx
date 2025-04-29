@@ -1,13 +1,20 @@
 import { StyleSheet, View, Text, TouchableOpacity, Image, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { auth, cacheAuthState } from '../../src/lib/firebase';
+import { auth } from '../../src/lib/firebase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SettingsScreen() {
   const handleSignOut = async () => {
     try {
+      // Sign out from Firebase
       await auth.signOut();
-      await cacheAuthState(null); // Clear cached user data
+      
+      // Clear any stored user data from AsyncStorage
+      await AsyncStorage.removeItem('userHasProfile');
+      await AsyncStorage.removeItem('userProfile');
+      
+      // Navigate back to auth screen
       router.replace('/(auth)');
     } catch (error) {
       Alert.alert('Error', 'Failed to sign out. Please try again.');
