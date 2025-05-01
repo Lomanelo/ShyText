@@ -1,0 +1,42 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null",
+    "messages": {
+      ".indexOn": ["createdAt"],
+      "$conversationId": {
+        ".indexOn": ["createdAt", "senderId", "receiverId"],
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "conversations": {
+      ".indexOn": ["participants/*", "initiatorId", "receiverId"],
+      "$conversationId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "userStatus": {
+      ".indexOn": ["online", "peerId"],
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null || $uid === auth.uid"
+      }
+    },
+    "profiles": {
+      ".indexOn": ["email", "firstName"],
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && $uid === auth.uid"
+      }
+    },
+    "users": {
+      ".indexOn": ["email", "displayName"],
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && $uid === auth.uid"
+      }
+    }
+  }
+}

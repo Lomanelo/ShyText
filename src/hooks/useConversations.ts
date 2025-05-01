@@ -1,16 +1,23 @@
 import { useState, useEffect } from 'react';
-import { getDatabase, ref, query, orderByChild, onValue, onChildAdded, get } from 'firebase/database';
+import { getDatabase, ref, query, orderByChild, onValue, equalTo, get } from 'firebase/database';
 import { auth } from '../lib/firebase';
+
+interface UserProfile {
+  userId: string;
+  firstName?: string;
+  photoURL?: string | null;
+}
 
 interface Conversation {
   id: string;
   initiatorId: string;
   receiverId: string;
   createdAt: string;
-  initiator?: any;
-  receiver?: any;
   lastMessage?: string;
   lastMessageTime?: string;
+  otherUser?: UserProfile;
+  unreadCount?: number;
+  participants?: Record<string, boolean>;
   [key: string]: any;
 }
 
@@ -23,26 +30,31 @@ export function useConversations() {
     const user = auth.currentUser;
     if (!user) {
       setLoading(false);
+      setError("You must be logged in");
       return;
     }
 
     // Get the database
     const db = getDatabase();
-    const conversationsRef = ref(db, 'conversations');
     
     // Fetch initial conversations
     fetchConversations();
 
-    // Subscribe to new conversations
-    const userConversationsQuery = query(
-      conversationsRef,
-      orderByChild('participants/' + user.uid),
-      // We filter by value equal to true in the query, but Firebase
-      // automatically retrieves children where the value is truthy
-    );
-
-    const unsubscribe = onValue(userConversationsQuery, (snapshot) => {
-      fetchConversations();
+    // Listen for changes in conversations
+    const conversationsRef = ref(db, 'conversations');
+    
+    // Simple query for all conversations - we'll filter client-side
+    const unsubscribe = onValue(conversationsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        processConversations(snapshot.val());
+      } else {
+        setConversations([]);
+        setLoading(false);
+      }
+    }, (error) => {
+      console.error("Error fetching conversations:", error);
+      setError("Failed to load conversations");
+      setLoading(false);
     });
 
     return () => {
@@ -50,35 +62,20 @@ export function useConversations() {
     };
   }, []);
 
-  async function fetchConversations() {
+  const processConversations = async (data: Record<string, any>) => {
     try {
       const user = auth.currentUser;
       if (!user) return;
 
       const db = getDatabase();
-      const conversationsRef = ref(db, 'conversations');
-      
-      // Query conversations where the current user is a participant
-      const userConversationsQuery = query(
-        conversationsRef,
-        orderByChild('participants/' + user.uid)
-        // We filter by value equal to true in the query, but Firebase
-        // automatically retrieves children where the value is truthy
-      );
-      
-      const snapshot = await get(userConversationsQuery);
-      if (!snapshot.exists()) {
-        setConversations([]);
-        setLoading(false);
-        return;
-      }
-      
-      const conversationsData = snapshot.val();
       const conversationsList: Conversation[] = [];
       
       // Process each conversation and get participant profiles
-      for (const [id, data] of Object.entries(conversationsData)) {
-        const convo = data as any;
+      for (const [id, convo] of Object.entries(data)) {
+        // Skip if current user is not a participant
+        if (!convo.participants || !convo.participants[user.uid]) {
+          continue;
+        }
         
         // Get the other user's ID (not the current user)
         const otherUserId = convo.initiatorId === user.uid 
@@ -86,21 +83,59 @@ export function useConversations() {
           : convo.initiatorId;
         
         // Get the other user's profile
-        const otherUserProfileRef = ref(db, `profiles/${otherUserId}`);
+        const profilePath = 'profiles/' + otherUserId;
+        const otherUserProfileRef = ref(db, profilePath);
         const profileSnapshot = await get(otherUserProfileRef);
-        const otherUserProfile = profileSnapshot.exists() ? profileSnapshot.val() : null;
+        
+        let otherUser: UserProfile = {
+          userId: otherUserId
+        };
+        
+        if (profileSnapshot.exists()) {
+          const profileData = profileSnapshot.val();
+          otherUser = {
+            ...otherUser,
+            firstName: profileData.firstName || 'User',
+            photoURL: profileData.photoURL || null
+          };
+        } else {
+          // Try fallback to users collection
+          const userPath = 'users/' + otherUserId;
+          const userRef = ref(db, userPath);
+          const userSnapshot = await get(userRef);
+          
+          if (userSnapshot.exists()) {
+            const userData = userSnapshot.val();
+            otherUser = {
+              ...otherUser,
+              firstName: userData.displayName || 'User',
+              photoURL: userData.photoURL || null
+            };
+          }
+        }
         
         // Get the last message for this conversation
-        const messagesRef = ref(db, `messages/${id}`);
+        const messagesPath = 'messages/' + id;
+        const messagesRef = ref(db, messagesPath);
         const lastMessageQuery = query(messagesRef, orderByChild('createdAt'));
         const messagesSnapshot = await get(lastMessageQuery);
         
         let lastMessage = null;
         let lastMessageTime = null;
+        let unreadCount = 0;
         
         if (messagesSnapshot.exists()) {
           const messages = messagesSnapshot.val();
           const messageKeys = Object.keys(messages);
+          
+          // Count unread messages
+          for (const key of messageKeys) {
+            const message = messages[key];
+            if (message.senderId !== user.uid && !message.read) {
+              unreadCount++;
+            }
+          }
+          
           if (messageKeys.length > 0) {
             // Get the last message (most recent by timestamp)
             const sortedKeys = messageKeys.sort((a, b) => 
@@ -114,9 +149,10 @@ export function useConversations() {
         conversationsList.push({
           id,
           ...convo,
-          otherUser: otherUserProfile,
+          otherUser,
           lastMessage,
-          lastMessageTime
+          lastMessageTime,
+          unreadCount
         });
       }
       
@@ -130,6 +166,30 @@ export function useConversations() {
       setConversations(sortedConversations);
       setLoading(false);
     } catch (err) {
+      console.error("Error processing conversations:", err);
+      setError(err instanceof Error ? err.message : 'An error occurred');
+      setLoading(false);
+    }
+  }
+
+  async function fetchConversations() {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const db = getDatabase();
+      const conversationsRef = ref(db, 'conversations');
+      
+      // Get all conversations and filter client-side
+      const snapshot = await get(conversationsRef);
+      if (snapshot.exists()) {
+        processConversations(snapshot.val());
+      } else {
+        setConversations([]);
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error("Error fetching conversations:", err);
       setError(err instanceof Error ? err.message : 'An error occurred');
       setLoading(false);
     }

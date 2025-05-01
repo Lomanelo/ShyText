@@ -1,30 +1,58 @@
 import { StyleSheet, View, Text, FlatList, TouchableOpacity, Image } from 'react-native';
 import { useConversations } from '../../src/hooks/useConversations';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function ChatsScreen() {
   const { conversations, loading, error } = useConversations();
 
+  // Function to navigate to chat detail
+  const navigateToChat = (chatId: string) => {
+    router.push(`/chat/${chatId}`);
+  };
+  
+  // Function to get avatar source outside JSX
+  const getAvatarSource = (user: any) => {
+    const defaultImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&h=80&fit=crop';
+    return { uri: user?.photoURL || defaultImage };
+  };
+
   if (loading) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.loadingText}>Loading conversations...</Text>
-      </View>
+      <LinearGradient colors={['#f9f1e7', '#f9f1e7']} style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Messages</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading conversations...</Text>
+        </View>
+      </LinearGradient>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>{error}</Text>
-      </View>
+      <LinearGradient colors={['#f9f1e7', '#f9f1e7']} style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Messages</Text>
+        </View>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      </LinearGradient>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <LinearGradient colors={['#f9f1e7', '#f9f1e7']} style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Messages</Text>
+      </View>
+      
       {conversations.length === 0 ? (
         <View style={styles.emptyState}>
+          <Ionicons name="chatbubble-outline" size={50} color="#999" style={styles.emptyIcon} />
           <Text style={styles.emptyStateText}>
             No active conversations yet.{'\n'}
             Find someone nearby to start chatting!
@@ -36,38 +64,45 @@ export default function ChatsScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.chatItem}
-              onPress={() => router.push(`/chat/${item.id}`)}>
+              onPress={() => navigateToChat(item.id)}>
               <Image
-                source={{ 
-                  uri: item.other_user.photo_url || 
-                    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&h=80&fit=crop' 
-                }}
+                source={getAvatarSource(item.otherUser)}
                 style={styles.avatar}
               />
               <View style={styles.chatInfo}>
-                <Text style={styles.chatName}>{item.other_user.first_name}</Text>
+                <Text style={styles.chatName}>{item.otherUser?.firstName || 'User'}</Text>
                 <Text style={styles.lastMessage} numberOfLines={1}>
-                  {item.last_message?.content || 'No messages yet'}
+                  {item.lastMessage || 'No messages yet'}
                 </Text>
               </View>
-              {item.unread_count > 0 && (
+              {item.unreadCount && item.unreadCount > 0 && (
                 <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadCount}>{item.unread_count}</Text>
+                  <Text style={styles.unreadCount}>{item.unreadCount}</Text>
                 </View>
               )}
             </TouchableOpacity>
           )}
           keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContentContainer}
         />
       )}
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a',
+  },
+  header: {
+    paddingTop: 60,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#222',
   },
   emptyState: {
     flex: 1,
@@ -75,30 +110,53 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
+  emptyIcon: {
+    marginBottom: 20,
+  },
   emptyStateText: {
-    color: '#888',
+    color: '#666',
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   loadingText: {
-    color: '#fff',
+    color: '#666',
     fontSize: 16,
     textAlign: 'center',
-    marginTop: 20,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   errorText: {
     color: '#ff4444',
     fontSize: 16,
     textAlign: 'center',
-    marginTop: 20,
+    padding: 20,
+    backgroundColor: 'rgba(255, 68, 68, 0.1)',
+    borderRadius: 8,
+  },
+  listContentContainer: {
+    padding: 16,
   },
   chatItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   avatar: {
     width: 50,
@@ -110,17 +168,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   chatName: {
-    color: '#fff',
+    color: '#222',
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
   },
   lastMessage: {
-    color: '#888',
+    color: '#666',
     fontSize: 14,
   },
   unreadBadge: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#222',
     borderRadius: 10,
     minWidth: 20,
     height: 20,

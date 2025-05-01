@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, checkUserProfileExists } from '../src/lib/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { colors, typography } from '../src/styles/theme';
 
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -75,18 +76,19 @@ export default function RootLayout() {
       <StatusBar style="light" />
       <Stack screenOptions={{
         headerStyle: {
-          backgroundColor: '#1a1a1a',
+          backgroundColor: colors.background,
         },
-        headerTintColor: '#fff',
+        headerTintColor: colors.text.primary,
         headerTitleStyle: {
-          fontWeight: 'bold',
+          fontWeight: '600',
         },
         contentStyle: {
-          backgroundColor: '#1a1a1a',
+          backgroundColor: colors.background,
         },
       }}>
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
       </Stack>
     </>
   );
