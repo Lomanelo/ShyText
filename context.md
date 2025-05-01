@@ -21,8 +21,3 @@ Want to meet people at a conference? ShyText becomes your icebreaker.
 And the best part? No swiping, no algorithms—just real people, right next to you. It’s like Tinder meets Pokémon Go, but for making IRL connections.
 
 expo applications service. (testing on real ios device)
-
-colors :
-#ffffff
-#000000
-#881CD5
