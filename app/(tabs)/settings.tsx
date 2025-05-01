@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image, Alert } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Image, Alert, Linking, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, database } from '../../src/lib/firebase';
@@ -72,6 +72,19 @@ export default function SettingsScreen() {
     );
   };
 
+  const openNotificationSettings = async () => {
+    try {
+      if (Platform.OS === 'ios') {
+        await Linking.openURL('app-settings:');
+      } else {
+        await Linking.openSettings();
+      }
+    } catch (error) {
+      console.error('Error opening settings:', error);
+      Alert.alert('Error', 'Could not open notification settings');
+    }
+  };
+
   return (
     <LinearGradient colors={['#f9f1e7', '#f9f1e7']} style={styles.container}>
       <View style={styles.header}>
@@ -93,7 +106,9 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.settingsSection}>
-        <TouchableOpacity style={styles.settingsItem}>
+        <TouchableOpacity 
+          style={styles.settingsItem}
+          onPress={openNotificationSettings}>
           <View style={styles.settingsIconContainer}>
             <Ionicons name="notifications-outline" size={22} color="#222" />
           </View>

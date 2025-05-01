@@ -219,7 +219,7 @@ export default function ChatScreen() {
     <KeyboardAvoidingView 
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}>
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
       
       <View style={styles.chatHeader}>
         <TouchableOpacity 
@@ -255,8 +255,14 @@ export default function ChatScreen() {
               styles.sentMessage : 
               styles.receivedMessage
           ]}>
-            <Text style={styles.messageText}>{item.content}</Text>
-            <Text style={styles.messageTime}>
+            <Text style={[
+              styles.messageText,
+              { color: item.senderId === auth.currentUser?.uid ? colors.text.light : colors.text.primary }
+            ]}>{item.content}</Text>
+            <Text style={[
+              styles.messageTime,
+              { color: item.senderId === auth.currentUser?.uid ? 'rgba(255,255,255,0.7)' : colors.text.tertiary }
+            ]}>
               {new Date(item.createdAt).toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',
@@ -298,64 +304,66 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: Platform.OS === 'ios' ? 50 : 30,
   },
   chatHeader: {
-    padding: spacing.lg,
-    paddingTop: Platform.OS === 'ios' ? spacing.xl : spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.ui.ghost,
-    backgroundColor: colors.card,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: shadows.small.shadowColor,
-    shadowOffset: shadows.small.shadowOffset,
-    shadowOpacity: shadows.small.shadowOpacity,
-    shadowRadius: shadows.small.shadowRadius,
-    elevation: shadows.small.elevation,
-  } as ViewStyle,
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingTop: Platform.OS === 'ios' ? 50 : 10,
+    paddingBottom: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEEEEE',
+    ...shadows.small,
+    position: 'relative',
+  },
   backButton: {
     width: 40,
     height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: borderRadius.circle,
-    backgroundColor: colors.background,
-  } as ViewStyle,
+    backgroundColor: '#F5F5F5',
+    position: 'absolute',
+    left: 16,
+    top: Platform.OS === 'ios' ? 50 : 10,
+    zIndex: 1,
+  },
   headerProfile: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-  } as ViewStyle,
+    gap: 8,
+  },
   headerAvatar: {
     width: 36,
     height: 36,
-    borderRadius: borderRadius.circle,
-    marginRight: spacing.md,
-  } as ImageStyle,
+    borderRadius: 18,
+  },
   headerAvatarPlaceholder: {
     width: 36,
     height: 36,
-    borderRadius: borderRadius.circle,
-    backgroundColor: colors.ui.accent,
+    borderRadius: 18,
+    backgroundColor: '#F0F0F0',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: spacing.md,
-  } as ViewStyle,
+  },
   headerAvatarText: {
-    color: colors.text.light,
-    fontSize: typography.fontSize.lg,
-    fontWeight: typography.fontWeight.bold,
-  } as TextStyle,
-  headerRight: {
-    width: 40,
-  } as ViewStyle,
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text.secondary,
+  },
   chatHeaderText: {
     fontSize: typography.fontSize.xl,
-    fontWeight: typography.fontWeight.semibold,
+    fontWeight: '600',
     color: colors.text.primary,
-  } as TextStyle,
+  },
+  headerRight: {
+    width: 40,
+    position: 'absolute',
+    right: 16,
+  },
   messagesList: {
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
@@ -373,7 +381,7 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   sentMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: colors.ui.accent,
+    backgroundColor: colors.ui.primary,
     borderBottomRightRadius: borderRadius.xs,
   } as ViewStyle,
   receivedMessage: {
@@ -382,11 +390,9 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: borderRadius.xs,
   } as ViewStyle,
   messageText: {
-    color: colors.text.light,
     fontSize: typography.fontSize.md,
   } as TextStyle,
   messageTime: {
-    color: 'rgba(255,255,255,0.7)',
     fontSize: typography.fontSize.xs,
     marginTop: spacing.xs,
     alignSelf: 'flex-end',
@@ -395,7 +401,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.md,
-    paddingBottom: Platform.OS === 'ios' ? spacing.xl : spacing.md,
+    paddingBottom: Platform.OS === 'ios' ? spacing.md : spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.ui.ghost,
     backgroundColor: colors.card,
