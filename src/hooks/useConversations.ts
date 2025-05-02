@@ -143,16 +143,16 @@ export function useConversations() {
             );
             lastMessage = messages[sortedKeys[0]].content;
             lastMessageTime = messages[sortedKeys[0]].createdAt;
-            
+        
             // Only add conversations that have messages
-            conversationsList.push({
-              id,
-              ...convo,
-              otherUser,
-              lastMessage,
-              lastMessageTime,
-              unreadCount
-            });
+        conversationsList.push({
+          id,
+          ...convo,
+          otherUser,
+          lastMessage,
+          lastMessageTime,
+          unreadCount
+        });
           }
         }
       }

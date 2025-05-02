@@ -230,8 +230,8 @@ export default function ChatScreen() {
       // Update conversation with first sender info and message count
       const updatedConversation = {
         ...currentConversation,
-        lastMessage: newMessage.trim(),
-        lastMessageTime: new Date().toISOString()
+          lastMessage: newMessage.trim(),
+          lastMessageTime: new Date().toISOString()
       };
       
       if (isFirstMessage) {

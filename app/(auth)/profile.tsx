@@ -403,7 +403,7 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        <TouchableOpacity
+        <TouchableOpacity 
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleComplete}
           disabled={loading}>

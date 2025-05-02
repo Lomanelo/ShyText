@@ -29,7 +29,7 @@ export default function RootLayout() {
             ]);
 
             // If we have a user, check profile data
-            if (user) {
+          if (user) {
               // Check if the user has a profile
               const hasProfile = await checkUserProfileExists(user.uid);
               console.log(`User ${user.uid} has profile: ${hasProfile}`);
@@ -39,7 +39,7 @@ export default function RootLayout() {
               
               // Set authenticated state
               setIsAuthenticated(true);
-            } else {
+                } else {
               setIsAuthenticated(false);
               console.log("No user is signed in");
             }

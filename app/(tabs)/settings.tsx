@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image, Alert, Linking, Platform, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Image, Alert, Linking, Platform, ActivityIndicator, Modal, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, database, uploadProfileImage } from '../../src/lib/firebase';
@@ -8,6 +8,7 @@ import { router } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import ContactForm from '../components/ContactForm';
 
 export default function SettingsScreen() {
   const [userData, setUserData] = useState<{
@@ -15,6 +16,10 @@ export default function SettingsScreen() {
     photoURL: string | null;
   } | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [updatingName, setUpdatingName] = useState(false);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -175,6 +180,42 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleUpdateName = async () => {
+    if (!newName.trim()) {
+      Alert.alert('Error', 'Please enter a name');
+      return;
+    }
+
+    setUpdatingName(true);
+    try {
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be signed in to update your name');
+        return;
+      }
+
+      const userProfileRef = ref(database, `profiles/${currentUser.uid}`);
+      await update(userProfileRef, {
+        firstName: newName.trim(),
+        lastUpdated: new Date().toISOString()
+      });
+
+      setUserData(prev => prev ? {
+        ...prev,
+        firstName: newName.trim()
+      } : null);
+
+      setShowNameModal(false);
+      setNewName('');
+      Alert.alert('Success', 'Name updated successfully!');
+    } catch (error) {
+      console.error('Error updating name:', error);
+      Alert.alert('Error', 'Failed to update name. Please try again.');
+    } finally {
+      setUpdatingName(false);
+    }
+  };
+
   return (
     <LinearGradient colors={['#f9f1e7', '#f9f1e7']} style={styles.container}>
       <View style={styles.header}>
@@ -198,11 +239,19 @@ export default function SettingsScreen() {
             />
           )}
           <View style={styles.editIconContainer}>
-            <Ionicons name="camera" size={18} color="#fff" />
+            <Ionicons name="camera" size={16} color="#fff" />
           </View>
         </TouchableOpacity>
         <Text style={styles.profileName}>{userData?.firstName || 'User'}</Text>
-        <Text style={styles.profileInfo}>Edit your profile details</Text>
+        <TouchableOpacity 
+          style={styles.changeNameButton}
+          onPress={() => {
+            setNewName(userData?.firstName || '');
+            setShowNameModal(true);
+          }}
+        >
+          <Text style={styles.changeNameText}>Change Name</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.settingsSection}>
@@ -216,15 +265,9 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={22} color="#999" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.settingsItem}>
-          <View style={styles.settingsIconContainer}>
-            <Ionicons name="lock-closed-outline" size={22} color="#222" />
-          </View>
-          <Text style={styles.settingsText}>Privacy</Text>
-          <Ionicons name="chevron-forward" size={22} color="#999" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.settingsItem}>
+        <TouchableOpacity 
+          style={styles.settingsItem}
+          onPress={() => setShowContactForm(true)}>
           <View style={styles.settingsIconContainer}>
             <Ionicons name="help-circle-outline" size={22} color="#222" />
           </View>
@@ -238,6 +281,60 @@ export default function SettingsScreen() {
           <Text style={styles.signOutText}>Sign Out</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal
+        visible={showContactForm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowContactForm(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ContactForm onClose={() => setShowContactForm(false)} />
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showNameModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNameModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.nameModalContainer}>
+            <Text style={styles.nameModalTitle}>Change Name</Text>
+            <TextInput
+              style={styles.nameInput}
+              value={newName}
+              onChangeText={setNewName}
+              placeholder="Enter your name"
+              placeholderTextColor="#999"
+              autoFocus
+            />
+            <View style={styles.nameModalButtons}>
+              <TouchableOpacity 
+                style={[styles.nameModalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowNameModal(false);
+                  setNewName('');
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.nameModalButton, styles.saveButton]}
+                onPress={handleUpdateName}
+                disabled={updatingName}
+              >
+                {updatingName ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -289,10 +386,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '600',
     marginBottom: 4,
-  },
-  profileInfo: {
-    color: '#666',
-    fontSize: 14,
   },
   settingsSection: {
     marginTop: 30,
@@ -346,5 +439,79 @@ const styles = StyleSheet.create({
     backgroundColor: '#f2f2f2',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  changeNameButton: {
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: '#f2f2f2',
+  },
+  changeNameText: {
+    color: '#222',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  nameModalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 20,
+    width: '90%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  nameModalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#222',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  nameInput: {
+    backgroundColor: '#f2f2f2',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#222',
+    marginBottom: 20,
+  },
+  nameModalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  nameModalButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f2f2f2',
+  },
+  saveButton: {
+    backgroundColor: '#222',
+  },
+  cancelButtonText: {
+    color: '#222',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  saveButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

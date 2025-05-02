@@ -74,26 +74,26 @@ export default function WelcomeScreen() {
           </View>
 
           <View style={styles.footer}>
-            {isExpoGo && (
-              <Text style={styles.expoGoNotice}>
-                Note: Google authentication doesn't work in Expo Go.{'\n'}
+                {isExpoGo && (
+                  <Text style={styles.expoGoNotice}>
+                    Note: Google authentication doesn't work in Expo Go.{'\n'}
                 Please build a development build to test authentication.
-              </Text>
-            )}
-            
-            <TouchableOpacity
-              style={[styles.googleButton, (loading || isExpoGo) && styles.buttonDisabled]}
-              onPress={signInWithGoogle}
-              disabled={loading || isExpoGo}>
-              {googleLoading ? (
+                  </Text>
+                )}
+                
+                <TouchableOpacity
+                  style={[styles.googleButton, (loading || isExpoGo) && styles.buttonDisabled]}
+                  onPress={signInWithGoogle}
+                  disabled={loading || isExpoGo}>
+                  {googleLoading ? (
                 <ActivityIndicator color={colors.text.primary} />
-              ) : (
-                <View style={styles.googleButtonContent}>
+                  ) : (
+                    <View style={styles.googleButtonContent}>
                   <AntDesign name="google" size={20} color={colors.text.primary} />
-                  <Text style={styles.googleButtonText}>Continue with Google</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+                      <Text style={styles.googleButtonText}>Continue with Google</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
 
             {error && <Text style={styles.errorText}>{error}</Text>}
 
