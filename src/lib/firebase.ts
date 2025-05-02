@@ -4,6 +4,7 @@ import { getDatabase, ref, get, set } from 'firebase/database';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Alert, Platform } from 'react-native';
 import { GoogleAuthProvider, signInWithCredential, onAuthStateChanged } from 'firebase/auth';
+import * as ImageManipulator from 'expo-image-manipulator';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -60,24 +61,42 @@ export const signInWithGoogleCredential = async (idToken: string) => {
   return await signInWithCredential(auth, credential);
 };
 
-// Helper function to upload profile images to Firebase Storage
+// Process and encode image for direct database storage
+export const processProfileImageForDB = async (uri: string): Promise<string> => {
+  try {
+    console.log('Processing image for database storage');
+    
+    // Resize and compress the image heavily to keep database size reasonable
+    const processedImage = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 250 } }], // Small thumbnail size
+      { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+    );
+    
+    console.log('Image processed successfully');
+    
+    if (!processedImage.base64) {
+      throw new Error('Failed to get base64 data from processed image');
+    }
+    
+    // Return the data URL format that can be used directly as an image source
+    const dataUrl = `data:image/jpeg;base64,${processedImage.base64}`;
+    console.log('Image converted to data URL, length:', dataUrl.length);
+    
+    return dataUrl;
+  } catch (error) {
+    console.error('Error processing image:', error);
+    throw error;
+  }
+};
+
+// Keep the old function for backward compatibility
 export const uploadProfileImage = async (userId: string, uri: string): Promise<string | null> => {
   try {
-    // Convert URI to blob
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    
-    // Create a reference to the profile image in Firebase Storage
-    const imageRef = storageRef(storage, `profile_images/${userId}`);
-    
-    // Upload the blob
-    await uploadBytes(imageRef, blob);
-    
-    // Get the download URL
-    const downloadURL = await getDownloadURL(imageRef);
-    return downloadURL;
+    // Skip storage upload and use direct database storage instead
+    return await processProfileImageForDB(uri);
   } catch (error) {
-    console.error('Error uploading profile image:', error);
+    console.error('Error in profile image processing:', error);
     return null;
   }
 };

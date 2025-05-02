@@ -1,18 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image, Alert, Linking, Platform } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Image, Alert, Linking, Platform, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, database } from '../../src/lib/firebase';
-import { ref, get } from 'firebase/database';
+import { auth, database, uploadProfileImage } from '../../src/lib/firebase';
+import { ref, get, update } from 'firebase/database';
 import { router } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as ImagePicker from 'expo-image-picker';
 
 export default function SettingsScreen() {
   const [userData, setUserData] = useState<{
     firstName: string;
     photoURL: string | null;
   } | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -46,6 +48,82 @@ export default function SettingsScreen() {
 
     fetchUserData();
   }, []);
+
+  const handleUpdateProfileImage = async () => {
+    if (imageUploading) return; // Prevent multiple uploads
+    
+    try {
+      // Request media library permissions
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (!permissionResult.granted) {
+        Alert.alert('Permission required', 'Please allow access to your photos to update your profile picture.');
+        return;
+      }
+
+      // Launch image picker with simple options
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5, // Lower quality for faster upload
+      });
+
+      if (result.canceled || !result.assets || result.assets.length === 0) {
+        // User canceled or no image selected
+        return;
+      }
+
+      const uri = result.assets[0].uri;
+      console.log('Selected image URI:', uri);
+      
+      // Check if user is authenticated
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        Alert.alert('Error', 'You must be signed in to update your profile picture.');
+        return;
+      }
+
+      setImageUploading(true);
+
+      try {
+        // Process the image and get a data URL
+        const dataUrl = await uploadProfileImage(currentUser.uid, uri);
+        
+        if (!dataUrl) {
+          throw new Error('Failed to process image');
+        }
+        
+        console.log('Image processing successful');
+        
+        // Update profile in Firebase Database with the data URL
+        const userProfileRef = ref(database, `profiles/${currentUser.uid}`);
+        await update(userProfileRef, {
+          photoURL: dataUrl,
+          lastUpdated: new Date().toISOString()
+        });
+
+        console.log('Database updated successfully');
+
+        // Update local state
+        setUserData(prev => prev ? {
+          ...prev,
+          photoURL: dataUrl
+        } : null);
+        
+        // Success message
+        Alert.alert('Success', 'Profile picture updated successfully!');
+      } catch (error) {
+        console.error('Error during profile picture update:', error);
+        Alert.alert('Error', 'Failed to update profile picture. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error in image picker:', error);
+      Alert.alert('Error', 'An error occurred while selecting an image.');
+    } finally {
+      setImageUploading(false);
+    }
+  };
 
   const handleSignOut = async () => {
     Alert.alert(
@@ -104,11 +182,21 @@ export default function SettingsScreen() {
       </View>
       
       <View style={styles.profileSection}>
-        <TouchableOpacity style={styles.profileImageContainer}>
-          <Image
-            source={userData?.photoURL ? { uri: userData.photoURL } : require('../../assets/images/icon.png')}
-            style={styles.profileImage}
-          />
+        <TouchableOpacity 
+          style={styles.profileImageContainer}
+          onPress={handleUpdateProfileImage}
+          disabled={imageUploading}
+        >
+          {imageUploading ? (
+            <View style={[styles.profileImage, styles.loadingContainer]}>
+              <ActivityIndicator size="small" color="#222" />
+            </View>
+          ) : (
+            <Image
+              source={userData?.photoURL ? { uri: userData.photoURL } : require('../../assets/images/icon.png')}
+              style={styles.profileImage}
+            />
+          )}
           <View style={styles.editIconContainer}>
             <Ionicons name="camera" size={18} color="#fff" />
           </View>
@@ -253,5 +341,10 @@ const styles = StyleSheet.create({
     color: '#FF4444',
     fontSize: 16,
     fontWeight: '600',
+  },
+  loadingContainer: {
+    backgroundColor: '#f2f2f2',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

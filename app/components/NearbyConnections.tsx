@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, TextInput, Alert, Platform, PermissionsAndroid, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, TextInput, Alert, Platform, PermissionsAndroid, Switch, AppState } from 'react-native';
 import { Strategy } from 'expo-nearby-connections';
 import { auth } from '../../src/lib/firebase';
 import { getDatabase, ref, onValue, get, set, push, onDisconnect } from 'firebase/database';
@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useSegments } from 'expo-router';
 
 // Import NearbyConnections in a try-catch block to handle potential import errors
 let NearbyConnections: any = null;
@@ -118,6 +118,7 @@ const ProfileList = ({
 
 export default function NearbyConnectionsComponent() {
   const router = useRouter();
+  const segments = useSegments();
   const [myPeerId, setMyPeerId] = useState<string>('');
   const [discoveredPeers, setDiscoveredPeers] = useState<Peer[]>([]);
   const [connectedPeers, setConnectedPeers] = useState<Peer[]>([]);
@@ -134,6 +135,12 @@ export default function NearbyConnectionsComponent() {
     photoURL?: string | null;
   } | null>(null);
   const [ghostMode, setGhostMode] = useState(false);
+  const appState = useRef(AppState.currentState);
+  const discoveryInterval = useRef<NodeJS.Timeout | null>(null);
+  const isTabActive = useMemo(() => {
+    // In (tabs), if index is the active route
+    return segments.length > 0 && segments[0] === '(tabs)' && !segments[1];
+  }, [segments]);
   
   // Helper function for random age generation
   const getRandomAge = () => {
@@ -305,29 +312,96 @@ export default function NearbyConnectionsComponent() {
     if (value) {
       // Enable Ghost Mode - stop advertising
       stopAdvertising();
+      stopDiscovering();
     } else {
-      // Disable Ghost Mode - start advertising
+      // Disable Ghost Mode - start advertising and discovery
       handleStartAdvertising();
+      handleStartDiscovery();
     }
   };
+  
+  // Start continuous discovery to ensure we always find nearby users
+  const startContinuousDiscovery = () => {
+    // Clear any existing interval
+    if (discoveryInterval.current) {
+      clearInterval(discoveryInterval.current);
+    }
+    
+    // Start discovery immediately
+    handleStartDiscovery();
+    
+    // Set up an interval to check and restart discovery if needed
+    discoveryInterval.current = setInterval(() => {
+      if (!isDiscovering && userData && libraryReady && permissionsGranted && !ghostMode) {
+        console.log('Restarting discovery...');
+        handleStartDiscovery();
+      }
+    }, 30000); // Check every 30 seconds
+  };
+  
+  // Handle App State Changes
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextAppState => {
+      if (
+        appState.current.match(/inactive|background/) && 
+        nextAppState === 'active' && 
+        userData && 
+        libraryReady && 
+        permissionsGranted && 
+        !ghostMode
+      ) {
+        // App has come to the foreground
+        console.log('App has come to the foreground, restarting discovery...');
+        handleStartDiscovery();
+      }
+      
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+      // Clear any intervals
+      if (discoveryInterval.current) {
+        clearInterval(discoveryInterval.current);
+      }
+    };
+  }, [userData, libraryReady, permissionsGranted, ghostMode]);
+  
+  // Handle tab active state changes
+  useEffect(() => {
+    if (isTabActive && userData && libraryReady && permissionsGranted && !ghostMode) {
+      // We're on the discovery tab, ensure discovery is running
+      if (!isDiscovering) {
+        handleStartDiscovery();
+      }
+    }
+  }, [isTabActive, userData, libraryReady, permissionsGranted, ghostMode]);
   
   // Safely start advertising and discovering when user data is available
   useEffect(() => {
     if (!userData || !libraryReady || !permissionsGranted) return;
     
-    // Start immediately without delays
+    // Start advertising if not in ghost mode
     if (!ghostMode) {
       handleStartAdvertising();
     }
-    handleStartDiscovery();
+    
+    // Always maintain discovery when component is mounted
+    startContinuousDiscovery();
     
     return () => {
-      // Cleanup function remains the same
+      // Cleanup function
       if (isDiscovering && NearbyConnections) {
         NearbyConnections.stopDiscovery().catch((error: Error) => console.error('Error stopping discovery:', error));
       }
       if (isAdvertising && NearbyConnections) {
         NearbyConnections.stopAdvertise().catch((error: Error) => console.error('Error stopping advertising:', error));
+      }
+      
+      // Clear intervals
+      if (discoveryInterval.current) {
+        clearInterval(discoveryInterval.current);
+        discoveryInterval.current = null;
       }
     };
   }, [userData, libraryReady, permissionsGranted, ghostMode]);
@@ -377,7 +451,7 @@ export default function NearbyConnectionsComponent() {
     }
   };
   
-  // Update handleStartDiscovery to be more immediate
+  // Update handleStartDiscovery to be more resilient
   const handleStartDiscovery = async (e?: React.MouseEvent<HTMLButtonElement>) => {
     e?.preventDefault();
     try {
@@ -386,6 +460,7 @@ export default function NearbyConnectionsComponent() {
       // Don't start if already discovering
       if (isDiscovering) return;
       
+      console.log('Starting discovery...');
       setIsDiscovering(true);
       
       const payload = userData.userId;
@@ -396,12 +471,25 @@ export default function NearbyConnectionsComponent() {
       
       setMyPeerId(peerId);
       
-      // Update Firebase status immediately
+      // Update Firebase status
       await updateUserOnlineStatus(userData.userId, peerId);
+      
+      console.log('Discovery started successfully');
     } catch (error) {
       console.error('Error starting discovery:', error);
       setIsDiscovering(false);
-      setErrorMessage('Could not search for nearby users');
+      
+      // Don't show error message for every restart attempt
+      if (e) {
+        setErrorMessage('Could not search for nearby users');
+      }
+      
+      // Schedule a retry after a short delay
+      setTimeout(() => {
+        if (userData && libraryReady && permissionsGranted && !ghostMode && !isDiscovering) {
+          handleStartDiscovery();
+        }
+      }, 10000);
     }
   };
 
@@ -735,8 +823,10 @@ export default function NearbyConnectionsComponent() {
   const stopDiscovering = async () => {
     try {
       if (!NearbyConnections) return;
+      console.log('Stopping discovery...');
       await NearbyConnections.stopDiscovery();
       setIsDiscovering(false);
+      console.log('Discovery stopped');
     } catch (error) {
       console.error('Error stopping discovery:', error);
     }
