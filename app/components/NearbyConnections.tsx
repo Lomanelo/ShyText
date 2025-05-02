@@ -336,7 +336,7 @@ export default function NearbyConnectionsComponent() {
         console.log('Restarting discovery...');
         handleStartDiscovery();
       }
-    }, 30000); // Check every 30 seconds
+    }, 10000); // Check every 10 seconds instead of 30
   };
   
   // Handle App State Changes
@@ -484,12 +484,12 @@ export default function NearbyConnectionsComponent() {
         setErrorMessage('Could not search for nearby users');
       }
       
-      // Schedule a retry after a short delay
+      // Schedule a retry after a shorter delay
       setTimeout(() => {
         if (userData && libraryReady && permissionsGranted && !ghostMode && !isDiscovering) {
           handleStartDiscovery();
         }
-      }, 10000);
+      }, 5000); // Retry after 5 seconds instead of 10
     }
   };
 
