@@ -1,24 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, TextInput, ImageBackground } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, ImageBackground, Platform, ViewStyle, TextStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AntDesign } from '@expo/vector-icons';
-import { useGoogleAuth, useEmailAuth } from '../../src/lib/auth';
+import { useGoogleAuth } from '../../src/lib/auth';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, checkUserProfileExists } from '../../src/lib/firebase';
+import { colors, typography, spacing, borderRadius, shadows } from '../../src/styles/theme';
 
 export default function WelcomeScreen() {
   const { signInWithGoogle, loading: googleLoading, error: googleError } = useGoogleAuth();
-  const { signInWithEmail, signUpWithEmail, loading: emailLoading, error: emailError } = useEmailAuth();
-  
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showEmailForm, setShowEmailForm] = useState(false);
   const [initializing, setInitializing] = useState(true);
   
-  const loading = googleLoading || emailLoading || initializing;
-  const error = googleError || emailError;
+  const loading = googleLoading || initializing;
+  const error = googleError;
 
   // Check for authentication state when component mounts
   useEffect(() => {
@@ -48,14 +44,6 @@ export default function WelcomeScreen() {
     return unsubscribe;
   }, []);
 
-  const handleEmailAuth = async (type: 'signin' | 'signup') => {
-    if (type === 'signin') {
-      await signInWithEmail(email, password);
-    } else {
-      await signUpWithEmail(email, password);
-    }
-  };
-
   const isExpoGo = Constants.appOwnership === 'expo';
 
   // Show loading indicator while checking auth state
@@ -73,107 +61,39 @@ export default function WelcomeScreen() {
   return (
     <ImageBackground source={require('../../assets/images/bgimage.png')} style={styles.backgroundImage}>
       <LinearGradient
-        colors={['rgba(0,0,0,0.5)', 'rgba(0,0,0,0.8)']}
+        colors={['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.7)']}
         style={styles.overlay}
       >
         <View style={styles.container}>
           <View style={styles.content}>
             <Text style={styles.title}>ShyText</Text>
             <Text style={styles.subtitle}>
-              Connect with people nearby,{'\n'}one message at a time
+              Break the <Text style={{ fontWeight: '700' }}>ice</Text>,{'\n'}
+              not the <Text style={{ fontWeight: '700' }}>silence</Text>.
             </Text>
           </View>
 
           <View style={styles.footer}>
-            {!showEmailForm ? (
-              <>
-                {isExpoGo && (
-                  <Text style={styles.expoGoNotice}>
-                    Note: Google authentication doesn't work in Expo Go.{'\n'}
-                    Please use Email authentication for testing.
-                  </Text>
-                )}
-                
-                <TouchableOpacity
-                  style={[styles.googleButton, (loading || isExpoGo) && styles.buttonDisabled]}
-                  onPress={signInWithGoogle}
-                  disabled={loading || isExpoGo}>
-                  {googleLoading ? (
-                    <ActivityIndicator color="#0055FF" />
-                  ) : (
-                    <View style={styles.googleButtonContent}>
-                      <AntDesign name="google" size={20} color="#0055FF" />
-                      <Text style={styles.googleButtonText}>Continue with Google</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.emailButton, isExpoGo && styles.emailButtonHighlighted]}
-                  onPress={() => setShowEmailForm(true)}
-                  disabled={loading}>
-                  <View style={styles.emailButtonContent}>
-                    <AntDesign name="mail" size={20} color="#fff" />
-                    <Text style={styles.emailButtonText}>
-                      {isExpoGo ? "Use Email Authentication (Recommended)" : "Continue with Email"}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              </>
-            ) : (
-              // Email form
-              <View style={styles.emailForm}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Email"
-                  placeholderTextColor="#999"
-                  value={email}
-                  onChangeText={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  editable={!loading}
-                />
-                
-                <TextInput
-                  style={styles.input}
-                  placeholder="Password"
-                  placeholderTextColor="#999"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry
-                  editable={!loading}
-                />
-                
-                <View style={styles.emailButtonsRow}>
-                  <TouchableOpacity 
-                    style={[styles.emailAuthButton, loading && styles.buttonDisabled]}
-                    onPress={() => handleEmailAuth('signin')}
-                    disabled={loading}>
-                    <Text style={styles.emailAuthButtonText}>
-                      {emailLoading ? 'Signing in...' : 'Sign In'}
-                    </Text>
-                  </TouchableOpacity>
-                  
-                  <TouchableOpacity 
-                    style={[styles.emailAuthButton, loading && styles.buttonDisabled]}
-                    onPress={() => handleEmailAuth('signup')}
-                    disabled={loading}>
-                    <Text style={styles.emailAuthButtonText}>
-                      {emailLoading ? 'Signing up...' : 'Sign Up'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                
-                <TouchableOpacity
-                  style={styles.backButton}
-                  onPress={() => setShowEmailForm(false)}
-                  disabled={loading}>
-                  <Text style={styles.backButtonText}>
-                    ← Back to options
-                  </Text>
-                </TouchableOpacity>
-              </View>
+            {isExpoGo && (
+              <Text style={styles.expoGoNotice}>
+                Note: Google authentication doesn't work in Expo Go.{'\n'}
+                Please build a development build to test authentication.
+              </Text>
             )}
+            
+            <TouchableOpacity
+              style={[styles.googleButton, (loading || isExpoGo) && styles.buttonDisabled]}
+              onPress={signInWithGoogle}
+              disabled={loading || isExpoGo}>
+              {googleLoading ? (
+                <ActivityIndicator color={colors.text.primary} />
+              ) : (
+                <View style={styles.googleButtonContent}>
+                  <AntDesign name="google" size={20} color={colors.text.primary} />
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
             {error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -189,7 +109,27 @@ export default function WelcomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+type Styles = {
+  backgroundImage: ViewStyle;
+  overlay: ViewStyle;
+  container: ViewStyle;
+  loadingContainer: ViewStyle;
+  loadingText: TextStyle;
+  content: ViewStyle;
+  title: TextStyle;
+  subtitle: TextStyle;
+  footer: ViewStyle;
+  expoGoNotice: TextStyle;
+  googleButton: ViewStyle;
+  googleButtonContent: ViewStyle;
+  googleButtonText: TextStyle;
+  buttonDisabled: ViewStyle;
+  errorText: TextStyle;
+  terms: TextStyle;
+  link: TextStyle;
+};
+
+const styles = StyleSheet.create<Styles>({
   backgroundImage: {
     flex: 1,
     width: '100%',
@@ -203,7 +143,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'space-between',
-    padding: 20,
+    padding: spacing.xl,
   },
   loadingContainer: {
     justifyContent: 'center',
@@ -211,141 +151,102 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.7)',
   },
   loadingText: {
-    color: '#ffffff',
-    marginTop: 10,
-    fontSize: 16,
+    color: colors.text.light,
+    marginTop: spacing.md,
+    fontSize: typography.fontSize.md,
   },
   content: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
   },
   title: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 20,
+    fontSize: typography.fontSize.header,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: spacing.md,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
+    letterSpacing: 1,
   },
   subtitle: {
-    fontSize: 18,
-    color: '#ffffff',
+    fontSize: typography.fontSize.xl,
+    color: '#FFFFFF',
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 34,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+    fontWeight: '500',
+    letterSpacing: 0.5,
+    marginHorizontal: spacing.xl,
+    paddingHorizontal: spacing.xl,
   },
   footer: {
     width: '100%',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
   },
   expoGoNotice: {
-    color: '#ffaa00',
+    color: colors.ui.warning,
     textAlign: 'center',
-    marginBottom: 15,
-    padding: 10,
-    backgroundColor: 'rgba(255, 170, 0, 0.2)',
-    borderRadius: 8,
+    marginBottom: spacing.lg,
+    padding: spacing.md,
+    backgroundColor: 'rgba(255, 170, 0, 0.15)',
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
   },
   googleButton: {
     width: '100%',
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#fff',
+    height: 56,
+    borderRadius: borderRadius.pill,
+    backgroundColor: colors.card,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    marginBottom: spacing.lg,
+    ...shadows.medium,
   },
   googleButtonContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingHorizontal: spacing.xl,
   },
   googleButtonText: {
-    color: '#0055FF',
-    fontSize: 18,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
     fontWeight: '600',
-    marginLeft: 10,
-  },
-  emailButton: {
-    width: '100%',
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: 'rgba(51, 51, 51, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  emailButtonHighlighted: {
-    backgroundColor: '#0055FF',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  emailButtonContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  emailButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    marginLeft: 10,
+    marginLeft: spacing.md,
   },
   buttonDisabled: {
     opacity: 0.5,
   },
-  emailForm: {
-    width: '100%',
-    marginBottom: 15,
-  },
-  input: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 16,
-    color: '#333',
-  },
-  emailButtonsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  emailAuthButton: {
-    flex: 1,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#0055FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 5,
-  },
-  emailAuthButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  backButton: {
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  backButtonText: {
-    color: '#ddd',
-    fontSize: 16,
-  },
   errorText: {
-    color: '#ff4444',
+    color: colors.text.error,
     textAlign: 'center',
-    marginBottom: 10,
-    padding: 5,
-    backgroundColor: 'rgba(255, 68, 68, 0.1)',
-    borderRadius: 4,
+    marginBottom: spacing.md,
+    padding: spacing.sm,
+    backgroundColor: 'rgba(255, 68, 68, 0.15)',
+    borderRadius: borderRadius.sm,
+    overflow: 'hidden',
   },
   terms: {
-    color: '#999',
+    color: colors.text.light,
     textAlign: 'center',
-    fontSize: 12,
-    marginTop: 5,
+    fontSize: typography.fontSize.sm,
+    marginTop: spacing.lg,
+    lineHeight: 20,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   link: {
-    color: '#0055FF',
+    color: colors.text.light,
     textDecorationLine: 'underline',
+    textDecorationStyle: 'solid',
+    textDecorationColor: colors.text.light,
+    fontWeight: '600',
   },
 });

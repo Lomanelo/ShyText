@@ -18,6 +18,8 @@ type Conversation = {
   receiverId: string;
   createdAt: string;
   participants: Record<string, boolean>;
+  firstSenderId?: string;
+  firstSenderMessageCount?: number;
 }
 
 export default function ChatScreen() {
@@ -27,6 +29,7 @@ export default function ChatScreen() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [otherUser, setOtherUser] = useState<{
     id: string;
@@ -116,6 +119,16 @@ export default function ChatScreen() {
         const unreadMessages: Record<string, any> = {};
         let hasUnread = false;
         
+        // Check if receiver has responded and clear warning if needed
+        if (conversation?.firstSenderId === currentUser.uid) {
+          const hasReceiverResponded = Object.values(messagesData).some(
+            (msg: any) => msg.senderId !== currentUser.uid
+          );
+          if (hasReceiverResponded) {
+            setWarningMessage(null);
+          }
+        }
+        
         // Convert to array and add IDs
         Object.entries(messagesData).forEach(([key, value]) => {
           const message = value as any;
@@ -172,8 +185,40 @@ export default function ChatScreen() {
       const db = getDatabase();
       const messagesPath = 'messages/' + id;
       const messagesRef = ref(db, messagesPath);
-      const newMessageRef = push(messagesRef);
       
+      // Check if this is the first message in the conversation
+      const messagesSnapshot = await get(messagesRef);
+      const isFirstMessage = !messagesSnapshot.exists();
+      
+      // Get current conversation data
+      const conversationRef = ref(db, 'conversations/' + id);
+      const conversationSnapshot = await get(conversationRef);
+      const currentConversation = conversationSnapshot.val();
+      
+      let hasReceiverResponded = false;
+      
+      // Check if the other user has responded (only if we're the first sender)
+      if (currentConversation.firstSenderId === currentUser.uid) {
+        hasReceiverResponded = messagesSnapshot.exists() && 
+          Object.values(messagesSnapshot.val()).some((msg: any) => 
+            msg.senderId !== currentUser.uid
+          );
+        
+        // If receiver has responded, we can reset the message count
+        if (hasReceiverResponded) {
+          currentConversation.firstSenderMessageCount = 0;
+        }
+        // Otherwise check the message limit
+        else if ((currentConversation.firstSenderMessageCount || 0) >= 2) {
+          setWarningMessage('Wait for a response before sending more messages');
+          return;
+        }
+      }
+      
+      // Clear any existing warning when sending is allowed
+      setWarningMessage(null);
+      
+      const newMessageRef = push(messagesRef);
       const messageData = {
         content: newMessage.trim(),
         senderId: currentUser.uid,
@@ -182,17 +227,22 @@ export default function ChatScreen() {
       
       await set(newMessageRef, messageData);
       
-      // Update the last message in the conversation
-      if (conversation) {
-        const conversationPath = 'conversations/' + id;
-        const conversationRef = ref(db, conversationPath);
-        await set(conversationRef, {
-          ...conversation,
-          lastMessage: newMessage.trim(),
-          lastMessageTime: new Date().toISOString()
-        });
+      // Update conversation with first sender info and message count
+      const updatedConversation = {
+        ...currentConversation,
+        lastMessage: newMessage.trim(),
+        lastMessageTime: new Date().toISOString()
+      };
+      
+      if (isFirstMessage) {
+        updatedConversation.firstSenderId = currentUser.uid;
+        updatedConversation.firstSenderMessageCount = 1;
+      } else if (currentConversation.firstSenderId === currentUser.uid && !hasReceiverResponded) {
+        // Only increment the count if the receiver hasn't responded yet
+        updatedConversation.firstSenderMessageCount = (currentConversation.firstSenderMessageCount || 0) + 1;
       }
       
+      await set(conversationRef, updatedConversation);
       setNewMessage('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message');
@@ -244,6 +294,12 @@ export default function ChatScreen() {
         </View>
         <View style={styles.headerRight} />
       </View>
+      
+      {warningMessage && (
+        <View style={styles.warningBar}>
+          <Text style={styles.warningText}>{warningMessage}</Text>
+        </View>
+      )}
       
       <FlatList
         ref={flatListRef}
@@ -441,5 +497,19 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize.md,
     textAlign: 'center',
     marginTop: spacing.xl,
+  } as TextStyle,
+  warningBar: {
+    backgroundColor: '#FFF3CD',
+    padding: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  } as ViewStyle,
+  warningText: {
+    color: '#856404',
+    fontSize: typography.fontSize.sm,
+    textAlign: 'center',
+    fontWeight: '500',
   } as TextStyle,
 });

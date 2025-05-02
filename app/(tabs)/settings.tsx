@@ -6,6 +6,7 @@ import { auth, database } from '../../src/lib/firebase';
 import { ref, get } from 'firebase/database';
 import { router } from 'expo-router';
 import { signOut } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function SettingsScreen() {
   const [userData, setUserData] = useState<{
@@ -60,7 +61,18 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
+              // Clear all user data from AsyncStorage
+              await AsyncStorage.multiRemove([
+                'userProfile',
+                'userHasProfile',
+                'lastKnownLocation',
+                'userPreferences'
+              ]);
+              
+              // Sign out from Firebase
               await signOut(auth);
+              
+              // Force navigation to auth screen
               router.replace('/(auth)');
             } catch (error) {
               console.error('Error signing out:', error);

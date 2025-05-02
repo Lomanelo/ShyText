@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { auth, database, storage, uploadProfileImage } from '../../src/lib/firebase';
+import { auth, database, uploadProfileImage } from '../../src/lib/firebase';
 import { ref, set, get } from 'firebase/database';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { colors, typography, spacing, shadows, borderRadius } from '../../src/styles/theme';
 
 export default function ProfileScreen() {
   const [firstName, setFirstName] = useState('');
@@ -328,7 +328,7 @@ export default function ProfileScreen() {
   }
 
   return (
-    <LinearGradient colors={['#1E1E1E', '#0D0D0D']} style={styles.container}>
+    <LinearGradient colors={[colors.background, colors.background]} style={styles.container}>
       <View style={styles.content}>
         <View style={styles.headerContainer}>
           <Text style={styles.title}>Complete your profile</Text>
@@ -340,7 +340,7 @@ export default function ProfileScreen() {
         <View style={styles.profileImageContainer}>
           {imageUploading ? (
             <View style={styles.imageLoadingContainer}>
-              <ActivityIndicator size="small" color="#3B82F6" />
+              <ActivityIndicator size="small" color={colors.ui.accent} />
             </View>
           ) : (
             <>
@@ -348,7 +348,7 @@ export default function ProfileScreen() {
                 <Image source={{ uri: profileImage }} style={styles.profileImage} />
               ) : (
                 <View style={styles.profileImagePlaceholder}>
-                  <AntDesign name="user" size={40} color="#666" />
+                  <AntDesign name="user" size={40} color={colors.text.secondary} />
                 </View>
               )}
             </>
@@ -360,9 +360,9 @@ export default function ProfileScreen() {
               onPress={pickImage}
               disabled={imageUploading || loading}>
               <LinearGradient
-                colors={['#3B82F6', '#1D4ED8']}
+                colors={[colors.ui.primary, colors.ui.primary]}
                 style={styles.imageButtonGradient}>
-                <Ionicons name="image" size={16} color="#FFFFFF" />
+                <Ionicons name="image" size={16} color={colors.text.light} />
                 <Text style={styles.imageButtonText}>Gallery</Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -372,9 +372,9 @@ export default function ProfileScreen() {
               onPress={takePicture}
               disabled={imageUploading || loading}>
               <LinearGradient
-                colors={['#3B82F6', '#1D4ED8']}
+                colors={[colors.ui.primary, colors.ui.primary]}
                 style={styles.imageButtonGradient}>
-                <Ionicons name="camera" size={16} color="#FFFFFF" />
+                <Ionicons name="camera" size={16} color={colors.text.light} />
                 <Text style={styles.imageButtonText}>Camera</Text>
               </LinearGradient>
             </TouchableOpacity>
@@ -383,11 +383,11 @@ export default function ProfileScreen() {
 
         <View style={styles.formContainer}>
           <View style={styles.inputContainer}>
-            <AntDesign name="user" size={20} color="#888" style={styles.inputIcon} />
+            <AntDesign name="user" size={20} color={colors.text.secondary} style={styles.inputIcon} />
             <TextInput
               style={styles.input}
               placeholder="First name"
-              placeholderTextColor="#888"
+              placeholderTextColor={colors.text.tertiary}
               value={firstName}
               onChangeText={setFirstName}
               editable={!loading}
@@ -397,24 +397,24 @@ export default function ProfileScreen() {
 
           {error && (
             <View style={styles.errorContainer}>
-              <AntDesign name="exclamationcircleo" size={16} color="#FF4444" />
+              <AntDesign name="exclamationcircleo" size={16} color={colors.ui.error} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           )}
         </View>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.button, loading && styles.buttonDisabled]}
           onPress={handleComplete}
           disabled={loading}>
           <LinearGradient
-            colors={['#3B82F6', '#1D4ED8']}
+            colors={[colors.ui.primary, colors.ui.primary]}
             style={styles.gradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}>
             {loading ? (
               <View style={styles.buttonContent}>
-                <ActivityIndicator size="small" color="#FFFFFF" />
+                <ActivityIndicator size="small" color={colors.text.light} />
                 <Text style={styles.buttonText}>Creating Profile...</Text>
               </View>
             ) : (
@@ -436,109 +436,116 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#A0A0A0',
-    marginTop: 16,
-    fontSize: 16,
+    color: colors.text.tertiary,
+    marginTop: spacing.lg,
+    fontSize: typography.fontSize.md,
   },
   content: {
     flex: 1,
-    padding: 24,
+    padding: spacing.xl,
     justifyContent: 'space-between',
   },
   headerContainer: {
-    marginTop: 60,
-    marginBottom: 32,
+    marginTop: spacing.xxxl * 2,
+    marginBottom: spacing.xl,
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 12,
+    fontSize: typography.fontSize.title,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: spacing.md,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#A0A0A0',
-    marginBottom: 8,
+    fontSize: typography.fontSize.md,
+    color: colors.text.secondary,
+    marginBottom: spacing.sm,
     textAlign: 'center',
   },
   profileImageContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: spacing.xl,
   },
   profileImage: {
     width: 120,
     height: 120,
-    borderRadius: 60,
-    backgroundColor: '#2A2A2A',
-    marginBottom: 16,
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.ui.secondary,
+    marginBottom: spacing.lg,
+    ...shadows.medium,
   },
   profileImagePlaceholder: {
     width: 120,
     height: 120,
-    borderRadius: 60,
-    backgroundColor: '#2A2A2A',
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.ui.secondary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
+    ...shadows.medium,
   },
   imageLoadingContainer: {
     width: 120,
     height: 120,
-    borderRadius: 60,
-    backgroundColor: '#2A2A2A',
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.ui.secondary,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.lg,
+    ...shadows.medium,
   },
   imageButtonsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
+    gap: spacing.md,
   },
   imageButton: {
-    height: 36,
-    width: 100,
-    borderRadius: 18,
+    height: 40,
+    width: 110,
+    borderRadius: borderRadius.pill,
     overflow: 'hidden',
-    marginHorizontal: 8,
+    ...shadows.small,
   },
   imageButtonGradient: {
     flex: 1,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: spacing.md,
   },
   imageButtonText: {
-    color: '#fff',
-    fontSize: 14,
+    color: colors.text.light,
+    fontSize: typography.fontSize.sm,
     fontWeight: '600',
-    marginLeft: 8,
+    marginLeft: spacing.sm,
   },
   formContainer: {
-    marginBottom: 40,
+    marginBottom: spacing.xl,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 12,
-    marginBottom: 16,
-    paddingHorizontal: 16,
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    ...shadows.small,
   },
   inputIcon: {
-    marginRight: 10,
+    marginRight: spacing.sm,
   },
   input: {
     flex: 1,
-    padding: 16,
-    color: '#fff',
-    fontSize: 16,
+    padding: spacing.lg,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
   },
   button: {
-    height: 56,
-    borderRadius: 16,
+    height: 52,
+    borderRadius: borderRadius.lg,
     overflow: 'hidden',
-    marginBottom: 24,
+    marginBottom: spacing.xl,
+    ...shadows.medium,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -547,28 +554,31 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: spacing.xl,
   },
   buttonContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 16,
+    color: colors.text.light,
+    fontSize: typography.fontSize.md,
     fontWeight: '600',
-    marginLeft: 8,
+    marginLeft: spacing.sm,
+    textAlign: 'center',
   },
   errorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 68, 68, 0.08)',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 16,
+    backgroundColor: `${colors.ui.error}15`,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
   },
   errorText: {
-    color: '#FF4444',
-    marginLeft: 8,
-    fontSize: 14,
+    color: colors.ui.error,
+    marginLeft: spacing.sm,
+    fontSize: typography.fontSize.sm,
   },
 });

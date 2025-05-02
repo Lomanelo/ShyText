@@ -19,9 +19,17 @@ export default function RootLayout() {
       try {
         // Listen for auth state changes from Firebase
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
-          // If we have a user, check profile data and navigate accordingly
-          if (user) {
-            try {
+          try {
+            // Clear any stale data first
+            await AsyncStorage.multiRemove([
+              'userProfile',
+              'userHasProfile',
+              'lastKnownLocation',
+              'userPreferences'
+            ]);
+
+            // If we have a user, check profile data
+            if (user) {
               // Check if the user has a profile
               const hasProfile = await checkUserProfileExists(user.uid);
               console.log(`User ${user.uid} has profile: ${hasProfile}`);
@@ -31,29 +39,18 @@ export default function RootLayout() {
               
               // Set authenticated state
               setIsAuthenticated(true);
-              
-              // If a user is authenticated, redirect them to the main app
-              // Using setTimeout to ensure this happens after the component mounts
-              setTimeout(() => {
-                if (hasProfile) {
-                  console.log("User already authenticated, redirecting to main app");
-                  router.replace('/(tabs)');
-                } else {
-                  console.log("User authenticated but needs profile, redirecting to profile");
-                  router.replace('/(auth)/profile');
-                }
-              }, 100);
-            } catch (profileError) {
-              console.error('Error checking profile:', profileError);
+            } else {
+              setIsAuthenticated(false);
+              console.log("No user is signed in");
             }
-          } else {
-            // No user is signed in
+          } catch (error) {
+            console.error('Error during auth check:', error);
             setIsAuthenticated(false);
-            console.log("No user is signed in, staying on auth screen");
+          } finally {
+            // Always set initialized to true after auth check
+            setInitialized(true);
+            SplashScreen.hideAsync();
           }
-          
-          setInitialized(true);
-          SplashScreen.hideAsync();
         });
         
         return unsubscribe;
@@ -66,6 +63,35 @@ export default function RootLayout() {
 
     initAuth();
   }, []);
+
+  // Separate effect for navigation based on auth state
+  useEffect(() => {
+    if (!initialized) return;
+
+    const navigateBasedOnAuth = async () => {
+      try {
+        const user = auth.currentUser;
+        if (user && isAuthenticated) {
+          const hasProfile = await checkUserProfileExists(user.uid);
+          if (hasProfile) {
+            console.log("User authenticated with profile, navigating to main app");
+            router.replace('/(tabs)');
+          } else {
+            console.log("User authenticated without profile, navigating to profile");
+            router.replace('/(auth)/profile');
+          }
+        } else {
+          console.log("No authenticated user, navigating to auth");
+          router.replace('/(auth)');
+        }
+      } catch (error) {
+        console.error('Navigation error:', error);
+        router.replace('/(auth)');
+      }
+    };
+
+    navigateBasedOnAuth();
+  }, [initialized, isAuthenticated]);
 
   if (!initialized) {
     return null;

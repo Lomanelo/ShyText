@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image, TextInput, Alert, Platform, PermissionsAndroid, Switch } from 'react-native';
 import { Strategy } from 'expo-nearby-connections';
 import { auth } from '../../src/lib/firebase';
-import { getDatabase, ref, onValue, get, set, push } from 'firebase/database';
+import { getDatabase, ref, onValue, get, set, push, onDisconnect } from 'firebase/database';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -142,19 +142,24 @@ export default function NearbyConnectionsComponent() {
   
   // Convert discovered peers to profile format
   const nearbyProfiles = useMemo(() => {
-    return discoveredPeers.map(peer => {
-      const distance = `${(Math.random() * 5).toFixed(1)}m away`;
-      
-      return {
-        id: peer.peerId,
-        name: peer.name || "Anonymous",
-        age: getRandomAge(), // Will be replaced with real age once profiles include this data
-        bio: "ShyText user",
-        interests: "Looking to connect",
-        distance: distance,
-        photoURL: peer.photoURL
-      };
-    });
+    return discoveredPeers
+      .filter(peer => {
+        // Only include peers that have a valid userId
+        return peer.userId && peer.name !== 'Loading...';
+      })
+      .map(peer => {
+        const distance = `${(Math.random() * 5).toFixed(1)}m away`;
+        
+        return {
+          id: peer.peerId,
+          name: peer.name || "Anonymous",
+          age: getRandomAge(),
+          bio: "ShyText user",
+          interests: "Looking to connect",
+          distance: distance,
+          photoURL: peer.photoURL
+        };
+      });
   }, [discoveredPeers]);
   
   // Load persistent peerId from storage if available when component mounts
@@ -242,88 +247,56 @@ export default function NearbyConnectionsComponent() {
   
   // Get current user data
   useEffect(() => {
-    if (!permissionsGranted) return;
-    
+    if (!libraryReady) return;
+
     const fetchUserProfile = async () => {
       try {
         const currentUser = auth.currentUser;
         if (!currentUser) {
-          console.error('No authenticated user found');
+          console.log('No authenticated user found');
+          router.replace('/(auth)');
           return;
         }
-        
-        const db = getDatabase();
-        const userProfileRef = ref(db, `profiles/${currentUser.uid}`);
-        
-        // Get user profile from Firebase
+
+        // Always fetch fresh data from Firebase
+        const userProfileRef = ref(getDatabase(), `profiles/${currentUser.uid}`);
         const snapshot = await get(userProfileRef);
-        
+
         if (snapshot.exists()) {
-          const profileData = snapshot.val();
-          // Log only necessary profile data without the photoURL base64 string
-          console.log('Found user profile:', { 
-            firstName: profileData.firstName, 
-            email: profileData.email,
-            userId: currentUser.uid,
-            hasPhoto: !!profileData.photoURL
-          });
-          
+          const data = snapshot.val();
           setUserData({
             userId: currentUser.uid,
-            displayName: profileData.firstName || currentUser.displayName || 'Anonymous',
-            photoURL: profileData.photoURL || currentUser.photoURL
+            displayName: data.firstName || currentUser.displayName || 'Anonymous',
+            photoURL: data.photoURL || currentUser.photoURL
           });
-        } else {
-          // No profile found, try to get cached profile
-          const cachedProfile = await AsyncStorage.getItem('userProfile');
           
-          if (cachedProfile) {
-            const profileData = JSON.parse(cachedProfile);
-            console.log('Using cached profile:', profileData);
-            
+          // Update cache with fresh data
+          await AsyncStorage.setItem('userProfile', JSON.stringify(data));
+        } else {
+          console.log('No profile found for user:', currentUser.uid);
+          router.replace('/(auth)/profile');
+          return;
+        }
+
+        // Set up real-time listener for profile updates
+        onValue(userProfileRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.val();
             setUserData({
               userId: currentUser.uid,
-              displayName: profileData.firstName || currentUser.displayName || 'Anonymous',
-              photoURL: profileData.photoURL || currentUser.photoURL
-            });
-          } else {
-            // Fallback to Firebase user data
-            setUserData({
-              userId: currentUser.uid,
-              displayName: currentUser.displayName || 'Anonymous',
-              photoURL: currentUser.photoURL
+              displayName: data.firstName || currentUser.displayName || 'Anonymous',
+              photoURL: data.photoURL || currentUser.photoURL
             });
           }
-          
-          // Update status in real-time database
-          onValue(userProfileRef, (snapshot) => {
-            if (snapshot.exists()) {
-              const data = snapshot.val();
-              setUserData({
-                userId: currentUser.uid,
-                displayName: data.firstName || currentUser.displayName || 'Anonymous',
-                photoURL: data.photoURL || currentUser.photoURL
-              });
-            }
-          });
-        }
+        });
       } catch (error) {
         console.error('Error fetching user profile:', error);
-        
-        // Fallback to current user basic data
-        const currentUser = auth.currentUser;
-        if (currentUser) {
-          setUserData({
-            userId: currentUser.uid,
-            displayName: currentUser.displayName || 'Anonymous',
-            photoURL: currentUser.photoURL
-          });
-        }
+        router.replace('/(auth)');
       }
     };
-    
+
     fetchUserProfile();
-  }, [permissionsGranted]);
+  }, [libraryReady]);
   
   // Handle Ghost Mode toggle
   const handleToggleGhostMode = (value: boolean) => {
@@ -342,23 +315,24 @@ export default function NearbyConnectionsComponent() {
   useEffect(() => {
     if (!userData || !libraryReady || !permissionsGranted) return;
     
-    // Delay starting services to ensure UI is rendered
-    const timer = setTimeout(() => {
-      // Only start advertising if not in ghost mode
-      if (!ghostMode) {
-        handleStartAdvertising();
-      }
-      
-      // Always start discovery
-      setTimeout(() => {
-        handleStartDiscovery();
-      }, 1000);
-    }, 1000);
+    // Start immediately without delays
+    if (!ghostMode) {
+      handleStartAdvertising();
+    }
+    handleStartDiscovery();
     
-    return () => clearTimeout(timer);
+    return () => {
+      // Cleanup function remains the same
+      if (isDiscovering && NearbyConnections) {
+        NearbyConnections.stopDiscovery().catch((error: Error) => console.error('Error stopping discovery:', error));
+      }
+      if (isAdvertising && NearbyConnections) {
+        NearbyConnections.stopAdvertise().catch((error: Error) => console.error('Error stopping advertising:', error));
+      }
+    };
   }, [userData, libraryReady, permissionsGranted, ghostMode]);
   
-  // Update handleStartAdvertising to use only the Firebase UID for advertising
+  // Update handleStartAdvertising to be more immediate
   const handleStartAdvertising = async (e?: React.MouseEvent<HTMLButtonElement>) => {
     e?.preventDefault();
     try {
@@ -369,43 +343,33 @@ export default function NearbyConnectionsComponent() {
       
       setIsAdvertising(true);
       
-      // Create a payload with ONLY the user ID - for maximum privacy and reliability
-      // The user details will be loaded from Firebase directly
+      // Create a payload with ONLY the user ID
       const payload = userData.userId;
-      
-      console.log('Starting advertising with UID:', payload);
       
       // Use the saved peerId if available, otherwise let the library generate one
       let peerId;
       if (myPeerId) {
-        // Try to use existing peer ID
         peerId = await NearbyConnections.startAdvertise(
           payload,
           Strategy.P2P_STAR,
-          myPeerId // Pass the saved ID as a hint (library may or may not use it)
+          myPeerId
         );
       } else {
-        // Generate a new ID
         peerId = await NearbyConnections.startAdvertise(
           payload,
           Strategy.P2P_STAR
         );
       }
       
-      // Avoid logging peerId details
-      console.log('Advertising started successfully');
-      
-      // Save the peer ID for future use
-      try {
-        await AsyncStorage.setItem('my_nearby_peer_id', peerId);
-      } catch (saveError) {
-        console.error('Failed to save peer ID:', saveError);
-      }
-      
       setMyPeerId(peerId);
       
-      // Update Firebase with user's online status and peerId
-      updateUserOnlineStatus(userData.userId, peerId);
+      // Update Firebase status and save peerId in parallel
+      await Promise.all([
+        updateUserOnlineStatus(userData.userId, peerId),
+        AsyncStorage.setItem('my_nearby_peer_id', peerId).catch(error => 
+          console.error('Failed to save peer ID:', error)
+        )
+      ]);
     } catch (error) {
       console.error('Error starting advertising:', error);
       setIsAdvertising(false);
@@ -413,7 +377,7 @@ export default function NearbyConnectionsComponent() {
     }
   };
   
-  // Update handleStartDiscovery to also use only the Firebase UID
+  // Update handleStartDiscovery to be more immediate
   const handleStartDiscovery = async (e?: React.MouseEvent<HTMLButtonElement>) => {
     e?.preventDefault();
     try {
@@ -424,22 +388,16 @@ export default function NearbyConnectionsComponent() {
       
       setIsDiscovering(true);
       
-      // Use only userId for maximum compatibility
       const payload = userData.userId;
-      
-      console.log('Starting discovery with UID:', payload);
-      
       const peerId = await NearbyConnections.startDiscovery(
         payload,
         Strategy.P2P_STAR
       );
       
-      // Avoid logging peerId details
-      console.log('Discovery started successfully');
       setMyPeerId(peerId);
       
-      // Update Firebase with user's online status
-      updateUserOnlineStatus(userData.userId, peerId);
+      // Update Firebase status immediately
+      await updateUserOnlineStatus(userData.userId, peerId);
     } catch (error) {
       console.error('Error starting discovery:', error);
       setIsDiscovering(false);
@@ -447,25 +405,247 @@ export default function NearbyConnectionsComponent() {
     }
   };
 
-  // Add new function to update user's online status in Firebase
+  // Add new function to check if a user is online
+  const checkUserOnlineStatus = async (userId: string): Promise<boolean> => {
+    try {
+      const db = getDatabase();
+      const userStatusRef = ref(db, `userStatus/${userId}`);
+      const snapshot = await get(userStatusRef);
+      
+      if (snapshot.exists()) {
+        const status = snapshot.val();
+        const lastSeen = new Date(status.lastSeen).getTime();
+        const now = new Date().getTime();
+        const twoMinutes = 2 * 60 * 1000;
+        
+        const isOnline = status.online && (now - lastSeen) < twoMinutes;
+        console.log(`User ${userId} online status:`, {
+          online: status.online,
+          lastSeen: new Date(status.lastSeen).toISOString(),
+          timeDiff: (now - lastSeen) / 1000,
+          isOnline
+        });
+        
+        return isOnline;
+      }
+      
+      console.log(`No online status found for user ${userId}`);
+      return true; // Default to showing users if no status found
+    } catch (error) {
+      console.error('Error checking user online status:', error);
+      return true; // Default to showing users on error
+    }
+  };
+
+  // Update loadUserFromFirebase to batch load profiles
+  const loadUserFromFirebase = async (userId: string): Promise<boolean> => {
+    try {
+      if (!userId) return false;
+      
+      const db = getDatabase();
+      
+      // First check profiles collection
+      const profileRef = ref(db, `profiles/${userId}`);
+      const userRef = ref(db, `users/${userId}`);
+      const statusRef = ref(db, `userStatus/${userId}`);
+      
+      // Fetch all data in parallel
+      const [profileSnapshot, userSnapshot, statusSnapshot] = await Promise.all([
+        get(profileRef),
+        get(userRef),
+        get(statusRef)
+      ]);
+      
+      // Check online status first
+      if (!statusSnapshot.exists() || !statusSnapshot.val().online) {
+        removePeerWithUserId(userId);
+        return false;
+      }
+      
+      let userData = {
+        name: '',
+        photoURL: null,
+        userId: userId
+      };
+      
+      // Try profile data first
+      if (profileSnapshot.exists()) {
+        const profileData = profileSnapshot.val();
+        userData.name = profileData.firstName || '';
+        userData.photoURL = profileData.photoURL || null;
+      }
+      
+      // Fallback to user data if needed
+      if (!userData.name && userSnapshot.exists()) {
+        const userProfileData = userSnapshot.val();
+        userData.name = userProfileData.displayName || '';
+        userData.photoURL = userProfileData.photoURL || null;
+      }
+      
+      // Only update if we have a valid name
+      if (userData.name) {
+        updatePeerWithUserData(userId, userData);
+        return true;
+      }
+      
+      removePeerWithUserId(userId);
+      return false;
+    } catch (error) {
+      console.error('Error loading user from Firebase:', error);
+      removePeerWithUserId(userId);
+      return false;
+    }
+  };
+
+  // Add batch profile loading function
+  const loadMultipleUserProfiles = async (userIds: string[]) => {
+    try {
+      const db = getDatabase();
+      const uniqueIds = [...new Set(userIds)];
+      
+      // Create all promises for parallel execution
+      const profilePromises = uniqueIds.map(id => get(ref(db, `profiles/${id}`)));
+      const userPromises = uniqueIds.map(id => get(ref(db, `users/${id}`)));
+      const statusPromises = uniqueIds.map(id => get(ref(db, `userStatus/${id}`)));
+      
+      // Execute all promises in parallel
+      const [profileSnapshots, userSnapshots, statusSnapshots] = await Promise.all([
+        Promise.all(profilePromises),
+        Promise.all(userPromises),
+        Promise.all(statusPromises)
+      ]);
+      
+      // Process results
+      const results = new Map();
+      
+      uniqueIds.forEach((userId, index) => {
+        // Check online status first
+        const status = statusSnapshots[index].val();
+        if (!status || !status.online) {
+          removePeerWithUserId(userId);
+          return;
+        }
+        
+        let userData = {
+          name: '',
+          photoURL: null,
+          userId: userId
+        };
+        
+        // Try profile data first
+        const profileData = profileSnapshots[index].val();
+        if (profileData) {
+          userData.name = profileData.firstName || '';
+          userData.photoURL = profileData.photoURL || null;
+        }
+        
+        // Fallback to user data if needed
+        if (!userData.name) {
+          const userProfileData = userSnapshots[index].val();
+          if (userProfileData) {
+            userData.name = userProfileData.displayName || '';
+            userData.photoURL = userProfileData.photoURL || null;
+          }
+        }
+        
+        if (userData.name) {
+          results.set(userId, userData);
+        } else {
+          removePeerWithUserId(userId);
+        }
+      });
+      
+      // Batch update peers with user data
+      const validUsers = Array.from(results.values());
+      if (validUsers.length > 0) {
+        setDiscoveredPeers(peers => {
+          const updatedPeers = peers.map(peer => {
+            const userData = results.get(peer.userId);
+            return userData ? { ...peer, name: userData.name, photoURL: userData.photoURL } : peer;
+          });
+          return updatedPeers.filter(peer => peer.name !== 'Loading...');
+        });
+      }
+      
+      return results;
+    } catch (error) {
+      console.error('Error batch loading user profiles:', error);
+      return new Map();
+    }
+  };
+
+  // Update the periodic online status check to be more efficient
+  useEffect(() => {
+    if (!discoveredPeers.length) return;
+
+    const checkOnlineStatus = async () => {
+      console.log('Checking online status for', discoveredPeers.length, 'peers');
+      
+      const userIds = discoveredPeers
+        .filter(peer => peer.userId)
+        .map(peer => peer.userId);
+      
+      if (userIds.length === 0) return;
+      
+      try {
+        const db = getDatabase();
+        const statusPromises = userIds.map(id => 
+          get(ref(db, `userStatus/${id}`))
+        );
+        
+        const snapshots = await Promise.all(statusPromises);
+        const offlineUsers = new Set();
+        
+        snapshots.forEach((snapshot, index) => {
+          const userId = userIds[index];
+          const status = snapshot.val();
+          
+          if (!status || !status.online) {
+            offlineUsers.add(userId);
+          }
+        });
+        
+        if (offlineUsers.size > 0) {
+          setDiscoveredPeers(prev => 
+            prev.filter(peer => !peer.userId || !offlineUsers.has(peer.userId))
+          );
+        }
+      } catch (error) {
+        console.error('Error checking online status:', error);
+      }
+    };
+
+    // Check immediately
+    checkOnlineStatus();
+
+    // Then check every 30 seconds instead of every minute
+    const interval = setInterval(checkOnlineStatus, 30000);
+
+    return () => clearInterval(interval);
+  }, [discoveredPeers.length]);
+
+  // Update the updateUserOnlineStatus function
   const updateUserOnlineStatus = async (userId: string, peerId: string) => {
     try {
       const db = getDatabase();
       const userStatusRef = ref(db, `userStatus/${userId}`);
       
       // Update online status
-      await set(userStatusRef, {
+      const status = {
         online: true,
         peerId: peerId,
         lastSeen: new Date().toISOString()
-      });
+      };
+      
+      await set(userStatusRef, status);
+      console.log('Updated online status for user:', userId, status);
       
       // Set up automated cleanup on disconnect
       const onlineRef = ref(db, '.info/connected');
       onValue(onlineRef, (snapshot) => {
         if (snapshot.val() === true) {
           const userStatusOfflineRef = ref(db, `userStatus/${userId}`);
-          set(userStatusOfflineRef, {
+          onDisconnect(userStatusOfflineRef).set({
             online: false,
             lastSeen: new Date().toISOString()
           });
@@ -473,64 +653,6 @@ export default function NearbyConnectionsComponent() {
       });
     } catch (error) {
       console.error('Error updating user status:', error);
-    }
-  };
-
-  // Modify the loadUserFromFirebase function to return a success/failure result
-  const loadUserFromFirebase = async (userId: string): Promise<boolean> => {
-    try {
-      if (!userId) return false;
-      
-      const db = getDatabase();
-      
-      // First check profiles collection (where complete profiles are stored)
-      const profileRef = ref(db, `profiles/${userId}`);
-      const profileSnapshot = await get(profileRef);
-      
-      if (profileSnapshot.exists()) {
-        const profileData = profileSnapshot.val();
-        
-        // Update both discovered and connected peers with this user's data
-        const userData = {
-          name: profileData.firstName || '',
-          photoURL: profileData.photoURL || null,
-          userId: userId
-        };
-        
-        // Only update if we have a valid name
-        if (userData.name) {
-          updatePeerWithUserData(userId, userData);
-          return true;
-        }
-      }
-      
-      // Fallback to users collection (for basic data)
-      const userRef = ref(db, `users/${userId}`);
-      const userSnapshot = await get(userRef);
-      
-      if (userSnapshot.exists()) {
-        const userData = userSnapshot.val();
-        
-        // Only update if we have a valid displayName
-        if (userData.displayName) {
-          updatePeerWithUserData(userId, {
-            name: userData.displayName,
-            photoURL: userData.photoURL || null,
-            userId: userId
-          });
-          return true;
-        }
-      }
-      
-      // If no valid user data found, remove this peer
-      removePeerWithUserId(userId);
-      return false;
-      
-    } catch (error) {
-      console.error('Error loading user from Firebase:', error);
-      // Remove the peer since we couldn't verify it
-      removePeerWithUserId(userId);
-      return false;
     }
   };
 
@@ -803,7 +925,6 @@ export default function NearbyConnectionsComponent() {
         }
         
         // Update discovered peers with minimal user data
-        // Full data will be loaded from Firebase by the parsePeerIdentity function
         setDiscoveredPeers(prev => {
           // First check if we already have this peer by peerId
           const existingByPeerId = prev.find(p => p.peerId === data.peerId);
@@ -827,7 +948,18 @@ export default function NearbyConnectionsComponent() {
           }
           
           // Add the new peer
-          return [...prev, { ...peerIdentity, peerId: data.peerId }];
+          const newPeers = [...prev, { ...peerIdentity, peerId: data.peerId }];
+          
+          // Trigger batch profile loading for any peers without full data
+          const peersToLoad = newPeers
+            .filter(p => p.name === 'Loading...' && p.userId !== undefined)
+            .map(p => p.userId as string);
+          
+          if (peersToLoad.length > 0) {
+            loadMultipleUserProfiles(peersToLoad);
+          }
+          
+          return newPeers;
         });
       });
 

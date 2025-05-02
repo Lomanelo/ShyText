@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDatabase, ref, get, set } from 'firebase/database';
-import { getStorage } from 'firebase/storage';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Alert, Platform } from 'react-native';
 import { GoogleAuthProvider, signInWithCredential, onAuthStateChanged } from 'firebase/auth';
 
@@ -58,6 +58,28 @@ export const checkUserProfileExists = async (userId: string) => {
 export const signInWithGoogleCredential = async (idToken: string) => {
   const credential = GoogleAuthProvider.credential(idToken);
   return await signInWithCredential(auth, credential);
+};
+
+// Helper function to upload profile images to Firebase Storage
+export const uploadProfileImage = async (userId: string, uri: string): Promise<string | null> => {
+  try {
+    // Convert URI to blob
+    const response = await fetch(uri);
+    const blob = await response.blob();
+    
+    // Create a reference to the profile image in Firebase Storage
+    const imageRef = storageRef(storage, `profile_images/${userId}`);
+    
+    // Upload the blob
+    await uploadBytes(imageRef, blob);
+    
+    // Get the download URL
+    const downloadURL = await getDownloadURL(imageRef);
+    return downloadURL;
+  } catch (error) {
+    console.error('Error uploading profile image:', error);
+    return null;
+  }
 };
 
 export default app; 
