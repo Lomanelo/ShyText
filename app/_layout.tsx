@@ -5,6 +5,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth, checkUserProfileExists } from '../src/lib/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors, typography } from '../src/styles/theme';
+import { NotificationProvider } from '../src/contexts/NotificationContext';
 
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -98,7 +99,7 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <NotificationProvider>
       <StatusBar style="light" />
       <Stack screenOptions={{
         headerStyle: {
@@ -116,6 +117,6 @@ export default function RootLayout() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
       </Stack>
-    </>
+    </NotificationProvider>
   );
 }

@@ -5,6 +5,7 @@ import { getDatabase, ref, push, onValue, query, orderByChild, get, set } from '
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../src/lib/firebase';
 import { colors, typography, spacing, shadows, borderRadius } from '../../src/styles/theme';
+import { sendPushNotification } from '../../src/utils/notifications';
 
 type Message = {
   id: string;
@@ -243,6 +244,40 @@ export default function ChatScreen() {
       }
       
       await set(conversationRef, updatedConversation);
+      
+      // Send push notification to the receiver
+      if (otherUser && otherUser.id) {
+        try {
+          // Get the receiver's push token from their profile
+          const receiverProfileRef = ref(db, `profiles/${otherUser.id}`);
+          const receiverProfileSnapshot = await get(receiverProfileRef);
+          
+          if (receiverProfileSnapshot.exists()) {
+            const receiverProfile = receiverProfileSnapshot.val();
+            const receiverPushToken = receiverProfile.expoPushToken;
+            
+            if (receiverPushToken) {
+              // Send push notification
+              await sendPushNotification(
+                receiverPushToken,
+                `New message from ${currentUser.displayName || 'Someone'}`,
+                newMessage.trim(),
+                { 
+                  type: 'chat',
+                  chatId: id,
+                  senderId: currentUser.uid,
+                  senderName: currentUser.displayName || 'Someone'
+                }
+              );
+              console.log('Push notification sent to receiver');
+            }
+          }
+        } catch (notifError) {
+          console.error('Error sending push notification:', notifError);
+          // Continue anyway - message is saved even if notification fails
+        }
+      }
+      
       setNewMessage('');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to send message');
