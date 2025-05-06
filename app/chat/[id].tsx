@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, Image, ViewStyle, TextStyle, ImageStyle } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getDatabase, ref, push, onValue, query, orderByChild, get, set } from 'firebase/database';
+import { getDatabase, ref, push, onValue, query, orderByChild, get, set, onDisconnect } from 'firebase/database';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../src/lib/firebase';
 import { colors, typography, spacing, shadows, borderRadius } from '../../src/styles/theme';
@@ -38,6 +38,29 @@ export default function ChatScreen() {
     photoURL?: string | null;
   } | null>(null);
   const flatListRef = useRef<FlatList>(null);
+  const currentUser = auth.currentUser;
+
+  // Add effect to track when user is viewing the chat
+  useEffect(() => {
+    if (!id || typeof id !== 'string' || !currentUser) return;
+
+    const db = getDatabase();
+    const activeChatRef = ref(db, `activeChats/${id}/${currentUser.uid}`);
+    
+    // Set user as active in this chat
+    set(activeChatRef, {
+      lastActive: new Date().toISOString(),
+      isActive: true
+    });
+
+    // Set up cleanup when user leaves the chat
+    onDisconnect(activeChatRef).remove();
+
+    return () => {
+      // Remove user from active chats when component unmounts
+      set(activeChatRef, null);
+    };
+  }, [id, currentUser]);
 
   useEffect(() => {
     if (!id || typeof id !== 'string') {
@@ -46,7 +69,6 @@ export default function ChatScreen() {
       return;
     }
     
-    const currentUser = auth.currentUser;
     if (!currentUser) {
       setError('You must be logged in');
       setLoading(false);
@@ -180,7 +202,6 @@ export default function ChatScreen() {
     if (!newMessage.trim() || !id || typeof id !== 'string') return;
 
     try {
-      const currentUser = auth.currentUser;
       if (!currentUser) throw new Error('You must be logged in');
       
       const db = getDatabase();
@@ -231,8 +252,8 @@ export default function ChatScreen() {
       // Update conversation with first sender info and message count
       const updatedConversation = {
         ...currentConversation,
-          lastMessage: newMessage.trim(),
-          lastMessageTime: new Date().toISOString()
+        lastMessage: newMessage.trim(),
+        lastMessageTime: new Date().toISOString()
       };
       
       if (isFirstMessage) {
@@ -245,32 +266,41 @@ export default function ChatScreen() {
       
       await set(conversationRef, updatedConversation);
       
-      // Send push notification to the receiver
+      // Send push notification to the receiver only if they're not actively viewing the chat
       if (otherUser && otherUser.id) {
         try {
-          // Get the receiver's push token from their profile
-          const receiverProfileRef = ref(db, `profiles/${otherUser.id}`);
-          const receiverProfileSnapshot = await get(receiverProfileRef);
-          
-          if (receiverProfileSnapshot.exists()) {
-            const receiverProfile = receiverProfileSnapshot.val();
-            const receiverPushToken = receiverProfile.expoPushToken;
+          // Check if receiver is actively viewing the chat
+          const activeChatRef = ref(db, `activeChats/${id}/${otherUser.id}`);
+          const activeChatSnapshot = await get(activeChatRef);
+          const isReceiverActive = activeChatSnapshot.exists() && activeChatSnapshot.val()?.isActive;
+
+          if (!isReceiverActive) {
+            // Get the receiver's push token from their profile
+            const receiverProfileRef = ref(db, `profiles/${otherUser.id}`);
+            const receiverProfileSnapshot = await get(receiverProfileRef);
             
-            if (receiverPushToken) {
-              // Send push notification
-              await sendPushNotification(
-                receiverPushToken,
-                `New message from ${currentUser.displayName || 'Someone'}`,
-                newMessage.trim(),
-                { 
-                  type: 'chat',
-                  chatId: id,
-                  senderId: currentUser.uid,
-                  senderName: currentUser.displayName || 'Someone'
-                }
-              );
-              console.log('Push notification sent to receiver');
+            if (receiverProfileSnapshot.exists()) {
+              const receiverProfile = receiverProfileSnapshot.val();
+              const receiverPushToken = receiverProfile.expoPushToken;
+              
+              if (receiverPushToken) {
+                // Send push notification
+                await sendPushNotification(
+                  receiverPushToken,
+                  `New message from ${currentUser.displayName || 'Someone'}`,
+                  newMessage.trim(),
+                  { 
+                    type: 'chat',
+                    chatId: id,
+                    senderId: currentUser.uid,
+                    senderName: currentUser.displayName || 'Someone'
+                  }
+                );
+                console.log('Push notification sent to receiver');
+              }
             }
+          } else {
+            console.log('Receiver is actively viewing the chat, notification skipped');
           }
         } catch (notifError) {
           console.error('Error sending push notification:', notifError);
