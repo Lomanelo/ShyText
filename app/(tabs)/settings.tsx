@@ -376,58 +376,6 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Notification Settings */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Notification Settings</Text>
-        
-        <View style={styles.option}>
-          <Text style={styles.optionText}>Push Token</Text>
-          <Text style={styles.tokenText} numberOfLines={2}>
-            {expoPushToken || 'No push token available'}
-          </Text>
-        </View>
-        
-        <TouchableOpacity 
-          style={styles.button}
-          onPress={handleOpenSettings}
-          disabled={isLoading}
-        >
-          <Ionicons name="settings-outline" size={24} color="#007AFF" />
-          <Text style={styles.buttonText}>Open Notification Settings</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.button}
-          onPress={handleTestNotification}
-          disabled={isLoading}
-        >
-          <Ionicons name="notifications-outline" size={24} color="#007AFF" />
-          <Text style={styles.buttonText}>
-            {isLoading ? 'Sending...' : 'Send Test Notification'}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={styles.button}
-          onPress={handleViewScheduledNotifications}
-          disabled={isLoading}
-        >
-          <Ionicons name="list-outline" size={24} color="#007AFF" />
-          <Text style={styles.buttonText}>View Scheduled Notifications</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={[styles.button, styles.dangerButton]}
-          onPress={handleClearNotifications}
-          disabled={isLoading}
-        >
-          <Ionicons name="trash-outline" size={24} color="#FF3B30" />
-          <Text style={[styles.buttonText, styles.dangerButtonText]}>
-            Clear All Notifications
-          </Text>
-        </TouchableOpacity>
-      </View>
     </LinearGradient>
   );
 }
@@ -606,57 +554,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  section: {
-    marginTop: 30,
-    padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#222',
-    marginBottom: 16,
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  optionText: {
-    color: '#222',
-    fontSize: 16,
-    flex: 1,
-  },
-  tokenText: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 4,
-  },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  buttonText: {
-    marginLeft: 10,
-    fontSize: 16,
-    color: '#007AFF',
-  },
-  dangerButton: {
-    backgroundColor: '#FFE5E5',
-  },
-  dangerButtonText: {
-    color: '#FF3B30',
   },
 });

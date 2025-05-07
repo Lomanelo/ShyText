@@ -25,6 +25,12 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "voxetik@gmail.com",
+        "ascAppId": "6745570237",
+        "appleTeamId": "5ZFG6BQDFL"
+      }
+    }
   }
 }
