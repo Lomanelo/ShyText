@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, ImageBackground, Platform, ViewStyle, TextStyle } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, ImageBackground, Platform, ViewStyle, TextStyle, TextInput, Modal, Linking } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { AntDesign } from '@expo/vector-icons';
-import { useGoogleAuth } from '../../src/lib/auth';
+import { AntDesign, Ionicons } from '@expo/vector-icons';
+import { useGoogleAuth, useEmailAuth } from '../../src/lib/auth';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -11,10 +11,16 @@ import { colors, typography, spacing, borderRadius, shadows } from '../../src/st
 
 export default function WelcomeScreen() {
   const { signInWithGoogle, loading: googleLoading, error: googleError } = useGoogleAuth();
+  const { signInWithEmail, signUpWithEmail, loading: emailLoading, error: emailError } = useEmailAuth();
   const [initializing, setInitializing] = useState(true);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [isLoginMode, setIsLoginMode] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   
-  const loading = googleLoading || initializing;
-  const error = googleError;
+  const loading = googleLoading || emailLoading || initializing;
+  const error = googleError || emailError;
 
   // Check for authentication state when component mounts
   useEffect(() => {
@@ -45,6 +51,39 @@ export default function WelcomeScreen() {
   }, []);
 
   const isExpoGo = Constants.appOwnership === 'expo';
+
+  const handleEmailSubmit = async () => {
+    if (!username || !password) {
+      return;
+    }
+
+    if (!isLoginMode && password !== confirmPassword) {
+      // Show error for password mismatch
+      return;
+    }
+
+    if (isLoginMode) {
+      await signInWithEmail(username, password);
+    } else {
+      await signUpWithEmail(username, password);
+    }
+  };
+
+  const resetForm = () => {
+    setUsername('');
+    setPassword('');
+    setConfirmPassword('');
+    setShowEmailModal(false);
+    setIsLoginMode(false);
+  };
+
+  const openTerms = () => {
+    Linking.openURL('https://shytext.com');
+  };
+
+  const openPrivacy = () => {
+    Linking.openURL('https://shytext.com/privacy');
+  };
 
   // Show loading indicator while checking auth state
   if (initializing) {
@@ -95,14 +134,99 @@ export default function WelcomeScreen() {
                   )}
                 </TouchableOpacity>
 
+                <TouchableOpacity
+                  style={[styles.emailButton, loading && styles.buttonDisabled]}
+                  onPress={() => setShowEmailModal(true)}
+                  disabled={loading}>
+                  <View style={styles.emailButtonContent}>
+                    <Ionicons name="person-outline" size={20} color={colors.text.primary} />
+                    <Text style={styles.emailButtonText}>Sign in with Username</Text>
+                  </View>
+                </TouchableOpacity>
+
             {error && <Text style={styles.errorText}>{error}</Text>}
 
             <Text style={styles.terms}>
               By continuing, you agree to our{' '}
-              <Text style={styles.link}>Terms of Service</Text> and{' '}
-              <Text style={styles.link}>Privacy Policy</Text>
+              <Text style={styles.link} onPress={openTerms}>Terms of Service</Text>
             </Text>
           </View>
+
+          <Modal
+            visible={showEmailModal}
+            transparent
+            animationType="slide"
+            onRequestClose={resetForm}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>
+                  {isLoginMode ? 'Sign in with Username' : 'Create Account'}
+                </Text>
+                
+                <TextInput
+                  style={styles.input}
+                  placeholder="Username"
+                  placeholderTextColor={colors.text.secondary}
+                  value={username}
+                  onChangeText={setUsername}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor={colors.text.secondary}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                />
+
+                {!isLoginMode && (
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Confirm Password"
+                    placeholderTextColor={colors.text.secondary}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry
+                  />
+                )}
+
+                <TouchableOpacity
+                  style={[styles.loginButton, loading && styles.buttonDisabled]}
+                  onPress={handleEmailSubmit}
+                  disabled={loading}>
+                  {emailLoading ? (
+                    <ActivityIndicator color={colors.text.primary} />
+                  ) : (
+                    <Text style={styles.loginButtonText}>
+                      {isLoginMode ? 'Sign In' : 'Create Account'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.switchModeButton}
+                  onPress={() => {
+                    setIsLoginMode(!isLoginMode);
+                    setPassword('');
+                    setConfirmPassword('');
+                  }}>
+                  <Text style={styles.switchModeText}>
+                    {isLoginMode ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={resetForm}>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
         </View>
       </LinearGradient>
     </ImageBackground>
@@ -123,10 +247,23 @@ type Styles = {
   googleButton: ViewStyle;
   googleButtonContent: ViewStyle;
   googleButtonText: TextStyle;
+  emailButton: ViewStyle;
+  emailButtonContent: ViewStyle;
+  emailButtonText: TextStyle;
   buttonDisabled: ViewStyle;
   errorText: TextStyle;
   terms: TextStyle;
   link: TextStyle;
+  modalOverlay: ViewStyle;
+  modalContent: ViewStyle;
+  modalTitle: TextStyle;
+  input: TextStyle;
+  loginButton: ViewStyle;
+  loginButtonText: TextStyle;
+  cancelButton: ViewStyle;
+  cancelButtonText: TextStyle;
+  switchModeButton: ViewStyle;
+  switchModeText: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -220,6 +357,29 @@ const styles = StyleSheet.create<Styles>({
     fontWeight: '600',
     marginLeft: spacing.md,
   },
+  emailButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: borderRadius.pill,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    ...shadows.medium,
+  },
+  emailButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingHorizontal: spacing.xl,
+  },
+  emailButtonText: {
+    color: colors.text.primary,
+    fontSize: typography.fontSize.lg,
+    fontWeight: '600',
+    marginLeft: spacing.md,
+  },
   buttonDisabled: {
     opacity: 0.5,
   },
@@ -248,5 +408,71 @@ const styles = StyleSheet.create<Styles>({
     textDecorationStyle: 'solid',
     textDecorationColor: colors.text.light,
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '90%',
+    backgroundColor: colors.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.xl,
+    ...shadows.large,
+  },
+  modalTitle: {
+    fontSize: typography.fontSize.xl,
+    fontWeight: '700',
+    color: colors.text.primary,
+    marginBottom: spacing.xl,
+    textAlign: 'center',
+  },
+  input: {
+    width: '100%',
+    height: 50,
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    color: colors.text.primary,
+    fontSize: typography.fontSize.md,
+  },
+  loginButton: {
+    width: '100%',
+    height: 50,
+    backgroundColor: colors.ui.primary,
+    borderRadius: borderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  loginButtonText: {
+    color: colors.text.light,
+    fontSize: typography.fontSize.lg,
+    fontWeight: '600',
+  },
+  cancelButton: {
+    width: '100%',
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  cancelButtonText: {
+    color: colors.text.secondary,
+    fontSize: typography.fontSize.md,
+  },
+  switchModeButton: {
+    width: '100%',
+    padding: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  switchModeText: {
+    color: colors.ui.primary,
+    fontSize: typography.fontSize.md,
+    fontWeight: '500',
   },
 });

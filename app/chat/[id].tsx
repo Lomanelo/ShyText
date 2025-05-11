@@ -267,7 +267,7 @@ export default function ChatScreen() {
       await set(conversationRef, updatedConversation);
       
       // Send push notification to the receiver only if they're not actively viewing the chat
-      if (otherUser && otherUser.id) {
+      if (otherUser && otherUser.id)
         try {
           // Check if receiver is actively viewing the chat
           const activeChatRef = ref(db, `activeChats/${id}/${otherUser.id}`);
@@ -284,16 +284,26 @@ export default function ChatScreen() {
               const receiverPushToken = receiverProfile.expoPushToken;
               
               if (receiverPushToken) {
-                // Send push notification
+                // Get the latest sender information
+                const senderProfileRef = ref(db, `profiles/${currentUser.uid}`);
+                const senderProfileSnapshot = await get(senderProfileRef);
+                let senderName = currentUser.displayName || 'Someone';
+                
+                if (senderProfileSnapshot.exists()) {
+                  const senderProfile = senderProfileSnapshot.val();
+                  senderName = senderProfile.firstName || senderProfile.displayName || senderName;
+                }
+                
+                // Send push notification with latest sender name
                 await sendPushNotification(
                   receiverPushToken,
-                  `New message from ${currentUser.displayName || 'Someone'}`,
+                  `New message from ${senderName}`,
                   newMessage.trim(),
                   { 
                     type: 'chat',
                     chatId: id,
                     senderId: currentUser.uid,
-                    senderName: currentUser.displayName || 'Someone'
+                    senderName: senderName
                   }
                 );
                 console.log('Push notification sent to receiver');
@@ -306,7 +316,6 @@ export default function ChatScreen() {
           console.error('Error sending push notification:', notifError);
           // Continue anyway - message is saved even if notification fails
         }
-      }
       
       setNewMessage('');
     } catch (err) {

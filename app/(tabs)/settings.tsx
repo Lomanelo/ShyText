@@ -3,9 +3,9 @@ import { StyleSheet, View, Text, TouchableOpacity, Image, Alert, Linking, Platfo
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, database, uploadProfileImage } from '../../src/lib/firebase';
-import { ref, get, update } from 'firebase/database';
+import { ref, get, update, remove } from 'firebase/database';
 import { router } from 'expo-router';
-import { signOut } from 'firebase/auth';
+import { signOut, EmailAuthProvider, reauthenticateWithCredential, updatePassword } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import ContactForm from '../components/ContactForm';
@@ -20,8 +20,13 @@ export default function SettingsScreen() {
   const [imageUploading, setImageUploading] = useState(false);
   const [showContactForm, setShowContactForm] = useState(false);
   const [showNameModal, setShowNameModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [newName, setNewName] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [updatingName, setUpdatingName] = useState(false);
+  const [updatingPassword, setUpdatingPassword] = useState(false);
   const { expoPushToken, sendTestNotification } = useNotifications();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -257,6 +262,171 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      Alert.alert('Error', 'All fields are required');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      Alert.alert('Error', 'New passwords do not match');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      Alert.alert('Error', 'New password must be at least 6 characters long');
+      return;
+    }
+
+    setUpdatingPassword(true);
+    try {
+      const user = auth.currentUser;
+      if (!user || !user.email) {
+        Alert.alert('Error', 'No user found. Please sign in again.');
+        return;
+      }
+
+      // Get the email from the user object
+      const email = user.email;
+      
+      try {
+        // Reauthenticate user
+        const credential = EmailAuthProvider.credential(email, currentPassword);
+        await reauthenticateWithCredential(user, credential);
+
+        // Update password
+        await updatePassword(user, newPassword);
+
+        // Clear form and close modal
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmNewPassword('');
+        setShowPasswordModal(false);
+
+        Alert.alert('Success', 'Password updated successfully!');
+      } catch (error: any) {
+        console.error('Error during password change:', error);
+        if (error.code === 'auth/wrong-password') {
+          Alert.alert('Error', 'Current password is incorrect');
+        } else if (error.code === 'auth/invalid-credential') {
+          Alert.alert('Error', 'Invalid credentials. Please check your current password.');
+        } else if (error.code === 'auth/requires-recent-login') {
+          Alert.alert('Error', 'Please sign out and sign in again before changing your password.');
+        } else {
+          Alert.alert('Error', 'Failed to update password. Please try again.');
+        }
+      }
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+    } finally {
+      setUpdatingPassword(false);
+    }
+  };
+
+  const handleAccountSettings = () => {
+    Alert.alert(
+      'Account Settings',
+      'What would you like to do?',
+      [
+        {
+          text: 'Change Password',
+          onPress: () => setShowPasswordModal(true)
+        },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Delete Account',
+              'Are you sure you want to delete your account? This action cannot be undone.',
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel'
+                },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      const user = auth.currentUser;
+                      if (!user) {
+                        Alert.alert('Error', 'No user found. Please sign in again.');
+                        return;
+                      }
+
+                      // Get user's email and password for reauthentication
+                      Alert.prompt(
+                        'Confirm Password',
+                        'Please enter your password to delete your account',
+                        [
+                          {
+                            text: 'Cancel',
+                            style: 'cancel'
+                          },
+                          {
+                            text: 'Delete',
+                            style: 'destructive',
+                            onPress: async (password) => {
+                              if (!password) {
+                                Alert.alert('Error', 'Password is required to delete account');
+                                return;
+                              }
+
+                              try {
+                                // Reauthenticate user
+                                const credential = EmailAuthProvider.credential(user.email!, password);
+                                await reauthenticateWithCredential(user, credential);
+
+                                // Delete user data from database
+                                const userProfileRef = ref(database, `profiles/${user.uid}`);
+                                await remove(userProfileRef);
+
+                                // Delete user account
+                                await user.delete();
+
+                                // Clear local storage
+                                await AsyncStorage.multiRemove([
+                                  'userProfile',
+                                  'userHasProfile',
+                                  'lastKnownLocation',
+                                  'userPreferences'
+                                ]);
+
+                                // Navigate to auth screen
+                                router.replace('/(auth)');
+                              } catch (error: any) {
+                                console.error('Error during account deletion:', error);
+                                if (error.code === 'auth/wrong-password') {
+                                  Alert.alert('Error', 'Incorrect password. Please try again.');
+                                } else {
+                                  Alert.alert('Error', 'Failed to delete account. Please try again later.');
+                                }
+                              }
+                            }
+                          }
+                        ],
+                        'secure-text'
+                      );
+                    } catch (error) {
+                      console.error('Error deleting account:', error);
+                      Alert.alert('Error', 'Failed to delete account. Please try again later.');
+                    }
+                  }
+                }
+              ]
+            );
+          }
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        }
+      ]
+    );
+  };
+
   return (
     <LinearGradient colors={['#f9f1e7', '#f9f1e7']} style={styles.container}>
       <View style={styles.header}>
@@ -296,6 +466,16 @@ export default function SettingsScreen() {
       </View>
 
       <View style={styles.settingsSection}>
+        <TouchableOpacity 
+          style={styles.settingsItem}
+          onPress={handleAccountSettings}>
+          <View style={styles.settingsIconContainer}>
+            <Ionicons name="key-outline" size={22} color="#222" />
+          </View>
+          <Text style={styles.settingsText}>Account Settings</Text>
+          <Ionicons name="chevron-forward" size={22} color="#999" />
+        </TouchableOpacity>
+
         <TouchableOpacity 
           style={styles.settingsItem}
           onPress={handleOpenSettings}>
@@ -370,6 +550,76 @@ export default function SettingsScreen() {
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={styles.saveButtonText}>Save</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showPasswordModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowPasswordModal(false);
+          setCurrentPassword('');
+          setNewPassword('');
+          setConfirmNewPassword('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.nameModalContainer}>
+            <Text style={styles.nameModalTitle}>Change Password</Text>
+            
+            <TextInput
+              style={styles.nameInput}
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              placeholder="Current Password"
+              placeholderTextColor="#999"
+              secureTextEntry
+            />
+
+            <TextInput
+              style={styles.nameInput}
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="New Password"
+              placeholderTextColor="#999"
+              secureTextEntry
+            />
+
+            <TextInput
+              style={styles.nameInput}
+              value={confirmNewPassword}
+              onChangeText={setConfirmNewPassword}
+              placeholder="Confirm New Password"
+              placeholderTextColor="#999"
+              secureTextEntry
+            />
+
+            <View style={styles.nameModalButtons}>
+              <TouchableOpacity 
+                style={[styles.nameModalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowPasswordModal(false);
+                  setCurrentPassword('');
+                  setNewPassword('');
+                  setConfirmNewPassword('');
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.nameModalButton, styles.saveButton]}
+                onPress={handleChangePassword}
+                disabled={updatingPassword}
+              >
+                {updatingPassword ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Update</Text>
                 )}
               </TouchableOpacity>
             </View>
