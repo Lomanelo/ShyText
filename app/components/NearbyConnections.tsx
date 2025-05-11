@@ -659,9 +659,13 @@ export default function NearbyConnectionsComponent() {
         
   // Handle send message
   const handleSendMessage = (profileId: string) => {
+    console.log('Starting conversation with profileId:', profileId);
     const peer = discoveredPeers.find(p => p.peerId === profileId);
     if (peer) {
-      startConversation(peer.peerId, peer.name);
+      console.log('Found peer to start conversation:', peer);
+      startConversation(peer);
+    } else {
+      console.error('Could not find peer with ID:', profileId);
     }
   };
   
@@ -702,11 +706,73 @@ export default function NearbyConnectionsComponent() {
     }
   };
 
-  const startConversation = (peerId: string, peerName: string) => {
-    router.push({
-      pathname: '/(tabs)/chats',
-      params: { peerId, peerName }
-    });
+  const startConversation = (peer: Peer) => {
+    if (!peer || !peer.peerId) {
+      console.error('Invalid peer for conversation:', peer);
+      return;
+    }
+    
+    if (!userData) {
+      console.error('Current user data not available');
+      return;
+    }
+    
+    console.log('Navigating to chat with:', peer.name, peer.peerId);
+    
+    // Create a unique conversation ID that will be consistent between the same two users
+    // Sort the IDs to ensure the same conversation ID regardless of who initiates
+    const participants = [userData.userId, peer.userId || peer.peerId].sort();
+    const conversationId = `conv_${participants.join('_')}`;
+    
+    try {
+      const db = getDatabase();
+      const conversationRef = ref(db, `conversations/${conversationId}`);
+      
+      // Set or update the conversation data
+      get(conversationRef).then(snapshot => {
+        if (!snapshot.exists()) {
+          // Create new conversation
+          set(conversationRef, {
+            initiatorId: userData.userId,
+            receiverId: peer.userId || peer.peerId,
+            createdAt: new Date().toISOString(),
+            participants: {
+              [userData.userId]: true,
+              [peer.userId || peer.peerId]: true
+            },
+            lastActive: new Date().toISOString()
+          });
+        }
+        
+        // Always update profile info for the users
+        const myProfileRef = ref(db, `profiles/${userData.userId}`);
+        const peerProfileRef = ref(db, `profiles/${peer.userId || peer.peerId}`);
+        
+        // Try to get peer profile if it doesn't exist already
+        get(peerProfileRef).then(peerSnapshot => {
+          if (!peerSnapshot.exists() && peer.userId) {
+            // Create a minimal profile for the peer if needed
+            set(peerProfileRef, {
+              firstName: peer.name || 'Anonymous',
+              photoURL: peer.photoURL || null,
+              lastActive: new Date().toISOString()
+            });
+          }
+        });
+        
+        // Navigate to the chat screen
+        router.push({
+          pathname: '/chat/[id]',
+          params: { 
+            id: conversationId
+          }
+        });
+      }).catch(error => {
+        console.error('Error setting up conversation:', error);
+      });
+    } catch (error) {
+      console.error('Error setting up conversation:', error);
+    }
   };
 
   // Request permissions
