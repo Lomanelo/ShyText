@@ -247,7 +247,7 @@ export default function ChatScreen() {
       if (snapshot.exists()) {
         const messagesData = snapshot.val();
         const messagesList: Message[] = [];
-        const unreadMessages: Record<string, any> = {};
+        const messagesToMarkAsRead: string[] = [];
         let hasUnread = false;
         
         Object.entries(messagesData).forEach(([key, value]) => {
@@ -266,13 +266,10 @@ export default function ChatScreen() {
             messageMapRef.current.set(message.tempId, true);
           }
           
-          // Mark unread messages
+          // Collect IDs of unread messages from other user
           if (message.senderId !== currentUser.uid && !message.read) {
             hasUnread = true;
-            unreadMessages[key] = {
-              ...message,
-              read: true
-            };
+            messagesToMarkAsRead.push(key);
           }
         });
         
@@ -284,17 +281,43 @@ export default function ChatScreen() {
         // Update messages
         setMessages(messagesList);
         
-        // Handle read receipts in background
-        if (hasUnread) {
-          const updates: Record<string, any> = {};
-          Object.entries(unreadMessages).forEach(([key, message]) => {
-            updates[`${messagesPath}/${key}`] = message;
-          });
+        // Handle read receipts safely one at a time
+        if (hasUnread && messagesToMarkAsRead.length > 0) {
+          // Process messages safely one at a time
+          let processedCount = 0;
           
-          const batchUpdateRef = ref(db);
-          set(batchUpdateRef, updates).catch(err => 
-            console.error('Error marking messages as read:', err)
-          );
+          const processNextMessage = () => {
+            if (processedCount >= messagesToMarkAsRead.length) return;
+            
+            const messageId = messagesToMarkAsRead[processedCount];
+            processedCount++;
+            
+            // Use direct path to avoid issues with message key construction
+            const messageRef = ref(db, `messages/${id}/${messageId}`);
+            get(messageRef)
+              .then(msgSnapshot => {
+                if (msgSnapshot.exists()) {
+                  const msgData = msgSnapshot.val();
+                  return set(messageRef, {
+                    ...msgData,
+                    read: true
+                  });
+                }
+                return null;
+              })
+              .then(() => {
+                // Continue with next message after successful update
+                processNextMessage();
+              })
+              .catch(error => {
+                console.error(`Error marking message ${messageId} as read:`, error);
+                // Continue with next message even after error
+                processNextMessage();
+              });
+          };
+          
+          // Start processing messages
+          processNextMessage();
         }
       } else {
         setMessages([]);
@@ -549,80 +572,6 @@ export default function ChatScreen() {
       console.error('Error updating conversation:', error);
     }
   };
-
-  // Update Firebase message listener to properly handle optimistic messages
-  useEffect(() => {
-    if (!id || typeof id !== 'string' || !currentUser) return;
-    
-    const db = getDatabase();
-    const messagesPath = 'messages/' + id;
-    const messagesRef = ref(db, messagesPath);
-    const messagesQuery = query(messagesRef, orderByChild('createdAt'));
-    
-    const unsubscribeMessages = onValue(messagesQuery, (snapshot) => {
-      if (snapshot.exists()) {
-        const messagesData = snapshot.val();
-        const messagesList: Message[] = [];
-        const unreadMessages: Record<string, any> = {};
-        let hasUnread = false;
-        
-        Object.entries(messagesData).forEach(([key, value]) => {
-          const message = value as any;
-          
-          // Create message object with ID and all properties
-          const messageObj = {
-            id: key,
-            ...message
-          };
-          
-          messagesList.push(messageObj);
-          
-          // Track tempId if it exists for matching with optimistic messages
-          if (message.tempId) {
-            messageMapRef.current.set(message.tempId, true);
-          }
-          
-          // Mark unread messages
-          if (message.senderId !== currentUser.uid && !message.read) {
-            hasUnread = true;
-            unreadMessages[key] = {
-              ...message,
-              read: true
-            };
-          }
-        });
-        
-        // Sort messages by timestamp
-        messagesList.sort((a, b) => 
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-        );
-        
-        // Update messages
-        setMessages(messagesList);
-        
-        // Handle read receipts in background
-        if (hasUnread) {
-          const updates: Record<string, any> = {};
-          Object.entries(unreadMessages).forEach(([key, message]) => {
-            updates[`${messagesPath}/${key}`] = message;
-          });
-          
-          const batchUpdateRef = ref(db);
-          set(batchUpdateRef, updates).catch(err => 
-            console.error('Error marking messages as read:', err)
-          );
-        }
-      } else {
-        setMessages([]);
-      }
-      
-      setLoading(false);
-    });
-    
-    return () => {
-      unsubscribeMessages();
-    };
-  }, [id, currentUser]);
 
   if (loading) {
     return (
