@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, Image, ViewStyle, TextStyle, ImageStyle, Alert } from 'react-native';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, Image, ViewStyle, TextStyle, ImageStyle, Alert, Animated, Keyboard } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getDatabase, ref, push, onValue, query, orderByChild, get, set, onDisconnect } from 'firebase/database';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,9 @@ type Message = {
   content: string;
   createdAt: string;
   senderId: string;
+  isOptimistic?: boolean;
+  sendFailed?: boolean;
+  tempId?: string;
 };
 
 type Conversation = {
@@ -45,6 +48,42 @@ export default function ChatScreen() {
   const [senderInfo, setSenderInfo] = useState<{name: string, id: string} | null>(null);
   const [receiverPushToken, setReceiverPushToken] = useState<string | null>(null);
   const [receiverActive, setReceiverActive] = useState(false);
+  const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([]);
+  const nextMessageIdRef = useRef(0);
+  const messageMapRef = useRef<Map<string, boolean>>(new Map());
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  // More reliable message merging that prevents flickering
+  const displayMessages = useMemo(() => {
+    // Create a map of message IDs from the server messages
+    const messageMap = new Map<string, boolean>();
+    messages.forEach(msg => {
+      messageMap.set(msg.id, true);
+      
+      // Also check if this message has a tempId that matches an optimistic message
+      if (msg.tempId) {
+        messageMapRef.current.set(msg.tempId, true);
+      }
+    });
+    
+    // Filter out optimistic messages that have been confirmed
+    const filteredOptimisticMessages = optimisticMessages.filter(
+      msg => !messageMapRef.current.has(msg.id)
+    );
+    
+    // Combine and sort messages
+    return [...messages, ...filteredOptimisticMessages].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+  }, [messages, optimisticMessages]);
+
+  // Reset the message map when component unmounts
+  useEffect(() => {
+    return () => {
+      messageMapRef.current.clear();
+    };
+  }, []);
 
   // Add function to check if user is blocked
   const checkIfBlocked = async () => {
@@ -204,32 +243,30 @@ export default function ChatScreen() {
     const messagesRef = ref(db, messagesPath);
     const messagesQuery = query(messagesRef, orderByChild('createdAt'));
     
-    const unsubscribeMessages = onValue(messagesQuery, async (snapshot) => {
+    const unsubscribeMessages = onValue(messagesQuery, (snapshot) => {
       if (snapshot.exists()) {
         const messagesData = snapshot.val();
         const messagesList: Message[] = [];
         const unreadMessages: Record<string, any> = {};
         let hasUnread = false;
         
-        // Check if receiver has responded and clear warning if needed
-        if (conversation?.firstSenderId === currentUser.uid) {
-          const hasReceiverResponded = Object.values(messagesData).some(
-            (msg: any) => msg.senderId !== currentUser.uid
-          );
-          if (hasReceiverResponded) {
-            setWarningMessage(null);
-          }
-        }
-        
-        // Convert to array and add IDs
         Object.entries(messagesData).forEach(([key, value]) => {
           const message = value as any;
-          messagesList.push({
+          
+          // Create message object with ID and all properties
+          const messageObj = {
             id: key,
             ...message
-          });
+          };
           
-          // Mark messages as read if they're from the other user
+          messagesList.push(messageObj);
+          
+          // Track tempId if it exists for matching with optimistic messages
+          if (message.tempId) {
+            messageMapRef.current.set(message.tempId, true);
+          }
+          
+          // Mark unread messages
           if (message.senderId !== currentUser.uid && !message.read) {
             hasUnread = true;
             unreadMessages[key] = {
@@ -239,21 +276,26 @@ export default function ChatScreen() {
           }
         });
         
-        // Update unread messages to mark them as read
-        if (hasUnread) {
-          for (const [key, message] of Object.entries(unreadMessages)) {
-            const msgPath = 'messages/' + id + '/' + key;
-            const messageRef = ref(db, msgPath);
-            await set(messageRef, message);
-          }
-        }
-        
-        // Sort by timestamp
+        // Sort messages by timestamp
         messagesList.sort((a, b) => 
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
         
+        // Update messages
         setMessages(messagesList);
+        
+        // Handle read receipts in background
+        if (hasUnread) {
+          const updates: Record<string, any> = {};
+          Object.entries(unreadMessages).forEach(([key, message]) => {
+            updates[`${messagesPath}/${key}`] = message;
+          });
+          
+          const batchUpdateRef = ref(db);
+          set(batchUpdateRef, updates).catch(err => 
+            console.error('Error marking messages as read:', err)
+          );
+        }
       } else {
         setMessages([]);
       }
@@ -338,125 +380,185 @@ export default function ChatScreen() {
     };
   }, [id, otherUser]);
 
-  // Optimize the handleSend function for faster notifications
-  const handleSend = async () => {
-    if (!newMessage.trim() || !id || typeof id !== 'string') return;
+  // Add keyboard detection for better input positioning
+  useEffect(() => {
+    const keyboardWillShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardVisible(true)
+    );
+    const keyboardWillHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardVisible(false)
+    );
+    
+    return () => {
+      keyboardWillShow.remove();
+      keyboardWillHide.remove();
+    };
+  }, []);
 
+  // Optimized send function without flickering
+  const handleSend = () => {
+    if (!newMessage.trim() || !id || typeof id !== 'string' || !currentUser) return;
+    
     // Store message text and clear input immediately
     const messageToSend = newMessage.trim();
     setNewMessage('');
-
-    try {
-      if (!currentUser) throw new Error('You must be logged in');
-      
-      // Check if either user has blocked the other
-      const isBlocked = await checkIfEitherUserBlocked();
-      if (isBlocked) {
-        Alert.alert(
-          'Cannot Send Message',
-          'This conversation has been blocked. You cannot send messages to this user.',
-          [{ text: 'OK' }]
+    
+    // Create optimistic message with a unique ID
+    const tempId = `temp-${Date.now()}-${nextMessageIdRef.current++}`;
+    const optimisticMessage: Message = {
+      id: tempId,
+      content: messageToSend,
+      senderId: currentUser.uid,
+      createdAt: new Date().toISOString(),
+      isOptimistic: true
+    };
+    
+    // Add optimistic message to state for instant display
+    setOptimisticMessages(prev => [...prev, optimisticMessage]);
+    
+    // Scroll to bottom immediately
+    setTimeout(() => {
+      flatListRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+    
+    // Send message in background
+    (async () => {
+      try {
+        // Check if blocked
+        const isBlocked = await checkIfEitherUserBlocked();
+        if (isBlocked) {
+          // Remove optimistic message if blocked
+          setOptimisticMessages(prev => prev.filter(msg => msg.id !== tempId));
+          Alert.alert(
+            'Cannot Send Message',
+            'This conversation has been blocked. You cannot send messages to this user.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        
+        const db = getDatabase();
+        const messagesPath = 'messages/' + id;
+        const messagesRef = ref(db, messagesPath);
+        
+        // Send notification if needed
+        if (otherUser && receiverPushToken && !receiverActive) {
+          sendPushNotification(
+            receiverPushToken,
+            `New message from ${senderInfo?.name || currentUser.displayName || 'Someone'}`,
+            messageToSend,
+            { 
+              type: 'chat',
+              chatId: id,
+              senderId: currentUser.uid,
+              senderName: senderInfo?.name || currentUser.displayName || 'Someone'
+            }
+          ).catch(console.error);
+        }
+        
+        // Create message data with tempId to match with optimistic message
+        const messageData = {
+          content: messageToSend,
+          senderId: currentUser.uid,
+          createdAt: new Date().toISOString(),
+          tempId: tempId // Add tempId to match with optimistic message
+        };
+        
+        // Send message to Firebase
+        const newMessageRef = push(messagesRef);
+        await set(newMessageRef, messageData);
+        
+        // Add to the message map to prevent flickering
+        messageMapRef.current.set(tempId, true);
+        
+        // Remove optimistic message after a delay to ensure smooth transition
+        setTimeout(() => {
+          setOptimisticMessages(prev => prev.filter(msg => msg.id !== tempId));
+        }, 300);
+        
+        // Handle conversation updates in background
+        updateConversationMetadata(messageToSend).catch(console.error);
+        
+      } catch (err) {
+        console.error('Error sending message:', err);
+        
+        // Mark optimistic message as failed without removing it
+        setOptimisticMessages(prev => 
+          prev.map(msg => 
+            msg.id === tempId 
+              ? { ...msg, sendFailed: true }
+              : msg
+          )
         );
-        return;
       }
-      
+    })();
+  };
+  
+  // Helper function to update conversation metadata
+  const updateConversationMetadata = async (messageText: string) => {
+    if (!currentUser || !id) return;
+    
+    try {
       const db = getDatabase();
       const messagesPath = 'messages/' + id;
       const messagesRef = ref(db, messagesPath);
+      const conversationRef = ref(db, 'conversations/' + id);
       
-      // Create message data
-      const messageData = {
-        content: messageToSend,
-        senderId: currentUser.uid,
-        createdAt: new Date().toISOString()
-      };
+      const [messagesSnapshot, conversationSnapshot] = await Promise.all([
+        get(messagesRef),
+        get(conversationRef)
+      ]);
       
-      // Immediately send notification if receiver is not active
-      // This runs in parallel with message sending for faster notifications
-      if (otherUser && receiverPushToken && !receiverActive) {
-        sendPushNotification(
-          receiverPushToken,
-          `New message from ${senderInfo?.name || currentUser.displayName || 'Someone'}`,
-          messageToSend,
-          { 
-            type: 'chat',
-            chatId: id,
-            senderId: currentUser.uid,
-            senderName: senderInfo?.name || currentUser.displayName || 'Someone'
-          }
-        ).catch(console.error);
+      if (!conversationSnapshot.exists()) return;
+      
+      const currentConversation = conversationSnapshot.val();
+      
+      const isFirstMessage = !messagesSnapshot.exists() || 
+        Object.keys(messagesSnapshot.val()).length <= 1;
+        
+      let hasReceiverResponded = false;
+      
+      if (currentConversation.firstSenderId === currentUser.uid && messagesSnapshot.exists()) {
+        hasReceiverResponded = Object.values(messagesSnapshot.val()).some((msg: any) => 
+          msg.senderId !== currentUser.uid
+        );
       }
       
-      // Send message to Firebase
-      const newMessageRef = push(messagesRef);
-      set(newMessageRef, messageData).catch(console.error);
+      const updatedConversation = {
+        ...currentConversation,
+        lastMessage: messageText,
+        lastMessageTime: new Date().toISOString()
+      };
       
-      // Handle conversation updates in background
-      Promise.all([
-        // Update conversation metadata
-        (async () => {
-          try {
-            const conversationRef = ref(db, 'conversations/' + id);
-            const conversationSnapshot = await get(conversationRef);
-            
-            if (!conversationSnapshot.exists()) return;
-            
-            const currentConversation = conversationSnapshot.val();
-            const messagesSnapshot = await get(messagesRef);
-            
-            const isFirstMessage = !messagesSnapshot.exists() || 
-              Object.keys(messagesSnapshot.val()).length <= 1;
-              
-            let hasReceiverResponded = false;
-            
-            if (currentConversation.firstSenderId === currentUser.uid && messagesSnapshot.exists()) {
-              hasReceiverResponded = Object.values(messagesSnapshot.val()).some((msg: any) => 
-                msg.senderId !== currentUser.uid
-              );
-            }
-            
-            const updatedConversation = {
-              ...currentConversation,
-              lastMessage: messageToSend,
-              lastMessageTime: new Date().toISOString()
-            };
-            
-            if (isFirstMessage) {
-              updatedConversation.firstSenderId = currentUser.uid;
-              updatedConversation.firstSenderMessageCount = 1;
-            } else if (currentConversation.firstSenderId === currentUser.uid && !hasReceiverResponded) {
-              updatedConversation.firstSenderMessageCount = 
-                (currentConversation.firstSenderMessageCount || 0) + 1;
-              
-              if (updatedConversation.firstSenderMessageCount >= 3) {
-                setWarningMessage('Wait for a response before sending more messages');
-              }
-            }
-            
-            await set(conversationRef, updatedConversation);
-          } catch (error) {
-            console.error('Error updating conversation:', error);
-          }
-        })()
-      ]).catch(console.error);
+      if (isFirstMessage) {
+        updatedConversation.firstSenderId = currentUser.uid;
+        updatedConversation.firstSenderMessageCount = 1;
+      } else if (currentConversation.firstSenderId === currentUser.uid && !hasReceiverResponded) {
+        updatedConversation.firstSenderMessageCount = 
+          (currentConversation.firstSenderMessageCount || 0) + 1;
+        
+        if (updatedConversation.firstSenderMessageCount >= 3) {
+          setWarningMessage('Wait for a response before sending more messages');
+        }
+      }
       
-    } catch (err) {
-      console.error('Error sending message:', err);
+      await set(conversationRef, updatedConversation);
+    } catch (error) {
+      console.error('Error updating conversation:', error);
     }
   };
 
-  // Optimize the messages listener to make message updates faster for the receiver
+  // Update Firebase message listener to properly handle optimistic messages
   useEffect(() => {
     if (!id || typeof id !== 'string' || !currentUser) return;
     
     const db = getDatabase();
     const messagesPath = 'messages/' + id;
     const messagesRef = ref(db, messagesPath);
-    
-    // Use serverTimestamp for better real-time ordering
     const messagesQuery = query(messagesRef, orderByChild('createdAt'));
     
-    // Create a faster listener with optimized batch updates
     const unsubscribeMessages = onValue(messagesQuery, (snapshot) => {
       if (snapshot.exists()) {
         const messagesData = snapshot.val();
@@ -464,15 +566,23 @@ export default function ChatScreen() {
         const unreadMessages: Record<string, any> = {};
         let hasUnread = false;
         
-        // Process messages in a single pass for better performance
         Object.entries(messagesData).forEach(([key, value]) => {
           const message = value as any;
-          messagesList.push({
+          
+          // Create message object with ID and all properties
+          const messageObj = {
             id: key,
             ...message
-          });
+          };
           
-          // Collect unread messages for batch update
+          messagesList.push(messageObj);
+          
+          // Track tempId if it exists for matching with optimistic messages
+          if (message.tempId) {
+            messageMapRef.current.set(message.tempId, true);
+          }
+          
+          // Mark unread messages
           if (message.senderId !== currentUser.uid && !message.read) {
             hasUnread = true;
             unreadMessages[key] = {
@@ -482,19 +592,17 @@ export default function ChatScreen() {
           }
         });
         
-        // Sort by timestamp for consistent order
+        // Sort messages by timestamp
         messagesList.sort((a, b) => 
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
         
-        // Update messages state first for immediate UI update
+        // Update messages
         setMessages(messagesList);
         
-        // Then handle read receipts as a background operation
+        // Handle read receipts in background
         if (hasUnread) {
-          // Use a more efficient batch update for marking messages as read
           const updates: Record<string, any> = {};
-          
           Object.entries(unreadMessages).forEach(([key, message]) => {
             updates[`${messagesPath}/${key}`] = message;
           });
@@ -536,7 +644,7 @@ export default function ChatScreen() {
     <KeyboardAvoidingView 
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
+      keyboardVerticalOffset={Platform.OS === 'ios' ? -5 : 0}>
       
       <View style={styles.chatHeader}>
         <TouchableOpacity 
@@ -580,14 +688,16 @@ export default function ChatScreen() {
       
       <FlatList
         ref={flatListRef}
-        data={messages}
+        data={displayMessages}
         renderItem={({ item }) => (
-          <View style={[
-            styles.messageContainer,
-            item.senderId === auth.currentUser?.uid ? 
-              styles.sentMessage : 
-              styles.receivedMessage
-          ]}>
+          <View
+            style={[
+              styles.messageContainer,
+              item.senderId === auth.currentUser?.uid ? 
+                styles.sentMessage : 
+                styles.receivedMessage,
+              item.sendFailed && styles.failedMessage
+            ]}>
             <Text style={[
               styles.messageText,
               { color: item.senderId === auth.currentUser?.uid ? colors.text.light : colors.text.primary }
@@ -600,7 +710,20 @@ export default function ChatScreen() {
                 hour: '2-digit',
                 minute: '2-digit',
               })}
+              {item.sendFailed && ' • Failed'}
             </Text>
+            {item.sendFailed && (
+              <TouchableOpacity 
+                style={styles.retryButton}
+                onPress={() => {
+                  // Remove failed message and try again
+                  setOptimisticMessages(prev => prev.filter(msg => msg.id !== item.id));
+                  setNewMessage(item.content);
+                }}>
+                <Ionicons name="refresh" size={16} color="#FF3B30" />
+                <Text style={styles.retryText}>Retry</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
         keyExtractor={(item) => item.id}
@@ -609,20 +732,25 @@ export default function ChatScreen() {
           { paddingBottom: 50 }
         ]}
         onContentSizeChange={() => {
-          flatListRef.current?.scrollToEnd({ animated: false });
-          setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: false });
-          }, 50);
+          flatListRef.current?.scrollToEnd({ animated: true });
         }}
         onLayout={() => {
-          flatListRef.current?.scrollToEnd({ animated: false });
-          setTimeout(() => {
-            flatListRef.current?.scrollToEnd({ animated: false });
-          }, 100);
+          flatListRef.current?.scrollToEnd({ animated: true });
         }}
+        showsVerticalScrollIndicator={false}
+        
+        // Performance optimizations
+        removeClippedSubviews={false}
+        maxToRenderPerBatch={5}
+        updateCellsBatchingPeriod={50}
+        windowSize={7}
+        initialNumToRender={10}
       />
 
-      <View style={styles.inputContainer}>
+      <View style={[
+        styles.inputContainer,
+        keyboardVisible && styles.inputContainerWithKeyboard
+      ]}>
         <TextInput
           style={styles.input}
           placeholder="Type a message..."
@@ -742,6 +870,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderBottomLeftRadius: borderRadius.xs,
   } as ViewStyle,
+  failedMessage: {
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 59, 48, 0.3)',
+  } as ViewStyle,
   messageText: {
     fontSize: typography.fontSize.md,
   } as TextStyle,
@@ -763,6 +896,10 @@ const styles = StyleSheet.create({
     shadowOpacity: shadows.small.shadowOpacity,
     shadowRadius: shadows.small.shadowRadius,
     elevation: shadows.small.elevation,
+  } as ViewStyle,
+  inputContainerWithKeyboard: {
+    paddingBottom: Platform.OS === 'ios' ? spacing.lg : 0,
+    marginBottom: 0,
   } as ViewStyle,
   input: {
     flex: 1,
@@ -821,4 +958,16 @@ const styles = StyleSheet.create({
     top: Platform.OS === 'ios' ? 70 : 20,
     zIndex: 1,
   },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+    alignSelf: 'flex-end',
+  } as ViewStyle,
+  retryText: {
+    color: '#FF3B30',
+    fontSize: typography.fontSize.xs,
+    marginLeft: 4,
+    fontWeight: '500',
+  } as TextStyle,
 });
