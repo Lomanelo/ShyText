@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useSegments } from 'expo-router';
 import * as NearbyConnections from 'expo-nearby-connections';
+import ImagePreviewModal from './ImagePreviewModal';
 
 // Define the event data interfaces for type safety
 interface InvitationData {
@@ -69,13 +70,17 @@ interface ConnectionResult {
 
 // Component for displaying profile information in a card
 const ProfileCard = ({ profile, onSendMessage }: { profile: ProfileData, onSendMessage: (profileId: string) => void }) => {
+  const [imageModalVisible, setImageModalVisible] = useState(false);
+  
   return (
     <View style={styles.profileCard}>
       <View style={styles.profileContent}>
-        <Image 
-          source={profile.photoURL ? { uri: profile.photoURL } : require('../../assets/images/icon.png')} 
-          style={styles.profileImage} 
-        />
+        <TouchableOpacity onPress={() => setImageModalVisible(true)}>
+          <Image 
+            source={profile.photoURL ? { uri: profile.photoURL } : require('../../assets/images/icon.png')} 
+            style={styles.profileImage} 
+          />
+        </TouchableOpacity>
         <View style={styles.profileInfo}>
           <Text style={styles.profileName}>{profile.name}</Text>
         </View>
@@ -86,6 +91,12 @@ const ProfileCard = ({ profile, onSendMessage }: { profile: ProfileData, onSendM
       >
         <Text style={styles.messageButtonText}>Message</Text>
       </TouchableOpacity>
+      
+      <ImagePreviewModal
+        visible={imageModalVisible}
+        imageUrl={profile.photoURL || null}
+        onClose={() => setImageModalVisible(false)}
+      />
     </View>
   );
 };

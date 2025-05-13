@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, Image } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, database, uploadProfileImage } from '../../src/lib/firebase';
@@ -329,100 +329,117 @@ export default function ProfileScreen() {
 
   return (
     <LinearGradient colors={[colors.background, colors.background]} style={styles.container}>
-      <View style={styles.content}>
-        <View style={styles.headerContainer}>
-          <Text style={styles.title}>Complete your profile</Text>
-          <Text style={styles.subtitle}>
-            Add your name and a profile picture
-          </Text>
-        </View>
-
-        <View style={styles.profileImageContainer}>
-          {imageUploading ? (
-            <View style={styles.imageLoadingContainer}>
-              <ActivityIndicator size="small" color={colors.ui.accent} />
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+        style={styles.keyboardAvoidView}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      >
+        <ScrollView 
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        >
+          <View style={styles.content}>
+            <View style={styles.headerContainer}>
+              <Text style={styles.title}>Complete your profile</Text>
+              <Text style={styles.subtitle}>
+                Add your name and a profile picture
+              </Text>
             </View>
-          ) : (
-            <>
-              {profileImage ? (
-                <Image source={{ uri: profileImage }} style={styles.profileImage} />
+
+            <View style={styles.profileImageContainer}>
+              {imageUploading ? (
+                <View style={styles.imageLoadingContainer}>
+                  <ActivityIndicator size="small" color={colors.ui.accent} />
+                </View>
               ) : (
-                <View style={styles.profileImagePlaceholder}>
-                  <AntDesign name="user" size={40} color={colors.text.secondary} />
+                <>
+                  {profileImage ? (
+                    <Image source={{ uri: profileImage }} style={styles.profileImage} />
+                  ) : (
+                    <View style={styles.profileImagePlaceholder}>
+                      <AntDesign name="user" size={40} color={colors.text.secondary} />
+                    </View>
+                  )}
+                </>
+              )}
+              
+              <View style={styles.imageButtonsContainer}>
+                <TouchableOpacity 
+                  style={styles.imageButton} 
+                  onPress={pickImage}
+                  disabled={imageUploading || loading}>
+                  <LinearGradient
+                    colors={[colors.ui.primary, colors.ui.primary]}
+                    style={styles.imageButtonGradient}>
+                    <Ionicons name="image" size={16} color={colors.text.light} />
+                    <Text style={styles.imageButtonText}>Gallery</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.imageButton} 
+                  onPress={takePicture}
+                  disabled={imageUploading || loading}>
+                  <LinearGradient
+                    colors={[colors.ui.primary, colors.ui.primary]}
+                    style={styles.imageButtonGradient}>
+                    <Ionicons name="camera" size={16} color={colors.text.light} />
+                    <Text style={styles.imageButtonText}>Camera</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.formContainer}>
+              <View style={styles.inputContainer}>
+                <AntDesign name="user" size={20} color={colors.text.secondary} style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="First name"
+                  placeholderTextColor={colors.text.tertiary}
+                  value={firstName}
+                  onChangeText={setFirstName}
+                  editable={!loading}
+                  autoFocus
+                  autoCorrect={false}
+                  autoCapitalize="words"
+                  inputAccessoryViewID={undefined}
+                  keyboardType="default"
+                  disableFullscreenUI={true}
+                />
+              </View>
+
+              {error && (
+                <View style={styles.errorContainer}>
+                  <AntDesign name="exclamationcircleo" size={16} color={colors.ui.error} />
+                  <Text style={styles.errorText}>{error}</Text>
                 </View>
               )}
-            </>
-          )}
-          
-          <View style={styles.imageButtonsContainer}>
-            <TouchableOpacity 
-              style={styles.imageButton} 
-              onPress={pickImage}
-              disabled={imageUploading || loading}>
-              <LinearGradient
-                colors={[colors.ui.primary, colors.ui.primary]}
-                style={styles.imageButtonGradient}>
-                <Ionicons name="image" size={16} color={colors.text.light} />
-                <Text style={styles.imageButtonText}>Gallery</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.imageButton} 
-              onPress={takePicture}
-              disabled={imageUploading || loading}>
-              <LinearGradient
-                colors={[colors.ui.primary, colors.ui.primary]}
-                style={styles.imageButtonGradient}>
-                <Ionicons name="camera" size={16} color={colors.text.light} />
-                <Text style={styles.imageButtonText}>Camera</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.formContainer}>
-          <View style={styles.inputContainer}>
-            <AntDesign name="user" size={20} color={colors.text.secondary} style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="First name"
-              placeholderTextColor={colors.text.tertiary}
-              value={firstName}
-              onChangeText={setFirstName}
-              editable={!loading}
-              autoFocus
-            />
-          </View>
-
-          {error && (
-            <View style={styles.errorContainer}>
-              <AntDesign name="exclamationcircleo" size={16} color={colors.ui.error} />
-              <Text style={styles.errorText}>{error}</Text>
             </View>
-          )}
-        </View>
 
-        <TouchableOpacity 
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleComplete}
-          disabled={loading}>
-          <LinearGradient
-            colors={[colors.ui.primary, colors.ui.primary]}
-            style={styles.gradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}>
-            {loading ? (
-              <View style={styles.buttonContent}>
-                <ActivityIndicator size="small" color={colors.text.light} />
-                <Text style={styles.buttonText}>Creating Profile...</Text>
-              </View>
-            ) : (
-              <Text style={styles.buttonText}>Complete Profile</Text>
-            )}
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+            <TouchableOpacity 
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleComplete}
+              disabled={loading}>
+              <LinearGradient
+                colors={[colors.ui.primary, colors.ui.primary]}
+                style={styles.gradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}>
+                {loading ? (
+                  <View style={styles.buttonContent}>
+                    <ActivityIndicator size="small" color={colors.text.light} />
+                    <Text style={styles.buttonText}>Creating Profile...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.buttonText}>Complete Profile</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </LinearGradient>
   );
 }
@@ -440,10 +457,17 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     fontSize: typography.fontSize.md,
   },
+  keyboardAvoidView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
   content: {
     flex: 1,
     padding: spacing.xl,
     justifyContent: 'space-between',
+    paddingBottom: Platform.OS === 'ios' ? 120 : 80,
   },
   headerContainer: {
     marginTop: spacing.xxxl * 2,

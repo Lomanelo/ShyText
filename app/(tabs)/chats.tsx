@@ -3,9 +3,13 @@ import { useConversations } from '../../src/hooks/useConversations';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import ImagePreviewModal from '../components/ImagePreviewModal';
+import { useState } from 'react';
 
 export default function ChatsScreen() {
   const { conversations, loading, error } = useConversations();
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageModalVisible, setImageModalVisible] = useState(false);
 
   // Function to navigate to chat detail
   const navigateToChat = (chatId: string) => {
@@ -16,6 +20,12 @@ export default function ChatsScreen() {
   const getAvatarSource = (user: any) => {
     const defaultImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&h=80&fit=crop';
     return { uri: user?.photoURL || defaultImage };
+  };
+
+  // Function to handle avatar click
+  const handleAvatarClick = (photoURL: string) => {
+    setSelectedImage(photoURL);
+    setImageModalVisible(true);
   };
 
   if (loading) {
@@ -65,10 +75,17 @@ export default function ChatsScreen() {
             <TouchableOpacity
               style={styles.chatItem}
               onPress={() => navigateToChat(item.id)}>
-              <Image
-                source={getAvatarSource(item.otherUser)}
-                style={styles.avatar}
-              />
+              <TouchableOpacity 
+                onPress={() => {
+                  const photoURL = item.otherUser?.photoURL;
+                  if (photoURL) handleAvatarClick(photoURL);
+                }}
+                activeOpacity={item.otherUser?.photoURL ? 0.7 : 1}>
+                <Image
+                  source={getAvatarSource(item.otherUser)}
+                  style={styles.avatar}
+                />
+              </TouchableOpacity>
               <View style={styles.chatInfo}>
                 <Text style={styles.chatName}>{item.otherUser?.firstName || 'User'}</Text>
                 <Text style={styles.lastMessage} numberOfLines={1}>
@@ -86,6 +103,12 @@ export default function ChatsScreen() {
           contentContainerStyle={styles.listContentContainer}
         />
       )}
+      
+      <ImagePreviewModal
+        visible={imageModalVisible}
+        imageUrl={selectedImage}
+        onClose={() => setImageModalVisible(false)}
+      />
     </LinearGradient>
   );
 }

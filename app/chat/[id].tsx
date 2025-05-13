@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../../src/lib/firebase';
 import { colors, typography, spacing, shadows, borderRadius } from '../../src/styles/theme';
 import { sendPushNotification } from '../../src/utils/notifications';
+import ImagePreviewModal from '../components/ImagePreviewModal';
 
 type Message = {
   id: string;
@@ -39,6 +40,7 @@ export default function ChatScreen() {
   } | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const currentUser = auth.currentUser;
+  const [imagePreviewVisible, setImagePreviewVisible] = useState(false);
 
   // Add effect to track when user is viewing the chat
   useEffect(() => {
@@ -353,10 +355,12 @@ export default function ChatScreen() {
         </TouchableOpacity>
         <View style={styles.headerProfile}>
           {otherUser?.photoURL ? (
-            <Image 
-              source={{ uri: otherUser.photoURL }} 
-              style={styles.headerAvatar} 
-            />
+            <TouchableOpacity onPress={() => setImagePreviewVisible(true)}>
+              <Image 
+                source={{ uri: otherUser.photoURL }} 
+                style={styles.headerAvatar} 
+              />
+            </TouchableOpacity>
           ) : (
             <View style={styles.headerAvatarPlaceholder}>
               <Text style={styles.headerAvatarText}>
@@ -426,6 +430,12 @@ export default function ChatScreen() {
           />
         </TouchableOpacity>
       </View>
+
+      <ImagePreviewModal
+        visible={imagePreviewVisible}
+        imageUrl={otherUser?.photoURL || null}
+        onClose={() => setImagePreviewVisible(false)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -440,9 +450,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
-    paddingTop: Platform.OS === 'ios' ? 50 : 10,
-    paddingBottom: 10,
-    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'ios' ? 70 : 20,
+    paddingBottom: 16,
+    paddingHorizontal: 30,
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
     ...shadows.small,
@@ -456,8 +466,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F5F5F5',
     position: 'absolute',
-    left: 16,
-    top: Platform.OS === 'ios' ? 50 : 10,
+    left: 30,
+    top: Platform.OS === 'ios' ? 70 : 20,
     zIndex: 1,
   },
   headerProfile: {
@@ -496,6 +506,7 @@ const styles = StyleSheet.create({
   },
   messagesList: {
     padding: spacing.lg,
+    paddingTop: spacing.xl,
     paddingBottom: spacing.xxl,
   } as ViewStyle,
   messageContainer: {
@@ -530,8 +541,8 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.md,
-    paddingBottom: Platform.OS === 'ios' ? spacing.md : spacing.md,
+    padding: spacing.lg,
+    paddingBottom: Platform.OS === 'ios' ? spacing.xxxl : spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.ui.ghost,
     backgroundColor: colors.card,
