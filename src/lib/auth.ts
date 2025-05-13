@@ -149,10 +149,25 @@ export function useEmailAuth() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Check if string is in email format
+  const isEmail = (input: string) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(input);
+  };
+
+  // Convert username to email format if needed for Firebase Auth
+  const formatUserInput = (input: string) => {
+    if (isEmail(input)) {
+      return input; // It's already an email
+    }
+    // Convert username to email format by appending domain
+    return `${input}@shytext.com`;
+  };
+
   // Email/Password Sign In
-  const signInWithEmail = async (email: string, password: string) => {
-    if (!email || !password) {
-      setError("Email and password are required");
+  const signInWithEmail = async (username: string, password: string) => {
+    if (!username || !password) {
+      setError("Username and password are required");
       return;
     }
 
@@ -160,7 +175,10 @@ export function useEmailAuth() {
       setLoading(true);
       setError(null);
       
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      // Format username as email if needed for Firebase
+      const formattedInput = formatUserInput(username);
+      
+      const userCredential = await signInWithEmailAndPassword(auth, formattedInput, password);
       const user = userCredential.user;
       
       setUserInfo(user);
@@ -185,9 +203,9 @@ export function useEmailAuth() {
   };
 
   // Email/Password Sign Up
-  const signUpWithEmail = async (email: string, password: string) => {
-    if (!email || !password) {
-      setError("Email and password are required");
+  const signUpWithEmail = async (username: string, password: string) => {
+    if (!username || !password) {
+      setError("Username and password are required");
       return;
     }
 
@@ -195,7 +213,10 @@ export function useEmailAuth() {
       setLoading(true);
       setError(null);
       
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      // Format username as email if needed for Firebase
+      const formattedInput = formatUserInput(username);
+      
+      const userCredential = await createUserWithEmailAndPassword(auth, formattedInput, password);
       const user = userCredential.user;
       
       setUserInfo(user);
