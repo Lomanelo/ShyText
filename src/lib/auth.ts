@@ -17,6 +17,48 @@ const webClientId = '680911194317-p9h15n8unj1dosd684i6qaina3n2rdam.apps.googleus
 const iosClientId = '680911194317-g3amhmkgvie7gdmdcalkn14p46ralg1h.apps.googleusercontent.com';
 const androidClientId = '680911194317-p9h15n8unj1dosd684i6qaina3n2rdam.apps.googleusercontent.com';
 
+// Add a helper function to translate Firebase error messages to user-friendly messages
+const getFirebaseErrorMessage = (error: any): string => {
+  const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+  
+  // Extract the error code if it's a Firebase error
+  const errorCode = errorMessage.match(/\(([^)]+)\)/)?.[1] || '';
+  
+  // Map Firebase error codes to user-friendly messages
+  switch (errorCode) {
+    case 'auth/email-already-in-use':
+      return 'This account already exists. Please try signing in instead.';
+    case 'auth/invalid-email':
+      return 'Please enter a valid username.';
+    case 'auth/user-disabled':
+      return 'This account has been disabled. Please contact support.';
+    case 'auth/user-not-found':
+      return 'Account not found. Please check your username or create a new account.';
+    case 'auth/wrong-password':
+      return 'Incorrect password. Please try again.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please try again later.';
+    case 'auth/weak-password':
+      return 'Password is too weak. Please use a stronger password.';
+    case 'auth/network-request-failed':
+      return 'Network error. Please check your internet connection and try again.';
+    case 'auth/internal-error':
+      return 'Something went wrong. Please try again later.';
+    case 'auth/invalid-credential':
+      return 'Invalid login credentials. Please try again.';
+    case 'auth/account-exists-with-different-credential':
+      return 'An account already exists with the same email but different sign-in method.';
+    case 'auth/operation-not-allowed':
+      return 'This sign-in method is not enabled. Please contact support.';
+    case 'auth/popup-closed-by-user':
+      return 'Sign-in cancelled. Please try again.';
+    default:
+      // For unhandled cases, provide a more generic message but log the actual error
+      console.error('Unhandled Firebase error:', errorMessage);
+      return 'Unable to complete your request. Please try again.';
+  }
+};
+
 // Hook for Google authentication
 export function useGoogleAuth() {
   const [userInfo, setUserInfo] = useState<User | null>(null);
@@ -63,7 +105,7 @@ export function useGoogleAuth() {
         
         if (!id_token) {
           console.error("No ID token received in response");
-          setError("Authentication failed: No ID token received");
+          setError("Sign-in failed. Please try again.");
           setLoading(false);
           return;
         }
@@ -90,20 +132,20 @@ export function useGoogleAuth() {
           }
         } catch (firebaseError) {
           console.error("Firebase sign-in error:", firebaseError);
-          setError(`Firebase authentication failed: ${
-            firebaseError instanceof Error ? firebaseError.message : 'Unknown error'
-          }`);
+          setError(getFirebaseErrorMessage(firebaseError));
         }
       } else if (response.type === 'error') {
         console.error("Auth error response:", response.error);
-        setError(`Authentication error: ${response.error?.message || 'Unknown error'}`);
+        setError(`Sign-in failed. ${response.error?.message ? 'Please try again.' : 'Please try again later.'}`);
+      } else if (response.type === 'cancel') {
+        console.log("Sign-in was cancelled");
+        // Don't set error for user cancellation
       } else {
         console.log("Other response type:", response.type);
       }
     } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : 'An error occurred during Google Sign In';
-      console.error("Sign-in error:", errorMessage);
-      setError(errorMessage);
+      console.error("Sign-in error:", e);
+      setError("Unable to sign in. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -117,7 +159,7 @@ export function useGoogleAuth() {
       console.log("Using redirect URI:", redirectUri);
       
       if (!request) {
-        setError("Authentication request was not properly initialized");
+        setError("Sign-in is unavailable at the moment. Please try again later.");
         console.error("Auth request is null");
         setLoading(false);
         return;
@@ -127,9 +169,8 @@ export function useGoogleAuth() {
       const result = await promptAsync();
       console.log("Prompt result:", result.type);
     } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : 'Failed to initiate Google Sign In';
-      console.error("Prompt error:", errorMessage);
-      setError(errorMessage);
+      console.error("Prompt error:", e);
+      setError("We couldn't connect to Google. Please check your internet connection and try again.");
       setLoading(false);
     }
   };
@@ -167,7 +208,7 @@ export function useEmailAuth() {
   // Email/Password Sign In
   const signInWithEmail = async (username: string, password: string) => {
     if (!username || !password) {
-      setError("Username and password are required");
+      setError("Please enter both username and password");
       return;
     }
 
@@ -196,7 +237,7 @@ export function useEmailAuth() {
       }
     } catch (e) {
       console.error("Email sign-in error:", e);
-      setError(e instanceof Error ? e.message : "Failed to sign in");
+      setError(getFirebaseErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -205,7 +246,12 @@ export function useEmailAuth() {
   // Email/Password Sign Up
   const signUpWithEmail = async (username: string, password: string) => {
     if (!username || !password) {
-      setError("Username and password are required");
+      setError("Please enter both username and password");
+      return;
+    }
+
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters long");
       return;
     }
 
@@ -226,7 +272,7 @@ export function useEmailAuth() {
       router.replace('/(auth)/profile');
     } catch (e) {
       console.error("Email sign-up error:", e);
-      setError(e instanceof Error ? e.message : "Failed to create account");
+      setError(getFirebaseErrorMessage(e));
     } finally {
       setLoading(false);
     }

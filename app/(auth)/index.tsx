@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, ImageBackground, Platform, ViewStyle, TextStyle, TextInput, Modal, Linking } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, ImageBackground, Platform, ViewStyle, TextStyle, TextInput, Modal, Linking, TouchableWithoutFeedback } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { useGoogleAuth, useEmailAuth } from '../../src/lib/auth';
@@ -10,8 +10,8 @@ import { auth, checkUserProfileExists } from '../../src/lib/firebase';
 import { colors, typography, spacing, borderRadius, shadows } from '../../src/styles/theme';
 
 export default function WelcomeScreen() {
-  const { signInWithGoogle, loading: googleLoading, error: googleError } = useGoogleAuth();
-  const { signInWithEmail, signUpWithEmail, loading: emailLoading, error: emailError } = useEmailAuth();
+  const { signInWithGoogle, loading: googleLoading, error: googleError, clearError: clearGoogleError } = useGoogleAuth();
+  const { signInWithEmail, signUpWithEmail, loading: emailLoading, error: emailError, clearError: clearEmailError } = useEmailAuth();
   const [initializing, setInitializing] = useState(true);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [isLoginMode, setIsLoginMode] = useState(false);
@@ -21,6 +21,17 @@ export default function WelcomeScreen() {
   
   const loading = googleLoading || emailLoading || initializing;
   const error = googleError || emailError;
+
+  // Function to clear all errors
+  const clearAllErrors = () => {
+    clearGoogleError && clearGoogleError();
+    clearEmailError && clearEmailError();
+  };
+  
+  // Clear errors when input fields are focused
+  const handleInputFocus = () => {
+    clearAllErrors();
+  };
 
   // Check for authentication state when component mounts
   useEffect(() => {
@@ -98,138 +109,166 @@ export default function WelcomeScreen() {
   }
 
   return (
-    <ImageBackground source={require('../../assets/images/bgimage.png')} style={styles.backgroundImage}>
-      <LinearGradient
-        colors={['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.7)']}
-        style={styles.overlay}
-      >
-        <View style={styles.container}>
-          <View style={styles.content}>
-            <Text style={styles.title}>ShyText</Text>
-            <Text style={styles.subtitle}>
-              Break the <Text style={{ fontWeight: '700' }}>ice</Text>,{'\n'}
-              not the <Text style={{ fontWeight: '700' }}>silence</Text>.
-            </Text>
-          </View>
+    <TouchableWithoutFeedback onPress={clearAllErrors}>
+      <ImageBackground source={require('../../assets/images/bgimage.png')} style={styles.backgroundImage}>
+        <LinearGradient
+          colors={['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.7)']}
+          style={styles.overlay}
+        >
+          <View style={styles.container}>
+            <View style={styles.content}>
+              <Text style={styles.title}>ShyText</Text>
+              <Text style={styles.subtitle}>
+                Break the <Text style={{ fontWeight: '700' }}>ice</Text>,{'\n'}
+                not the <Text style={{ fontWeight: '700' }}>silence</Text>.
+              </Text>
+            </View>
 
-          <View style={styles.footer}>
-                {isExpoGo && (
-                  <Text style={styles.expoGoNotice}>
-                    Note: Google authentication doesn't work in Expo Go.{'\n'}
-                Please build a development build to test authentication.
-                  </Text>
-                )}
-                
-                <TouchableOpacity
-                  style={[styles.googleButton, (loading || isExpoGo) && styles.buttonDisabled]}
-                  onPress={signInWithGoogle}
-                  disabled={loading || isExpoGo}>
-                  {googleLoading ? (
-                <ActivityIndicator color={colors.text.primary} />
-                  ) : (
-                    <View style={styles.googleButtonContent}>
-                  <AntDesign name="google" size={20} color={colors.text.primary} />
-                      <Text style={styles.googleButtonText}>Continue with Google</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.emailButton, loading && styles.buttonDisabled]}
-                  onPress={() => setShowEmailModal(true)}
-                  disabled={loading}>
-                  <View style={styles.emailButtonContent}>
-                    <Ionicons name="person-outline" size={20} color={colors.text.primary} />
-                    <Text style={styles.emailButtonText}>Sign in with Username</Text>
-                  </View>
-                </TouchableOpacity>
-
-            {error && <Text style={styles.errorText}>{error}</Text>}
-
-            <Text style={styles.terms}>
-              By continuing, you agree to our{' '}
-              <Text style={styles.link} onPress={openTerms}>Terms of Service</Text>
-            </Text>
-          </View>
-
-          <Modal
-            visible={showEmailModal}
-            transparent
-            animationType="slide"
-            onRequestClose={resetForm}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>
-                  {isLoginMode ? 'Sign in with Username' : 'Create Account'}
-                </Text>
-                
-                <TextInput
-                  style={styles.input}
-                  placeholder="Username"
-                  placeholderTextColor={colors.text.secondary}
-                  value={username}
-                  onChangeText={setUsername}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                
-                <TextInput
-                  style={styles.input}
-                  placeholder="Password"
-                  placeholderTextColor={colors.text.secondary}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry
-                />
-
-                {!isLoginMode && (
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Confirm Password"
-                    placeholderTextColor={colors.text.secondary}
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry
-                  />
-                )}
-
-                <TouchableOpacity
-                  style={[styles.loginButton, loading && styles.buttonDisabled]}
-                  onPress={handleEmailSubmit}
-                  disabled={loading}>
-                  {emailLoading ? (
-                    <ActivityIndicator color={colors.text.primary} />
-                  ) : (
-                    <Text style={styles.loginButtonText}>
-                      {isLoginMode ? 'Sign In' : 'Create Account'}
+            <View style={styles.footer}>
+                  {isExpoGo && (
+                    <Text style={styles.expoGoNotice}>
+                      Note: Google authentication doesn't work in Expo Go.{'\n'}
+                  Please build a development build to test authentication.
                     </Text>
                   )}
-                </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[styles.googleButton, (loading || isExpoGo) && styles.buttonDisabled]}
+                    onPress={() => {
+                      clearAllErrors();
+                      signInWithGoogle();
+                    }}
+                    disabled={loading || isExpoGo}>
+                    {googleLoading ? (
+                  <ActivityIndicator color={colors.text.primary} />
+                    ) : (
+                      <View style={styles.googleButtonContent}>
+                    <AntDesign name="google" size={20} color={colors.text.primary} />
+                        <Text style={styles.googleButtonText}>Continue with Google</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.switchModeButton}
-                  onPress={() => {
-                    setIsLoginMode(!isLoginMode);
-                    setPassword('');
-                    setConfirmPassword('');
-                  }}>
-                  <Text style={styles.switchModeText}>
-                    {isLoginMode ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-                  </Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.emailButton, loading && styles.buttonDisabled]}
+                    onPress={() => {
+                      clearAllErrors();
+                      setShowEmailModal(true);
+                    }}
+                    disabled={loading}>
+                    <View style={styles.emailButtonContent}>
+                      <Ionicons name="person-outline" size={20} color={colors.text.primary} />
+                      <Text style={styles.emailButtonText}>Sign in with Username</Text>
+                    </View>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={resetForm}>
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
+              {!showEmailModal && error && <Text style={styles.errorText}>{error}</Text>}
+
+              <Text style={styles.terms}>
+                By continuing, you agree to our{' '}
+                <Text style={styles.link} onPress={openTerms}>Terms of Service</Text>
+              </Text>
             </View>
-          </Modal>
-        </View>
-      </LinearGradient>
-    </ImageBackground>
+
+            <Modal
+              visible={showEmailModal}
+              transparent
+              animationType="slide"
+              onRequestClose={resetForm}
+            >
+              <TouchableWithoutFeedback onPress={clearAllErrors}>
+                <View style={styles.modalOverlay}>
+                  <TouchableWithoutFeedback>
+                    <View style={styles.modalContent}>
+                      <Text style={styles.modalTitle}>
+                        {isLoginMode ? 'Sign in with Username' : 'Create Account'}
+                      </Text>
+                      
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Username"
+                        placeholderTextColor={colors.text.secondary}
+                        value={username}
+                        onChangeText={setUsername}
+                        onFocus={handleInputFocus}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                      />
+                      
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Password"
+                        placeholderTextColor={colors.text.secondary}
+                        value={password}
+                        onChangeText={setPassword}
+                        onFocus={handleInputFocus}
+                        secureTextEntry
+                      />
+
+                      {!isLoginMode && (
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Confirm Password"
+                          placeholderTextColor={colors.text.secondary}
+                          value={confirmPassword}
+                          onChangeText={setConfirmPassword}
+                          onFocus={handleInputFocus}
+                          secureTextEntry
+                        />
+                      )}
+
+                      {error && <Text style={styles.modalErrorText}>{error}</Text>}
+                      
+                      {!isLoginMode && password && confirmPassword && password !== confirmPassword && (
+                        <Text style={styles.modalErrorText}>Passwords do not match</Text>
+                      )}
+
+                      <TouchableOpacity
+                        style={[styles.loginButton, loading && styles.buttonDisabled]}
+                        onPress={() => {
+                          clearAllErrors();
+                          handleEmailSubmit();
+                        }}
+                        disabled={loading}>
+                        {emailLoading ? (
+                          <ActivityIndicator color={colors.text.primary} />
+                        ) : (
+                          <Text style={styles.loginButtonText}>
+                            {isLoginMode ? 'Sign In' : 'Create Account'}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.switchModeButton}
+                        onPress={() => {
+                          clearAllErrors();
+                          setIsLoginMode(!isLoginMode);
+                          setPassword('');
+                          setConfirmPassword('');
+                        }}>
+                        <Text style={styles.switchModeText}>
+                          {isLoginMode ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.cancelButton}
+                        onPress={() => {
+                          clearAllErrors();
+                          resetForm();
+                        }}>
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </TouchableWithoutFeedback>
+                </View>
+              </TouchableWithoutFeedback>
+            </Modal>
+          </View>
+        </LinearGradient>
+      </ImageBackground>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -264,6 +303,7 @@ type Styles = {
   cancelButtonText: TextStyle;
   switchModeButton: ViewStyle;
   switchModeText: TextStyle;
+  modalErrorText: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -384,13 +424,10 @@ const styles = StyleSheet.create<Styles>({
     opacity: 0.5,
   },
   errorText: {
-    color: colors.text.error,
+    color: 'red',
     textAlign: 'center',
-    marginBottom: spacing.md,
-    padding: spacing.sm,
-    backgroundColor: 'rgba(255, 68, 68, 0.15)',
-    borderRadius: borderRadius.sm,
-    overflow: 'hidden',
+    marginVertical: 10,
+    fontSize: typography.fontSize.sm,
   },
   terms: {
     color: colors.text.light,
@@ -474,5 +511,15 @@ const styles = StyleSheet.create<Styles>({
     color: colors.ui.primary,
     fontSize: typography.fontSize.md,
     fontWeight: '500',
+  },
+  modalErrorText: {
+    color: '#FF3B30',
+    textAlign: 'center',
+    marginVertical: 10,
+    fontSize: typography.fontSize.sm,
+    padding: 8,
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    borderRadius: borderRadius.md,
+    width: '100%',
   },
 });
