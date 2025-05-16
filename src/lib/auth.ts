@@ -323,6 +323,10 @@ export function useAppleAuth() {
     setError(null);
   };
 
+  const resetLoading = () => {
+    setLoading(false);
+  };
+
   const handleSignIn = async (credential: {
     identityToken: string;
     fullName?: AppleAuthentication.AppleAuthenticationFullName | null | undefined;
@@ -401,6 +405,7 @@ export function useAppleAuth() {
     userInfo,
     loading,
     error,
-    clearError
+    clearError,
+    resetLoading
   };
 } 

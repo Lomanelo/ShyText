@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, ImageBackground, Platform, ViewStyle, TextStyle, TextInput, Modal, Linking, TouchableWithoutFeedback } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, ImageBackground, Platform, ViewStyle, TextStyle, TextInput, Modal, Linking, TouchableWithoutFeedback, Animated } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { useGoogleAuth, useEmailAuth, useAppleAuth } from '../../src/lib/auth';
@@ -14,7 +14,7 @@ import { CryptoUtils } from '../../src/utils/CryptoUtils';
 export default function WelcomeScreen() {
   const { signInWithGoogle, loading: googleLoading, error: googleError, clearError: clearGoogleError } = useGoogleAuth();
   const { signInWithEmail, signUpWithEmail, loading: emailLoading, error: emailError, clearError: clearEmailError } = useEmailAuth();
-  const { signInWithApple, handleSignIn, loading: appleLoading, error: appleError, clearError: clearAppleError } = useAppleAuth();
+  const { signInWithApple, handleSignIn, loading: appleLoading, error: appleError, clearError: clearAppleError, resetLoading: resetAppleLoading } = useAppleAuth();
   const [initializing, setInitializing] = useState(true);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [isLoginMode, setIsLoginMode] = useState(false);
@@ -22,6 +22,12 @@ export default function WelcomeScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
+  
+  // Animation values
+  const appleButtonAnim = useRef(new Animated.Value(100)).current;
+  const googleButtonAnim = useRef(new Animated.Value(100)).current;
+  const emailButtonAnim = useRef(new Animated.Value(100)).current;
+  const termsTextAnim = useRef(new Animated.Value(100)).current;
   
   const loading = googleLoading || emailLoading || appleLoading || initializing;
   const error = googleError || emailError || appleError;
@@ -35,6 +41,39 @@ export default function WelcomeScreen() {
     
     checkAppleAuthAvailable();
   }, []);
+
+  // Animation setup
+  useEffect(() => {
+    if (!initializing) {
+      // Staggered animation for buttons
+      Animated.stagger(100, [
+        Animated.spring(appleButtonAnim, {
+          toValue: 0,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true
+        }),
+        Animated.spring(googleButtonAnim, {
+          toValue: 0,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true
+        }),
+        Animated.spring(emailButtonAnim, {
+          toValue: 0,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true
+        }),
+        Animated.spring(termsTextAnim, {
+          toValue: 0,
+          friction: 8,
+          tension: 40,
+          useNativeDriver: true
+        })
+      ]).start();
+    }
+  }, [initializing]);
 
   // Function to clear all errors
   const clearAllErrors = () => {
@@ -148,6 +187,13 @@ export default function WelcomeScreen() {
                 )}
                 
                 {Platform.OS === 'ios' && appleAuthAvailable && (
+                  <Animated.View style={{
+                    transform: [{ translateY: appleButtonAnim }],
+                    opacity: appleButtonAnim.interpolate({
+                      inputRange: [0, 100],
+                      outputRange: [1, 0]
+                    })
+                  }}>
                   <AppleAuthentication.AppleAuthenticationButton
                     buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
                     buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
@@ -179,16 +225,32 @@ export default function WelcomeScreen() {
                           });
                         } else {
                           console.error('No identity token received from Apple');
+                          resetAppleLoading();
                         }
                       } catch (e: any) {
                         if (e.code !== 'ERR_CANCELED') {
                           console.error('Apple sign in error:', e);
+                        } else {
+                          console.log('Apple sign in was cancelled by user');
                         }
+                        // Make sure to reset loading state when cancelled or on error
+                        resetAppleLoading();
+                      } finally {
+                        // Ensure loading state is reset in all cases
+                        resetAppleLoading();
                       }
                     }}
                   />
+                  </Animated.View>
                 )}
                 
+                <Animated.View style={{
+                  transform: [{ translateY: googleButtonAnim }],
+                  opacity: googleButtonAnim.interpolate({
+                    inputRange: [0, 100],
+                    outputRange: [1, 0]
+                  })
+                }}>
                 <TouchableOpacity
                   style={[styles.googleButton, (loading || isExpoGo) && styles.buttonDisabled]}
                     onPress={() => {
@@ -205,7 +267,15 @@ export default function WelcomeScreen() {
                     </View>
                   )}
                 </TouchableOpacity>
+                </Animated.View>
 
+                <Animated.View style={{
+                  transform: [{ translateY: emailButtonAnim }],
+                  opacity: emailButtonAnim.interpolate({
+                    inputRange: [0, 100],
+                    outputRange: [1, 0]
+                  })
+                }}>
                 <TouchableOpacity
                   style={[styles.emailButton, loading && styles.buttonDisabled]}
                     onPress={() => {
@@ -218,31 +288,24 @@ export default function WelcomeScreen() {
                     <Text style={styles.emailButtonText}>Sign in with Username</Text>
                   </View>
                 </TouchableOpacity>
+                </Animated.View>
 
               {!showEmailModal && error && <Text style={styles.errorText}>{error}</Text>}
 
-              <View style={styles.legalLinksContainer}>
-                <TouchableOpacity
-                  style={styles.legalButton}
-                  onPress={openTerms}>
-                  <Ionicons name="document-text-outline" size={16} color={colors.text.primary} />
-                  <Text style={styles.legalButtonText}>Terms of Service</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.legalButton}
-                  onPress={openPrivacy}>
-                  <Ionicons name="shield-outline" size={16} color={colors.text.primary} />
-                  <Text style={styles.legalButtonText}>Privacy Policy</Text>
-                </TouchableOpacity>
-              </View>
-
-            <Text style={styles.terms}>
-              By continuing, you agree to our{' '}
-              <Text style={styles.link} onPress={openTerms}>Terms of Service</Text>
-              {' '}and{' '}
-              <Text style={styles.link} onPress={openPrivacy}>Privacy Policy</Text>
-            </Text>
+              <Animated.View style={{
+                transform: [{ translateY: termsTextAnim }],
+                opacity: termsTextAnim.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: [1, 0]
+                })
+              }}>
+              <Text style={styles.terms}>
+                By continuing, you agree to our{' '}
+                <Text style={styles.link} onPress={openTerms}>Terms of Service</Text>
+                {' '}and{' '}
+                <Text style={styles.link} onPress={openPrivacy}>Privacy Policy</Text>
+              </Text>
+              </Animated.View>
           </View>
 
           <Modal
@@ -379,9 +442,6 @@ type Styles = {
   switchModeButton: ViewStyle;
   switchModeText: TextStyle;
   modalErrorText: TextStyle;
-  legalLinksContainer: ViewStyle;
-  legalButton: ViewStyle;
-  legalButtonText: TextStyle;
   appleButton: ViewStyle;
 };
 
@@ -600,26 +660,6 @@ const styles = StyleSheet.create<Styles>({
     backgroundColor: 'rgba(255, 59, 48, 0.1)',
     borderRadius: borderRadius.md,
     width: '100%',
-  },
-  legalLinksContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: spacing.lg,
-    width: '100%',
-  },
-  legalButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: borderRadius.lg,
-  },
-  legalButtonText: {
-    color: colors.text.light,
-    fontSize: typography.fontSize.sm,
-    marginLeft: spacing.xs,
-    fontWeight: '500',
   },
   appleButton: {
     width: '100%',
