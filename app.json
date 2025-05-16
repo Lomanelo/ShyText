@@ -24,9 +24,9 @@
             ]
           }
         ],
-        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to find nearby users",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to find nearby users even when in background",
-        "NSLocationAlwaysUsageDescription": "This app needs access to your location to find nearby users even when in background",
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to find nearby users. Your location data will be uploaded to our servers to enable this functionality.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to find nearby users even when in background. Your location data will be uploaded to our servers to enable this functionality.",
+        "NSLocationAlwaysUsageDescription": "This app needs access to your location to find nearby users even when in background. Your location data will be uploaded to our servers to enable this functionality.",
         "NSLocalNetworkUsageDescription": "This app uses nearby connections to discover and connect with other devices",
         "NSBonjourServices": ["_nearby._tcp"],
         "NSBluetoothAlwaysUsageDescription": "This app uses Bluetooth to discover and connect with nearby devices",
@@ -150,6 +150,8 @@
       "iosDisplayInForeground": true,
       "androidMode": "default",
       "androidCollapsedTitle": "ShyText"
-    }
+    },
+    "privacy": "public",
+    "privacyPolicyUrl": "https://www.yourwebsite.com/privacy-policy"
   }
 }

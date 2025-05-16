@@ -89,7 +89,7 @@ export default function WelcomeScreen() {
   };
 
   const openTerms = () => {
-    Linking.openURL('https://shytext.com');
+    Linking.openURL('https://shytext.com/terms');
   };
 
   const openPrivacy = () => {
@@ -110,112 +110,130 @@ export default function WelcomeScreen() {
 
   return (
     <TouchableWithoutFeedback onPress={clearAllErrors}>
-      <ImageBackground source={require('../../assets/images/bgimage.png')} style={styles.backgroundImage}>
-        <LinearGradient
-          colors={['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.7)']}
-          style={styles.overlay}
-        >
-          <View style={styles.container}>
-            <View style={styles.content}>
-              <Text style={styles.title}>ShyText</Text>
-              <Text style={styles.subtitle}>
-                Break the <Text style={{ fontWeight: '700' }}>ice</Text>,{'\n'}
-                not the <Text style={{ fontWeight: '700' }}>silence</Text>.
-              </Text>
-            </View>
+    <ImageBackground source={require('../../assets/images/bgimage.png')} style={styles.backgroundImage}>
+      <LinearGradient
+        colors={['rgba(0,0,0,0.4)', 'rgba(0,0,0,0.7)']}
+        style={styles.overlay}
+      >
+        <View style={styles.container}>
+          <View style={styles.content}>
+            <Text style={styles.title}>ShyText</Text>
+            <Text style={styles.subtitle}>
+              Break the <Text style={{ fontWeight: '700' }}>ice</Text>,{'\n'}
+              not the <Text style={{ fontWeight: '700' }}>silence</Text>.
+            </Text>
+          </View>
 
-            <View style={styles.footer}>
-                  {isExpoGo && (
-                    <Text style={styles.expoGoNotice}>
-                      Note: Google authentication doesn't work in Expo Go.{'\n'}
-                  Please build a development build to test authentication.
-                    </Text>
-                  )}
-                  
-                  <TouchableOpacity
-                    style={[styles.googleButton, (loading || isExpoGo) && styles.buttonDisabled]}
+          <View style={styles.footer}>
+                {isExpoGo && (
+                  <Text style={styles.expoGoNotice}>
+                    Note: Google authentication doesn't work in Expo Go.{'\n'}
+                Please build a development build to test authentication.
+                  </Text>
+                )}
+                
+                <TouchableOpacity
+                  style={[styles.googleButton, (loading || isExpoGo) && styles.buttonDisabled]}
                     onPress={() => {
                       clearAllErrors();
                       signInWithGoogle();
                     }}
-                    disabled={loading || isExpoGo}>
-                    {googleLoading ? (
-                  <ActivityIndicator color={colors.text.primary} />
-                    ) : (
-                      <View style={styles.googleButtonContent}>
-                    <AntDesign name="google" size={20} color={colors.text.primary} />
-                        <Text style={styles.googleButtonText}>Continue with Google</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
+                  disabled={loading || isExpoGo}>
+                  {googleLoading ? (
+                <ActivityIndicator color={colors.text.primary} />
+                  ) : (
+                    <View style={styles.googleButtonContent}>
+                  <AntDesign name="google" size={20} color={colors.text.primary} />
+                      <Text style={styles.googleButtonText}>Continue with Google</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={[styles.emailButton, loading && styles.buttonDisabled]}
+                <TouchableOpacity
+                  style={[styles.emailButton, loading && styles.buttonDisabled]}
                     onPress={() => {
                       clearAllErrors();
                       setShowEmailModal(true);
                     }}
-                    disabled={loading}>
-                    <View style={styles.emailButtonContent}>
-                      <Ionicons name="person-outline" size={20} color={colors.text.primary} />
-                      <Text style={styles.emailButtonText}>Sign in with Username</Text>
-                    </View>
-                  </TouchableOpacity>
+                  disabled={loading}>
+                  <View style={styles.emailButtonContent}>
+                    <Ionicons name="person-outline" size={20} color={colors.text.primary} />
+                    <Text style={styles.emailButtonText}>Sign in with Username</Text>
+                  </View>
+                </TouchableOpacity>
 
               {!showEmailModal && error && <Text style={styles.errorText}>{error}</Text>}
 
-              <Text style={styles.terms}>
-                By continuing, you agree to our{' '}
-                <Text style={styles.link} onPress={openTerms}>Terms of Service</Text>
-              </Text>
-            </View>
+              <View style={styles.legalLinksContainer}>
+                <TouchableOpacity
+                  style={styles.legalButton}
+                  onPress={openTerms}>
+                  <Ionicons name="document-text-outline" size={16} color={colors.text.primary} />
+                  <Text style={styles.legalButtonText}>Terms of Service</Text>
+                </TouchableOpacity>
 
-            <Modal
-              visible={showEmailModal}
-              transparent
-              animationType="slide"
-              onRequestClose={resetForm}
-            >
+                <TouchableOpacity
+                  style={styles.legalButton}
+                  onPress={openPrivacy}>
+                  <Ionicons name="shield-outline" size={16} color={colors.text.primary} />
+                  <Text style={styles.legalButtonText}>Privacy Policy</Text>
+                </TouchableOpacity>
+              </View>
+
+            <Text style={styles.terms}>
+              By continuing, you agree to our{' '}
+              <Text style={styles.link} onPress={openTerms}>Terms of Service</Text>
+              {' '}and{' '}
+              <Text style={styles.link} onPress={openPrivacy}>Privacy Policy</Text>
+            </Text>
+          </View>
+
+          <Modal
+            visible={showEmailModal}
+            transparent
+            animationType="slide"
+            onRequestClose={resetForm}
+          >
               <TouchableWithoutFeedback onPress={clearAllErrors}>
-                <View style={styles.modalOverlay}>
+            <View style={styles.modalOverlay}>
                   <TouchableWithoutFeedback>
-                    <View style={styles.modalContent}>
-                      <Text style={styles.modalTitle}>
-                        {isLoginMode ? 'Sign in with Username' : 'Create Account'}
-                      </Text>
-                      
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Username"
-                        placeholderTextColor={colors.text.secondary}
-                        value={username}
-                        onChangeText={setUsername}
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>
+                  {isLoginMode ? 'Sign in with Username' : 'Create Account'}
+                </Text>
+                
+                <TextInput
+                  style={styles.input}
+                  placeholder="Username"
+                  placeholderTextColor={colors.text.secondary}
+                  value={username}
+                  onChangeText={setUsername}
                         onFocus={handleInputFocus}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                      />
-                      
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Password"
-                        placeholderTextColor={colors.text.secondary}
-                        value={password}
-                        onChangeText={setPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                
+                <TextInput
+                  style={styles.input}
+                  placeholder="Password"
+                  placeholderTextColor={colors.text.secondary}
+                  value={password}
+                  onChangeText={setPassword}
                         onFocus={handleInputFocus}
-                        secureTextEntry
-                      />
+                  secureTextEntry
+                />
 
-                      {!isLoginMode && (
-                        <TextInput
-                          style={styles.input}
-                          placeholder="Confirm Password"
-                          placeholderTextColor={colors.text.secondary}
-                          value={confirmPassword}
-                          onChangeText={setConfirmPassword}
+                {!isLoginMode && (
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Confirm Password"
+                    placeholderTextColor={colors.text.secondary}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
                           onFocus={handleInputFocus}
-                          secureTextEntry
-                        />
-                      )}
+                    secureTextEntry
+                  />
+                )}
 
                       {error && <Text style={styles.modalErrorText}>{error}</Text>}
                       
@@ -223,51 +241,51 @@ export default function WelcomeScreen() {
                         <Text style={styles.modalErrorText}>Passwords do not match</Text>
                       )}
 
-                      <TouchableOpacity
-                        style={[styles.loginButton, loading && styles.buttonDisabled]}
+                <TouchableOpacity
+                  style={[styles.loginButton, loading && styles.buttonDisabled]}
                         onPress={() => {
                           clearAllErrors();
                           handleEmailSubmit();
                         }}
-                        disabled={loading}>
-                        {emailLoading ? (
-                          <ActivityIndicator color={colors.text.primary} />
-                        ) : (
-                          <Text style={styles.loginButtonText}>
-                            {isLoginMode ? 'Sign In' : 'Create Account'}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
+                  disabled={loading}>
+                  {emailLoading ? (
+                    <ActivityIndicator color={colors.text.primary} />
+                  ) : (
+                    <Text style={styles.loginButtonText}>
+                      {isLoginMode ? 'Sign In' : 'Create Account'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={styles.switchModeButton}
-                        onPress={() => {
+                <TouchableOpacity
+                  style={styles.switchModeButton}
+                  onPress={() => {
                           clearAllErrors();
-                          setIsLoginMode(!isLoginMode);
-                          setPassword('');
-                          setConfirmPassword('');
-                        }}>
-                        <Text style={styles.switchModeText}>
-                          {isLoginMode ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-                        </Text>
-                      </TouchableOpacity>
+                    setIsLoginMode(!isLoginMode);
+                    setPassword('');
+                    setConfirmPassword('');
+                  }}>
+                  <Text style={styles.switchModeText}>
+                    {isLoginMode ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+                  </Text>
+                </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={styles.cancelButton}
+                <TouchableOpacity
+                  style={styles.cancelButton}
                         onPress={() => {
                           clearAllErrors();
                           resetForm();
                         }}>
-                        <Text style={styles.cancelButtonText}>Cancel</Text>
-                      </TouchableOpacity>
-                    </View>
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
                   </TouchableWithoutFeedback>
-                </View>
+            </View>
               </TouchableWithoutFeedback>
-            </Modal>
-          </View>
-        </LinearGradient>
-      </ImageBackground>
+          </Modal>
+        </View>
+      </LinearGradient>
+    </ImageBackground>
     </TouchableWithoutFeedback>
   );
 }
@@ -304,6 +322,9 @@ type Styles = {
   switchModeButton: ViewStyle;
   switchModeText: TextStyle;
   modalErrorText: TextStyle;
+  legalLinksContainer: ViewStyle;
+  legalButton: ViewStyle;
+  legalButtonText: TextStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -521,5 +542,25 @@ const styles = StyleSheet.create<Styles>({
     backgroundColor: 'rgba(255, 59, 48, 0.1)',
     borderRadius: borderRadius.md,
     width: '100%',
+  },
+  legalLinksContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: spacing.lg,
+    width: '100%',
+  },
+  legalButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: borderRadius.lg,
+  },
+  legalButtonText: {
+    color: colors.text.light,
+    fontSize: typography.fontSize.sm,
+    marginLeft: spacing.xs,
+    fontWeight: '500',
   },
 });

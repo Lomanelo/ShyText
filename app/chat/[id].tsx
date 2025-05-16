@@ -540,13 +540,13 @@ export default function ChatScreen() {
       
       const isFirstMessage = !messagesSnapshot.exists() || 
         Object.keys(messagesSnapshot.val()).length <= 1;
-        
+      
       let hasReceiverResponded = false;
       
       if (currentConversation.firstSenderId === currentUser.uid && messagesSnapshot.exists()) {
         hasReceiverResponded = Object.values(messagesSnapshot.val()).some((msg: any) => 
-          msg.senderId !== currentUser.uid
-        );
+            msg.senderId !== currentUser.uid
+          );
       }
       
       const updatedConversation = {
@@ -604,10 +604,10 @@ export default function ChatScreen() {
         <View style={styles.headerProfile}>
           {otherUser?.photoURL ? (
             <TouchableOpacity onPress={() => setImagePreviewVisible(true)}>
-              <Image 
-                source={{ uri: otherUser.photoURL }} 
-                style={styles.headerAvatar} 
-              />
+            <Image 
+              source={{ uri: otherUser.photoURL }} 
+              style={styles.headerAvatar} 
+            />
             </TouchableOpacity>
           ) : (
             <View style={styles.headerAvatarPlaceholder}>
@@ -641,12 +641,12 @@ export default function ChatScreen() {
         renderItem={({ item }) => (
           <View
             style={[
-              styles.messageContainer,
-              item.senderId === auth.currentUser?.uid ? 
-                styles.sentMessage : 
+            styles.messageContainer,
+            item.senderId === auth.currentUser?.uid ? 
+              styles.sentMessage : 
                 styles.receivedMessage,
               item.sendFailed && styles.failedMessage
-            ]}>
+          ]}>
             <Text style={[
               styles.messageText,
               { color: item.senderId === auth.currentUser?.uid ? colors.text.light : colors.text.primary }

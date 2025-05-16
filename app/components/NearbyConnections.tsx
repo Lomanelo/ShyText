@@ -76,10 +76,10 @@ const ProfileCard = ({ profile, onSendMessage }: { profile: ProfileData, onSendM
     <View style={styles.profileCard}>
       <View style={styles.profileContent}>
         <TouchableOpacity onPress={() => setImageModalVisible(true)}>
-          <Image 
-            source={profile.photoURL ? { uri: profile.photoURL } : require('../../assets/images/icon.png')} 
-            style={styles.profileImage} 
-          />
+        <Image 
+          source={profile.photoURL ? { uri: profile.photoURL } : require('../../assets/images/icon.png')} 
+          style={styles.profileImage} 
+        />
         </TouchableOpacity>
         <View style={styles.profileInfo}>
           <Text style={styles.profileName}>{profile.name}</Text>
