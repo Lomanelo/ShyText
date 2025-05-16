@@ -14,6 +14,7 @@
       "bundleIdentifier": "com.rahimrady.myshytext",
       "requireFullScreen": true,
       "isTabletOnly": false,
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [

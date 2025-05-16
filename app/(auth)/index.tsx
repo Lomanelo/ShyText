@@ -2,30 +2,45 @@ import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator, ImageBackground, Platform, ViewStyle, TextStyle, TextInput, Modal, Linking, TouchableWithoutFeedback } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { AntDesign, Ionicons } from '@expo/vector-icons';
-import { useGoogleAuth, useEmailAuth } from '../../src/lib/auth';
+import { useGoogleAuth, useEmailAuth, useAppleAuth } from '../../src/lib/auth';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, checkUserProfileExists } from '../../src/lib/firebase';
 import { colors, typography, spacing, borderRadius, shadows } from '../../src/styles/theme';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import { CryptoUtils } from '../../src/utils/CryptoUtils';
 
 export default function WelcomeScreen() {
   const { signInWithGoogle, loading: googleLoading, error: googleError, clearError: clearGoogleError } = useGoogleAuth();
   const { signInWithEmail, signUpWithEmail, loading: emailLoading, error: emailError, clearError: clearEmailError } = useEmailAuth();
+  const { signInWithApple, handleSignIn, loading: appleLoading, error: appleError, clearError: clearAppleError } = useAppleAuth();
   const [initializing, setInitializing] = useState(true);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [isLoginMode, setIsLoginMode] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [appleAuthAvailable, setAppleAuthAvailable] = useState(false);
   
-  const loading = googleLoading || emailLoading || initializing;
-  const error = googleError || emailError;
+  const loading = googleLoading || emailLoading || appleLoading || initializing;
+  const error = googleError || emailError || appleError;
+
+  // Check if Apple Authentication is available on this device
+  useEffect(() => {
+    const checkAppleAuthAvailable = async () => {
+      const isAvailable = await AppleAuthentication.isAvailableAsync();
+      setAppleAuthAvailable(isAvailable);
+    };
+    
+    checkAppleAuthAvailable();
+  }, []);
 
   // Function to clear all errors
   const clearAllErrors = () => {
     clearGoogleError && clearGoogleError();
     clearEmailError && clearEmailError();
+    clearAppleError && clearAppleError();
   };
   
   // Clear errors when input fields are focused
@@ -130,6 +145,48 @@ export default function WelcomeScreen() {
                     Note: Google authentication doesn't work in Expo Go.{'\n'}
                 Please build a development build to test authentication.
                   </Text>
+                )}
+                
+                {Platform.OS === 'ios' && appleAuthAvailable && (
+                  <AppleAuthentication.AppleAuthenticationButton
+                    buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                    buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                    cornerRadius={borderRadius.pill / 2}
+                    style={styles.appleButton}
+                    onPress={async () => {
+                      try {
+                        clearAllErrors();
+                        const { nonce } = await signInWithApple();
+                        console.log("Got nonce for Apple Sign In:", nonce);
+                        
+                        // SHA256 hash the nonce for Apple Sign In
+                        const hashedNonce = await CryptoUtils.sha256(nonce || '');
+                        console.log("Hashed nonce for Apple Sign In:", hashedNonce);
+                        
+                        const credential = await AppleAuthentication.signInAsync({
+                          requestedScopes: [
+                            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+                            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+                          ],
+                          nonce: hashedNonce,
+                        });
+                        
+                        if (credential.identityToken) {
+                          console.log("Got identity token from Apple, sending to Firebase with original nonce");
+                          await handleSignIn({
+                            identityToken: credential.identityToken,
+                            fullName: credential.fullName || undefined
+                          });
+                        } else {
+                          console.error('No identity token received from Apple');
+                        }
+                      } catch (e: any) {
+                        if (e.code !== 'ERR_CANCELED') {
+                          console.error('Apple sign in error:', e);
+                        }
+                      }
+                    }}
+                  />
                 )}
                 
                 <TouchableOpacity
@@ -325,6 +382,7 @@ type Styles = {
   legalLinksContainer: ViewStyle;
   legalButton: ViewStyle;
   legalButtonText: TextStyle;
+  appleButton: ViewStyle;
 };
 
 const styles = StyleSheet.create<Styles>({
@@ -562,5 +620,15 @@ const styles = StyleSheet.create<Styles>({
     fontSize: typography.fontSize.sm,
     marginLeft: spacing.xs,
     fontWeight: '500',
+  },
+  appleButton: {
+    width: '100%',
+    height: 56,
+    borderRadius: borderRadius.pill,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    ...shadows.medium,
   },
 });

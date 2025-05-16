@@ -52,6 +52,21 @@ export default function ProfileScreen() {
             if (user.photoURL) {
               setProfileImage(user.photoURL);
             }
+          } else {
+            // Check if we have Apple name data stored in AsyncStorage
+            try {
+              const appleNameJson = await AsyncStorage.getItem('appleFullName');
+              if (appleNameJson) {
+                const appleName = JSON.parse(appleNameJson);
+                if (appleName.givenName) {
+                  setFirstName(appleName.givenName);
+                  // Clear the stored data after using it
+                  await AsyncStorage.removeItem('appleFullName');
+                }
+              }
+            } catch (appleNameError) {
+              console.error('Error fetching Apple name data:', appleNameError);
+            }
           }
         } catch (profileError) {
           console.error('Error fetching profile:', profileError);

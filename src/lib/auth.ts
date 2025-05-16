@@ -6,8 +6,11 @@ import { Platform, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { User, createUserWithEmailAndPassword, signInWithEmailAndPassword } from '@firebase/auth';
 import Constants from 'expo-constants';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
-import { auth, checkUserProfileExists, signInWithGoogleCredential } from './firebase';
+import { auth, checkUserProfileExists, signInWithGoogleCredential, signInWithAppleCredential } from './firebase';
+import { CryptoUtils } from '../utils/CryptoUtils';
 
 // Register web browser for redirect login flow
 WebBrowser.maybeCompleteAuthSession();
@@ -151,6 +154,10 @@ export function useGoogleAuth() {
     }
   };
 
+  const clearError = () => {
+    setError(null);
+  };
+
   const signInWithGoogle = async () => {
     try {
       setLoading(true);
@@ -181,6 +188,7 @@ export function useGoogleAuth() {
     loading,
     error,
     request,
+    clearError
   };
 }
 
@@ -203,6 +211,10 @@ export function useEmailAuth() {
     }
     // Convert username to email format by appending domain
     return `${input}@shytext.com`;
+  };
+
+  const clearError = () => {
+    setError(null);
   };
 
   // Email/Password Sign In
@@ -283,6 +295,112 @@ export function useEmailAuth() {
     signUpWithEmail,
     userInfo,
     loading,
-    error
+    error,
+    clearError
+  };
+}
+
+// Hook for Apple authentication
+export function useAppleAuth() {
+  const [userInfo, setUserInfo] = useState<User | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [nonce, setNonce] = useState<string | null>(null);
+
+  // We need to keep track of the current nonce to verify when signing in
+  useEffect(() => {
+    // Generate a fresh nonce on component mount
+    const generateFreshNonce = async () => {
+      const newNonce = CryptoUtils.randomNonceString();
+      setNonce(newNonce);
+      console.log('Generated fresh nonce:', newNonce);
+    };
+    
+    generateFreshNonce();
+  }, []);
+
+  const clearError = () => {
+    setError(null);
+  };
+
+  const handleSignIn = async (credential: {
+    identityToken: string;
+    fullName?: AppleAuthentication.AppleAuthenticationFullName | null | undefined;
+  }) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (!credential.identityToken || !nonce) {
+        setError("Sign-in failed. Please try again.");
+        return;
+      }
+
+      console.log('Signing in with Apple credential, using nonce:', nonce);
+      
+      // Sign in with Firebase using the Apple identity token and original nonce
+      const userCredential = await signInWithAppleCredential(credential.identityToken, nonce);
+      const user = userCredential.user;
+      
+      setUserInfo(user);
+      
+      // Check if user profile already exists
+      const profileExists = await checkUserProfileExists(user.uid);
+      
+      // If we have a name from Apple and no profile, save it for later use
+      if (credential.fullName && !profileExists) {
+        await AsyncStorage.setItem('appleFullName', JSON.stringify({
+          givenName: credential.fullName.givenName || '',
+          familyName: credential.fullName.familyName || ''
+        }));
+      }
+      
+      // Navigate to the profile completion screen or main app based on profile existence
+      if (profileExists) {
+        console.log("User profile exists, redirecting to main app");
+        router.replace('/(tabs)');
+      } else {
+        console.log("User profile does not exist, redirecting to profile completion");
+        router.replace('/(auth)/profile');
+      }
+    } catch (e) {
+      console.error("Apple sign-in error:", e);
+      setError(getFirebaseErrorMessage(e));
+    } finally {
+      setLoading(false);
+      // Generate a new nonce for next login attempt
+      const newNonce = CryptoUtils.randomNonceString();
+      setNonce(newNonce);
+      console.log('Generated new nonce after sign-in attempt:', newNonce);
+    }
+  };
+
+  const signInWithApple = async () => {
+    try {
+      setLoading(true);
+      
+      if (!nonce) {
+        const freshNonce = CryptoUtils.randomNonceString();
+        setNonce(freshNonce);
+        console.log('Generated nonce for sign-in:', freshNonce);
+        return { nonce: freshNonce };
+      }
+      
+      console.log('Using existing nonce for sign-in:', nonce);
+      return { nonce };
+    } catch (error) {
+      console.error('Error preparing for Apple sign-in:', error);
+      setLoading(false);
+      throw error;
+    }
+  };
+
+  return {
+    signInWithApple,
+    handleSignIn,
+    userInfo,
+    loading,
+    error,
+    clearError
   };
 } 

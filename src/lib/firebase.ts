@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getDatabase, ref, get, set } from 'firebase/database';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { Alert, Platform } from 'react-native';
-import { GoogleAuthProvider, signInWithCredential, onAuthStateChanged } from 'firebase/auth';
+import { GoogleAuthProvider, OAuthProvider, signInWithCredential, onAuthStateChanged } from 'firebase/auth';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 // Firebase configuration
@@ -58,6 +58,16 @@ export const checkUserProfileExists = async (userId: string) => {
 // Google Auth utility
 export const signInWithGoogleCredential = async (idToken: string) => {
   const credential = GoogleAuthProvider.credential(idToken);
+  return await signInWithCredential(auth, credential);
+};
+
+// Apple Auth utility
+export const signInWithAppleCredential = async (identityToken: string, nonce: string) => {
+  const provider = new OAuthProvider('apple.com');
+  const credential = provider.credential({
+    idToken: identityToken,
+    rawNonce: nonce,
+  });
   return await signInWithCredential(auth, credential);
 };
 
