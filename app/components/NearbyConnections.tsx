@@ -795,22 +795,12 @@ export default function NearbyConnectionsComponent() {
         const locationPerm = await Location.requestForegroundPermissionsAsync();
         if (locationPerm.status !== 'granted') {
           Alert.alert(
-            'Permission Required',
-            'Location permission is required for finding nearby users. Please enable this in your device settings.',
+            'Location Permission',
+            'Location permission is required to discover nearby users. Without this permission, you can still access your chats and profile.',
             [
               {
-                text: 'Open Settings',
-                onPress: () => {
-                  if (Platform.OS === 'ios') {
-                    Linking.openURL('app-settings:');
-                  } else {
-                    Linking.openSettings();
-                  }
-                }
-              },
-              {
-                text: 'Cancel',
-                style: 'cancel'
+                text: 'OK',
+                style: 'default'
               }
             ]
           );
@@ -849,16 +839,12 @@ export default function NearbyConnectionsComponent() {
               granted['android.permission.ACCESS_COARSE_LOCATION'] !== 'granted'
             ) {
               Alert.alert(
-                'Permission Required',
-                'Location permissions are required for finding nearby users. Please enable this in your device settings.',
+                'Location Permission',
+                'Location permissions are required to discover nearby users. Without this permission, you can still access your chats and profile.',
                 [
                   {
-                    text: 'Open Settings',
-                    onPress: () => Linking.openSettings()
-                  },
-                  {
-                    text: 'Cancel',
-                    style: 'cancel'
+                    text: 'OK',
+                    style: 'default'
                   }
                 ]
               );
@@ -953,18 +939,43 @@ export default function NearbyConnectionsComponent() {
     );
   }
   
-  // Show permissions screen if permissions are not granted
+  // Show better permissions screen if permissions are not granted
   if (!permissionsGranted) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorTitle}>Permissions Required</Text>
-        <Text style={styles.errorText}>
-          Location permissions are required for the nearby connections feature.
-        </Text>
-        <Text style={styles.errorDetail}>
-          Please grant location permissions to use this feature.
-        </Text>
-      </View>
+      <LinearGradient
+        colors={['#f9f1e7', '#f9f1e7']}
+        style={styles.container}
+      >
+        <View style={styles.permissionContainer}>
+          <Ionicons name="location-outline" size={60} color="#222" style={styles.permissionIcon} />
+          <Text style={styles.permissionTitle}>Location Permission Needed</Text>
+          <Text style={styles.permissionText}>
+            The Discover feature requires location permission to find nearby users.
+          </Text>
+          <Text style={styles.permissionDetail}>
+            You can still access your chats and profile through the tabs below.
+          </Text>
+          <Text style={styles.permissionDetail}>
+            Grant location permission to start discovering people around you.
+          </Text>
+          
+          <TouchableOpacity 
+            style={styles.settingsButton}
+            onPress={() => {
+              if (Platform.OS === 'ios') {
+                Linking.openURL('app-settings:');
+              } else {
+                Linking.openSettings();
+              }
+            }}
+          >
+            <View style={{flexDirection: 'row', alignItems: 'center'}}>
+              <Ionicons name="settings-outline" size={18} color="#fff" style={{marginRight: 8}} />
+              <Text style={styles.settingsButtonText}>Open Settings</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      </LinearGradient>
     );
   }
 
@@ -1161,5 +1172,48 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 16,
     fontWeight: '500',
+  },
+  permissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  permissionIcon: {
+    marginBottom: 20,
+  },
+  permissionTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#222',
+    marginBottom: 16,
+  },
+  permissionText: {
+    color: '#666',
+    fontSize: 16,
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  permissionDetail: {
+    color: '#888',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  settingsButton: {
+    backgroundColor: '#222',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 25,
+    marginTop: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  settingsButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 }); 
