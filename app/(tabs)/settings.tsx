@@ -356,59 +356,51 @@ export default function SettingsScreen() {
                         return;
                       }
 
-                      // Get user's email and password for reauthentication
-                      Alert.prompt(
-                        'Confirm Password',
-                        'Please enter your password to delete your account',
-                        [
-                          {
-                            text: 'Cancel',
-                            style: 'cancel'
-                          },
-                          {
-                            text: 'Delete',
-                            style: 'destructive',
-                            onPress: async (password) => {
-                              if (!password) {
-                                Alert.alert('Error', 'Password is required to delete account');
-                                return;
-                              }
-
-                              try {
-                                // Reauthenticate user
-                                const credential = EmailAuthProvider.credential(user.email!, password);
-                                await reauthenticateWithCredential(user, credential);
-
-                                // Delete user data from database
-                                const userProfileRef = ref(database, `profiles/${user.uid}`);
-                                await remove(userProfileRef);
-
-                                // Delete user account
-                                await user.delete();
-
-                                // Clear local storage
-                                await AsyncStorage.multiRemove([
-                                  'userProfile',
-                                  'userHasProfile',
-                                  'lastKnownLocation',
-                                  'userPreferences'
-                                ]);
-
-                                // Navigate to auth screen
-                                router.replace('/(auth)');
-                              } catch (error: any) {
-                                console.error('Error during account deletion:', error);
-                                if (error.code === 'auth/wrong-password') {
-                                  Alert.alert('Error', 'Incorrect password. Please try again.');
-                                } else {
-                                  Alert.alert('Error', 'Failed to delete account. Please try again later.');
-                                }
-                              }
+                      // Delete without password confirmation
+                      try {
+                        // Delete user data from database first
+                        const userProfileRef = ref(database, `profiles/${user.uid}`);
+                        await remove(userProfileRef);
+                        
+                        // Clear local storage
+                        await AsyncStorage.multiRemove([
+                          'userProfile',
+                          'userHasProfile',
+                          'lastKnownLocation',
+                          'userPreferences'
+                        ]);
+                        
+                        // Delete the user account
+                        await user.delete()
+                          .then(() => {
+                            console.log('User account deleted successfully');
+                            // Navigate to auth screen
+                            router.replace('/(auth)');
+                          })
+                          .catch((error: any) => {
+                            console.error('Error deleting user account:', error);
+                            
+                            // Check if this is a credential error (user needs to re-authenticate)
+                            if (error.code === 'auth/requires-recent-login') {
+                              Alert.alert(
+                                'Session Expired',
+                                'For security reasons, please sign out and sign in again before deleting your account.',
+                                [
+                                  {
+                                    text: 'OK',
+                                    onPress: handleSignOut
+                                  }
+                                ]
+                              );
+                            } else {
+                              Alert.alert('Error', 'Failed to delete account. Please try again later.');
                             }
-                          }
-                        ],
-                        'secure-text'
-                      );
+                          });
+                          
+                      } catch (error: any) {
+                        console.error('Error during account deletion:', error);
+                        Alert.alert('Error', 'Failed to delete account. Please try again later.');
+                      }
                     } catch (error) {
                       console.error('Error deleting account:', error);
                       Alert.alert('Error', 'Failed to delete account. Please try again later.');

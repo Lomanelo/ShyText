@@ -9,7 +9,8 @@ import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
 
-import { auth, checkUserProfileExists, signInWithGoogleCredential, signInWithAppleCredential } from './firebase';
+import { auth, checkUserProfileExists, signInWithGoogleCredential, signInWithAppleCredential, database } from './firebase';
+import { ref, set } from 'firebase/database';
 import { CryptoUtils } from '../utils/CryptoUtils';
 
 // Register web browser for redirect login flow
@@ -341,34 +342,82 @@ export function useAppleAuth() {
       }
 
       console.log('Signing in with Apple credential, using nonce:', nonce);
+      console.log('Received Apple name data:', credential.fullName);
       
       // Sign in with Firebase using the Apple identity token and original nonce
       const userCredential = await signInWithAppleCredential(credential.identityToken, nonce);
       const user = userCredential.user;
+      console.log('Firebase signed in user:', user.uid, user.email);
       
       setUserInfo(user);
       
       // Check if user profile already exists
       const profileExists = await checkUserProfileExists(user.uid);
+      console.log('Profile exists:', profileExists);
       
-      // If we have a name from Apple and no profile, save it for later use
-      if (credential.fullName && !profileExists) {
-        await AsyncStorage.setItem('appleFullName', JSON.stringify({
-          givenName: credential.fullName.givenName || '',
-          familyName: credential.fullName.familyName || ''
-        }));
-      }
-      
-      // Navigate to the profile completion screen or main app based on profile existence
+      // If profile exists, go directly to main app
       if (profileExists) {
         console.log("User profile exists, redirecting to main app");
         router.replace('/(tabs)');
+        return;
+      }
+      
+      // For new accounts, create profile immediately with Apple data
+      if (credential.fullName) {
+        const nameData = {
+          givenName: credential.fullName.givenName || '',
+          familyName: credential.fullName.familyName || ''
+        };
+        
+        console.log('Creating profile directly with Apple data:', nameData);
+        
+        try {
+          // Use name from Apple data
+          const firstName = nameData.givenName || nameData.familyName || 'User';
+          
+          // Create user profile immediately
+          const userData = {
+            firstName: firstName.trim(),
+            email: user.email,
+            photoURL: user.photoURL || null,
+            createdAt: new Date().toISOString(),
+            lastLogin: new Date().toISOString()
+          };
+          
+          console.log('Profile data to save:', userData);
+          
+          // Save profile to Firebase Realtime Database
+          const userRef = ref(database, 'profiles/' + user.uid);
+          await set(userRef, userData);
+          console.log('*** PROFILE CREATED SUCCESSFULLY FOR APPLE USER ***');
+          
+          // Cache the profile locally as well
+          await AsyncStorage.setItem('userProfile', JSON.stringify(userData));
+          console.log('Profile cached locally');
+          
+          // Go directly to main app
+          console.log("Profile created for Apple user, redirecting to main app");
+          router.replace('/(tabs)');
+          return;
+        } catch (error) {
+          console.error('Error creating profile directly:', error);
+          console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
+          
+          // If direct profile creation fails, fall back to profile screen
+          // First save the Apple data
+          await AsyncStorage.setItem('appleFullName', JSON.stringify(nameData));
+          await AsyncStorage.setItem('isAppleSignIn', 'true');
+          
+          console.log("Failed to create profile directly, falling back to profile screen");
+          router.replace('/(auth)/profile');
+        }
       } else {
-        console.log("User profile does not exist, redirecting to profile completion");
+        console.log('No name data received from Apple, redirecting to profile screen');
         router.replace('/(auth)/profile');
       }
     } catch (e) {
       console.error("Apple sign-in error:", e);
+      console.error('Stack trace:', e instanceof Error ? e.stack : 'No stack trace');
       setError(getFirebaseErrorMessage(e));
     } finally {
       setLoading(false);

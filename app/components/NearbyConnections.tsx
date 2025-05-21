@@ -476,8 +476,13 @@ export default function NearbyConnectionsComponent() {
   const startDiscovering = async () => {
     if (!libraryReady || !permissionsGranted) return;
     try {
+      // Force P2P_CLUSTER to prioritize Bluetooth connections rather than local network
       const peerId = await NearbyConnections.startDiscovery("ShyText User", Strategy.P2P_CLUSTER);
       console.log('Started discovery with peer ID:', peerId);
+      
+      // Save peer ID for reconnection
+      await AsyncStorage.setItem('my_nearby_peer_id', peerId);
+      
       setMyPeerId(peerId);
       setIsDiscovering(true);
     } catch (error) {
@@ -504,8 +509,12 @@ export default function NearbyConnectionsComponent() {
       const deviceName = `ShyText_${userData.userId}`;
       
       console.log('Starting advertising with device name:', deviceName);
+      // Force P2P_CLUSTER to prioritize Bluetooth connections rather than local network
       const peerId = await NearbyConnections.startAdvertise(deviceName, Strategy.P2P_CLUSTER);
       console.log('Started advertising with peer ID:', peerId);
+      
+      // Save peer ID for reconnection
+      await AsyncStorage.setItem('my_nearby_peer_id', peerId);
       
       // Store the user info in Firebase instead
       const db = getDatabase();
@@ -537,14 +546,33 @@ export default function NearbyConnectionsComponent() {
       
   // Initialize library and start discovery/advertising
   useEffect(() => {
-    if (!libraryReady || !permissionsGranted || !userData) return;
+    if (!libraryReady || !permissionsGranted) return;
 
     const initializeConnections = async () => {
       try {
-        // Start both discovery and advertising
+        console.log('Initializing P2P connections with P2P_CLUSTER strategy...');
+        
+        // First stop any existing discovery/advertising to ensure a clean start
+        try {
+          await NearbyConnections.stopDiscovery();
+          await NearbyConnections.stopAdvertise();
+        } catch (stopError) {
+          // Ignore errors from stopping non-existent processes
+        }
+        
+        // Small delay to ensure clean start
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Start discovery first
         await startDiscovering();
-        await startAdvertising();
-    } catch (error) {
+        
+        // Start advertising if we have user data
+        if (userData) {
+          await startAdvertising();
+        }
+        
+        console.log('Successfully initialized connections!');
+      } catch (error) {
         console.error('Error initializing connections:', error);
         setErrorMessage('Failed to initialize connections');
       }
@@ -553,6 +581,7 @@ export default function NearbyConnectionsComponent() {
     initializeConnections();
 
     return () => {
+      console.log('Cleaning up connections...');
       stopDiscovering();
       stopAdvertising();
     };
@@ -567,12 +596,30 @@ export default function NearbyConnectionsComponent() {
           return;
         }
         
-        // Test if the library is working by trying to start discovery
-        await (NearbyConnections.startDiscovery as any)(String(Strategy.P2P_CLUSTER));
-        await NearbyConnections.stopDiscovery();
-        
-        setLibraryReady(true);
-    } catch (error) {
+        // Try initializing with P2P_CLUSTER (which works better across different network environments)
+        try {
+          console.log('Initializing Nearby Connections with P2P_CLUSTER...');
+          await (NearbyConnections.startDiscovery as any)('TestInit', Strategy.P2P_CLUSTER);
+          await NearbyConnections.stopDiscovery();
+          console.log('Successfully initialized Nearby Connections!');
+          setLibraryReady(true);
+        } catch (initError) {
+          console.error('First initialization attempt failed:', initError);
+          
+          // Second attempt with a small delay
+          try {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            console.log('Retrying initialization...');
+            await (NearbyConnections.startDiscovery as any)('TestInit', Strategy.P2P_CLUSTER);
+            await NearbyConnections.stopDiscovery();
+            console.log('Retry successful!');
+            setLibraryReady(true);
+          } catch (retryError) {
+            console.error('Retry initialization failed:', retryError);
+            setErrorMessage('Failed to initialize Nearby Connections');
+          }
+        }
+      } catch (error) {
         console.error('Error initializing Nearby Connections:', error);
         setErrorMessage('Failed to initialize Nearby Connections');
       }
@@ -792,15 +839,26 @@ export default function NearbyConnectionsComponent() {
     
     const requestPermissions = async () => {
       try {
+        // Location permission is essential for both Android and iOS for nearby discovery
         const locationPerm = await Location.requestForegroundPermissionsAsync();
         if (locationPerm.status !== 'granted') {
           Alert.alert(
-            'Location Permission',
-            'Location permission is required to discover nearby users. Without this permission, you can still access your chats and profile.',
+            'Permission Required',
+            'Location permission is required for finding nearby users. Please enable this in your device settings.',
             [
               {
-                text: 'OK',
-                style: 'default'
+                text: 'Open Settings',
+                onPress: () => {
+                  if (Platform.OS === 'ios') {
+                    Linking.openURL('app-settings:');
+                  } else {
+                    Linking.openSettings();
+                  }
+                }
+              },
+              {
+                text: 'Cancel',
+                style: 'cancel'
               }
             ]
           );
@@ -810,15 +868,21 @@ export default function NearbyConnectionsComponent() {
         
         if (Platform.OS === 'ios') {
           try {
+            // Background location helps with discovery when app is in background
             const backgroundPerm = await Location.requestBackgroundPermissionsAsync();
             if (backgroundPerm.status !== 'granted') {
-              console.log('Background location permission not granted');
-          }
+              console.log('Background location permission not granted - some features may be limited');
+            }
+            
+            // iOS doesn't have a direct way to request Bluetooth permissions through React Native
+            // The native dialog will show automatically when Bluetooth is first used
+            console.log('iOS: Bluetooth permissions will be requested when needed');
           } catch (locError) {
-            console.error('Error requesting background location:', locError);
+            console.error('Error requesting iOS permissions:', locError);
           }
         }
         
+        // For Android we need explicit Bluetooth and Wi-Fi permissions
         if (Platform.OS === 'android') {
           try {
             const allPermissions = [
@@ -834,31 +898,42 @@ export default function NearbyConnectionsComponent() {
 
             const granted = await PermissionsAndroid.requestMultiple(allPermissions);
             
+            // At minimum we need location for discovery to work
             if (
               granted['android.permission.ACCESS_FINE_LOCATION'] !== 'granted' && 
               granted['android.permission.ACCESS_COARSE_LOCATION'] !== 'granted'
             ) {
               Alert.alert(
-                'Location Permission',
-                'Location permissions are required to discover nearby users. Without this permission, you can still access your chats and profile.',
+                'Permission Required',
+                'Location permissions are required for finding nearby users. Please enable this in your device settings.',
                 [
                   {
-                    text: 'OK',
-                    style: 'default'
+                    text: 'Open Settings',
+                    onPress: () => Linking.openSettings()
+                  },
+                  {
+                    text: 'Cancel',
+                    style: 'cancel'
                   }
                 ]
               );
               setErrorMessage('Location permissions are required for nearby connections');
               return;
             }
+            
+            // Log which Bluetooth permissions were granted (for debugging)
+            console.log('Bluetooth scan permission:', granted['android.permission.BLUETOOTH_SCAN']);
+            console.log('Bluetooth connect permission:', granted['android.permission.BLUETOOTH_CONNECT']);
+            console.log('Bluetooth advertise permission:', granted['android.permission.BLUETOOTH_ADVERTISE']);
           } catch (btError) {
             console.error('Error requesting Android permissions:', btError);
           }
         }
         
+        // All essential permissions are granted
         setPermissionsGranted(true);
         updateUserLocation();
-        } catch (error) {
+      } catch (error) {
         console.error('Error requesting permissions:', error);
         setErrorMessage('Failed to request necessary permissions');
       }
@@ -939,7 +1014,7 @@ export default function NearbyConnectionsComponent() {
     );
   }
   
-  // Show better permissions screen if permissions are not granted
+  // Show permissions screen if permissions are not granted
   if (!permissionsGranted) {
     return (
       <LinearGradient
@@ -950,13 +1025,13 @@ export default function NearbyConnectionsComponent() {
           <Ionicons name="location-outline" size={60} color="#222" style={styles.permissionIcon} />
           <Text style={styles.permissionTitle}>Location Permission Needed</Text>
           <Text style={styles.permissionText}>
-            The Discover feature requires location permission to find nearby users.
+            ShyText uses location and Bluetooth to discover nearby users.
           </Text>
           <Text style={styles.permissionDetail}>
-            You can still access your chats and profile through the tabs below.
+            These permissions are required for the nearby discovery feature to work properly.
           </Text>
           <Text style={styles.permissionDetail}>
-            Grant location permission to start discovering people around you.
+            Your location is only used to find other users nearby and is not stored on our servers.
           </Text>
           
           <TouchableOpacity 
@@ -1187,24 +1262,26 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#222',
     marginBottom: 16,
+    textAlign: 'center',
   },
   permissionText: {
-    color: '#666',
+    color: '#333',
     fontSize: 16,
     marginBottom: 16,
     textAlign: 'center',
   },
   permissionDetail: {
-    color: '#888',
+    color: '#666',
     fontSize: 14,
     textAlign: 'center',
+    marginBottom: 8,
   },
   settingsButton: {
     backgroundColor: '#222',
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 25,
-    marginTop: 40,
+    marginTop: 30,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,

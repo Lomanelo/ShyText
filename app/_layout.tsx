@@ -21,16 +21,14 @@ export default function RootLayout() {
         // Listen for auth state changes from Firebase
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
           try {
-            // Clear any stale data first
+            // Only clear non-essential data
             await AsyncStorage.multiRemove([
-              'userProfile',
-              'userHasProfile',
               'lastKnownLocation',
               'userPreferences'
             ]);
 
             // If we have a user, check profile data
-          if (user) {
+            if (user) {
               // Check if the user has a profile
               const hasProfile = await checkUserProfileExists(user.uid);
               console.log(`User ${user.uid} has profile: ${hasProfile}`);
@@ -40,7 +38,7 @@ export default function RootLayout() {
               
               // Set authenticated state
               setIsAuthenticated(true);
-                } else {
+            } else {
               setIsAuthenticated(false);
               console.log("No user is signed in");
             }

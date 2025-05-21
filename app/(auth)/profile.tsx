@@ -16,9 +16,13 @@ export default function ProfileScreen() {
   const [initializing, setInitializing] = useState(true);
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [imageUploading, setImageUploading] = useState(false);
+  const [autoCreatingAppleProfile, setAutoCreatingAppleProfile] = useState(false);
+  const [skipUI, setSkipUI] = useState(true); // Default to true to prevent flash of UI
 
   useEffect(() => {
     const fetchUserData = async () => {
+      console.log('Profile screen - fetchUserData called');
+      
       try {
         const user = auth.currentUser;
         
@@ -29,7 +33,120 @@ export default function ProfileScreen() {
           return;
         }
         
-        console.log('Current user:', user.uid);
+        console.log('Current user:', user.uid, user.email);
+        
+        // Check if profile already exists in Firebase first
+        try {
+          const userProfileRef = ref(database, 'profiles/' + user.uid);
+          const snapshot = await get(userProfileRef);
+          
+          if (snapshot.exists()) {
+            const profileData = snapshot.val();
+            console.log('Existing profile found:', profileData);
+            if (profileData.firstName) {
+              setFirstName(profileData.firstName);
+            }
+            if (profileData.photoURL) {
+              setProfileImage(profileData.photoURL);
+            }
+            
+            // If profile exists, redirect to main app immediately
+            console.log('Profile already exists, redirecting to main app');
+            router.replace('/(tabs)');
+            return;
+          }
+        } catch (dbError) {
+          console.error('Error retrieving profile data:', dbError);
+        }
+        
+        // CRITICAL: Log all AsyncStorage keys for debugging
+        console.log('Checking for Apple Sign In data...');
+        const allKeys = await AsyncStorage.getAllKeys();
+        console.log('All AsyncStorage keys:', allKeys);
+        
+        // Check for Apple Sign In 
+        const isFromApple = await AsyncStorage.getItem('isAppleSignIn');
+        console.log('isAppleSignIn value:', isFromApple);
+        
+        const appleNameJson = await AsyncStorage.getItem('appleFullName');
+        console.log('appleFullName value:', appleNameJson);
+        
+        // If we have Apple data, immediately create profile without showing UI
+        if (isFromApple === 'true' && appleNameJson) {
+          console.log('*** APPLE SIGN IN DETECTED ***');
+          
+          try {
+            const appleName = JSON.parse(appleNameJson);
+            console.log('Apple name data:', appleName);
+            
+            if (appleName.givenName || appleName.familyName) {
+              // Use name from Apple
+              const name = appleName.givenName || appleName.familyName || 'User';
+              console.log('Using name from Apple:', name);
+              
+              setFirstName(name);
+              console.log('Auto-creating profile for Apple Sign In user');
+              setAutoCreatingAppleProfile(true);
+              
+              // Create user profile immediately - with better error handling
+              try {
+                const userData = {
+                  firstName: name.trim(),
+                  email: user.email,
+                  photoURL: user.photoURL || null,
+                  createdAt: new Date().toISOString(),
+                  lastLogin: new Date().toISOString()
+                };
+                
+                console.log('Profile data to save:', userData);
+                
+                // Save profile to Firebase Realtime Database
+                const userRef = ref(database, 'profiles/' + user.uid);
+                await set(userRef, userData);
+                console.log('*** PROFILE CREATED SUCCESSFULLY FOR APPLE USER ***');
+                
+                // Cache the profile locally as well
+                await AsyncStorage.setItem('userProfile', JSON.stringify(userData));
+                console.log('Profile cached locally');
+                
+                // Clear Apple data
+                await AsyncStorage.removeItem('appleFullName');
+                await AsyncStorage.removeItem('isAppleSignIn');
+                console.log('Apple data cleared from AsyncStorage');
+                
+                // IMPORTANT: Small delay before navigation to ensure state updates are processed
+                setTimeout(() => {
+                  console.log('Redirecting to main app...');
+                  router.replace('/(tabs)');
+                }, 500);
+                
+                return;
+              } catch (error) {
+                console.error('Error creating profile for Apple user:', error);
+                console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
+                // Don't fall through - keep trying to create the profile
+                Alert.alert(
+                  'Error Creating Profile',
+                  'There was an error creating your profile. Please try again.',
+                  [{ 
+                    text: 'Retry', 
+                    onPress: () => saveProfile()
+                  }]
+                );
+              }
+            } else {
+              console.log('No name data in Apple name object');
+            }
+          } catch (error) {
+            console.error('Error processing Apple sign in data:', error);
+            console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
+          }
+        } else {
+          console.log('Not an Apple Sign In or missing data, proceeding normally');
+        }
+        
+        // If not Apple Sign In or Apple auto-creation failed, proceed normally
+        setSkipUI(false);
         
         // Check if profile already exists in Firebase
         try {
@@ -45,6 +162,10 @@ export default function ProfileScreen() {
             if (profileData.photoURL) {
               setProfileImage(profileData.photoURL);
             }
+            
+            // If profile exists, redirect to main app
+            router.replace('/(tabs)');
+            return;
           } else if (user?.displayName) {
             // Pre-fill the name from Google account if available and no profile exists
             setFirstName(user.displayName.split(' ')[0]);
@@ -52,37 +173,13 @@ export default function ProfileScreen() {
             if (user.photoURL) {
               setProfileImage(user.photoURL);
             }
-          } else {
-            // Check if we have Apple name data stored in AsyncStorage
-            try {
-              const appleNameJson = await AsyncStorage.getItem('appleFullName');
-              if (appleNameJson) {
-                const appleName = JSON.parse(appleNameJson);
-                if (appleName.givenName) {
-                  setFirstName(appleName.givenName);
-                  // Clear the stored data after using it
-                  await AsyncStorage.removeItem('appleFullName');
-                }
-              }
-            } catch (appleNameError) {
-              console.error('Error fetching Apple name data:', appleNameError);
-            }
           }
-        } catch (profileError) {
-          console.error('Error fetching profile:', profileError);
-          
-          // Pre-fill the name from Google account if available as fallback
-          if (user?.displayName) {
-            setFirstName(user.displayName.split(' ')[0]);
-          }
-          // Use photo from Google if available
-          if (user.photoURL) {
-            setProfileImage(user.photoURL);
-          }
+        } catch (dbError) {
+          console.error('Error retrieving profile data:', dbError);
         }
-        
-      } catch (err) {
-        console.error('Error fetching user data:', err);
+      } catch (error) {
+        console.error('Error loading user data:', error);
+        setError('Failed to load your profile. Please try again.');
       } finally {
         setInitializing(false);
       }
@@ -310,6 +407,12 @@ export default function ProfileScreen() {
         // Cache the profile locally as well
         await AsyncStorage.setItem('userProfile', JSON.stringify(userData));
         
+        // If this is an auto-created profile from Apple Sign In, make sure to clear flag
+        if (autoCreatingAppleProfile) {
+          await AsyncStorage.removeItem('isAppleSignIn');
+          await AsyncStorage.removeItem('appleFullName');
+        }
+        
         router.replace('/(tabs)');
       } catch (dbError) {
         console.error('Error saving to database:', dbError);
@@ -330,6 +433,7 @@ export default function ProfileScreen() {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
+      setAutoCreatingAppleProfile(false);
     }
   };
 
@@ -338,6 +442,20 @@ export default function ProfileScreen() {
       <LinearGradient colors={['#1E1E1E', '#0D0D0D']} style={[styles.container, styles.loadingContainer]}>
         <ActivityIndicator size="large" color="#3B82F6" />
         <Text style={styles.loadingText}>Setting up your profile...</Text>
+      </LinearGradient>
+    );
+  }
+  
+  // Skip UI rendering completely for Apple Sign In - just show loading indicator
+  if (skipUI || autoCreatingAppleProfile) {
+    return (
+      <LinearGradient colors={['#1E1E1E', '#0D0D0D']} style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={styles.loadingText}>
+          {autoCreatingAppleProfile ? 
+            "Creating your profile with information from Apple Sign In..." : 
+            "Setting up your profile..."}
+        </Text>
       </LinearGradient>
     );
   }
@@ -619,5 +737,24 @@ const styles = StyleSheet.create({
     color: colors.ui.error,
     marginLeft: spacing.sm,
     fontSize: typography.fontSize.sm,
+  },
+  autoCreatingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+    padding: 20,
+  },
+  autoCreatingText: {
+    color: colors.text.light,
+    fontSize: typography.fontSize.lg,
+    textAlign: 'center',
+    marginTop: spacing.lg,
+    fontWeight: '500',
   },
 });
