@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Image, Alert, Linking, Platform, ActivityIndicator, Modal, TextInput } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Image, Alert, Linking, Platform, ActivityIndicator, Modal, TextInput, ScrollView } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, database, uploadProfileImage } from '../../src/lib/firebase';
@@ -11,6 +11,10 @@ import * as ImagePicker from 'expo-image-picker';
 import ContactForm from '../components/ContactForm';
 import { useNotifications } from '../../src/contexts/NotificationContext';
 import { cancelAllNotifications, getAllScheduledNotifications } from '../../src/utils/notifications';
+
+// Privacy and Terms URLs
+const PRIVACY_POLICY_URL = "https://www.yourappname.com/privacy-policy";
+const TERMS_OF_SERVICE_URL = "https://www.yourappname.com/terms-of-service";
 
 export default function SettingsScreen() {
   const [userData, setUserData] = useState<{
@@ -29,6 +33,7 @@ export default function SettingsScreen() {
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const { expoPushToken, sendTestNotification } = useNotifications();
   const [isLoading, setIsLoading] = useState(false);
+  const [dataConsentGiven, setDataConsentGiven] = useState(false);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -55,42 +60,175 @@ export default function SettingsScreen() {
             photoURL: currentUser.photoURL
           });
         }
+
+        // Check if user has already given data consent
+        const consentStatus = await AsyncStorage.getItem('dataConsentGiven');
+        if (consentStatus === 'true') {
+          setDataConsentGiven(true);
+        }
       } catch (error) {
         console.error('Error fetching user data:', error);
       }
     };
 
     fetchUserData();
+    
+    // Show initial data usage consent on app load if needed
+    const showInitialConsent = async () => {
+      const consentStatus = await AsyncStorage.getItem('dataConsentGiven');
+      if (consentStatus !== 'true') {
+        Alert.alert(
+          'Data Usage Information',
+          'This app collects and uses your personal data to provide you with a personalized experience. Your data is securely stored and used in accordance with our Privacy Policy.',
+          [
+            {
+              text: 'View Privacy Policy',
+              onPress: () => Linking.openURL(PRIVACY_POLICY_URL)
+            },
+            {
+              text: 'OK',
+              onPress: async () => {
+                await AsyncStorage.setItem('dataConsentGiven', 'true');
+                setDataConsentGiven(true);
+              }
+            }
+          ]
+        );
+      }
+    };
+    
+    showInitialConsent();
   }, []);
 
   const handleUpdateProfileImage = async () => {
     if (imageUploading) return; // Prevent multiple uploads
     
+    // If consent hasn't been given yet, show consent dialog
+    if (!dataConsentGiven) {
+      Alert.alert(
+        'Data Usage Consent',
+        'Your profile picture will be uploaded to our secure servers to provide you with a personalized experience. By continuing, you consent to this data usage as outlined in our Privacy Policy.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'View Privacy Policy',
+            onPress: () => Linking.openURL(PRIVACY_POLICY_URL)
+          },
+          {
+            text: 'Consent & Continue',
+            onPress: async () => {
+              await AsyncStorage.setItem('dataConsentGiven', 'true');
+              setDataConsentGiven(true);
+              showImageSourceOptions();
+            }
+          }
+        ]
+      );
+      return;
+    }
+    
+    showImageSourceOptions();
+  };
+  
+  const showImageSourceOptions = () => {
+    Alert.alert(
+      'Profile Picture',
+      'Choose a source for your profile picture',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Camera',
+          onPress: () => handleCameraSelection()
+        },
+        {
+          text: 'Photo Library',
+          onPress: () => handleGallerySelection()
+        }
+      ]
+    );
+  };
+  
+  const handleCameraSelection = async () => {
+    try {
+      // Request camera permissions
+      const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+      
+      if (!cameraPermission.granted) {
+        Alert.alert(
+          'Permission Required', 
+          'Camera access is required to take a profile picture. Please enable camera access in your device settings.',
+          [
+            { text: 'OK' },
+            { 
+              text: 'Open Settings', 
+              onPress: handleOpenSettings 
+            }
+          ]
+        );
+        return;
+      }
+      
+      // Open camera
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+      });
+      
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        processSelectedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      Alert.alert('Error', 'Failed to access camera. Please try again.');
+    }
+  };
+  
+  const handleGallerySelection = async () => {
     try {
       // Request media library permissions
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       
       if (!permissionResult.granted) {
-        Alert.alert('Permission required', 'Please allow access to your photos to update your profile picture.');
+        Alert.alert(
+          'Permission Required', 
+          'Photo library access is required to select a profile picture. Please enable photo access in your device settings.',
+          [
+            { text: 'OK' },
+            { 
+              text: 'Open Settings', 
+              onPress: handleOpenSettings 
+            }
+          ]
+        );
         return;
       }
-
-      // Launch image picker with simple options
+      
+      // Launch image picker
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.5, // Lower quality for faster upload
+        quality: 0.5,
       });
-
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        // User canceled or no image selected
-        return;
-      }
-
-      const uri = result.assets[0].uri;
-      console.log('Selected image URI:', uri);
       
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        processSelectedImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.error('Error accessing photo library:', error);
+      Alert.alert('Error', 'Failed to access photo library. Please try again.');
+    }
+  };
+  
+  const processSelectedImage = async (uri: string) => {
+    try {
       // Check if user is authenticated
       const currentUser = auth.currentUser;
       if (!currentUser) {
@@ -100,40 +238,35 @@ export default function SettingsScreen() {
 
       setImageUploading(true);
 
-      try {
-        // Process the image and get a data URL
-        const dataUrl = await uploadProfileImage(currentUser.uid, uri);
-        
-        if (!dataUrl) {
-          throw new Error('Failed to process image');
-        }
-        
-        console.log('Image processing successful');
-        
-        // Update profile in Firebase Database with the data URL
-        const userProfileRef = ref(database, `profiles/${currentUser.uid}`);
-        await update(userProfileRef, {
-          photoURL: dataUrl,
-          lastUpdated: new Date().toISOString()
-        });
-
-        console.log('Database updated successfully');
-
-        // Update local state
-        setUserData(prev => prev ? {
-          ...prev,
-          photoURL: dataUrl
-        } : null);
-        
-        // Success message
-        Alert.alert('Success', 'Profile picture updated successfully!');
-      } catch (error) {
-        console.error('Error during profile picture update:', error);
-        Alert.alert('Error', 'Failed to update profile picture. Please try again.');
+      // Process the image and get a data URL
+      const dataUrl = await uploadProfileImage(currentUser.uid, uri);
+      
+      if (!dataUrl) {
+        throw new Error('Failed to process image');
       }
+      
+      console.log('Image processing successful');
+      
+      // Update profile in Firebase Database with the data URL
+      const userProfileRef = ref(database, `profiles/${currentUser.uid}`);
+      await update(userProfileRef, {
+        photoURL: dataUrl,
+        lastUpdated: new Date().toISOString()
+      });
+
+      console.log('Database updated successfully');
+
+      // Update local state
+      setUserData(prev => prev ? {
+        ...prev,
+        photoURL: dataUrl
+      } : null);
+      
+      // Success message
+      Alert.alert('Success', 'Profile picture updated successfully!');
     } catch (error) {
-      console.error('Error in image picker:', error);
-      Alert.alert('Error', 'An error occurred while selecting an image.');
+      console.error('Error during profile picture update:', error);
+      Alert.alert('Error', 'Failed to update profile picture. Please try again.');
     } finally {
       setImageUploading(false);
     }
@@ -419,81 +552,113 @@ export default function SettingsScreen() {
     );
   };
 
+  const handleOpenPrivacyPolicy = () => {
+    Linking.openURL(PRIVACY_POLICY_URL);
+  };
+
+  const handleOpenTermsOfService = () => {
+    Linking.openURL(TERMS_OF_SERVICE_URL);
+  };
+
   return (
     <LinearGradient colors={['#f9f1e7', '#f9f1e7']} style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
-      </View>
-      
-      <View style={styles.profileSection}>
-        <TouchableOpacity 
-          style={styles.profileImageContainer}
-          onPress={handleUpdateProfileImage}
-          disabled={imageUploading}
-        >
-          {imageUploading ? (
-            <View style={[styles.profileImage, styles.loadingContainer]}>
-              <ActivityIndicator size="small" color="#222" />
+      <ScrollView>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Profile</Text>
+        </View>
+        
+        <View style={styles.profileSection}>
+          <TouchableOpacity 
+            style={styles.profileImageContainer}
+            onPress={handleUpdateProfileImage}
+            disabled={imageUploading}
+          >
+            {imageUploading ? (
+              <View style={[styles.profileImage, styles.loadingContainer]}>
+                <ActivityIndicator size="small" color="#222" />
+              </View>
+            ) : (
+              <Image
+                source={userData?.photoURL ? { uri: userData.photoURL } : require('../../assets/images/icon.png')}
+                style={styles.profileImage}
+              />
+            )}
+            <View style={styles.editIconContainer}>
+              <Ionicons name="camera" size={16} color="#fff" />
             </View>
-          ) : (
-            <Image
-              source={userData?.photoURL ? { uri: userData.photoURL } : require('../../assets/images/icon.png')}
-              style={styles.profileImage}
-            />
-          )}
-          <View style={styles.editIconContainer}>
-            <Ionicons name="camera" size={16} color="#fff" />
-          </View>
-        </TouchableOpacity>
-        <Text style={styles.profileName}>{userData?.firstName || 'User'}</Text>
-        <TouchableOpacity 
-          style={styles.changeNameButton}
-          onPress={() => {
-            setNewName(userData?.firstName || '');
-            setShowNameModal(true);
-          }}
-        >
-          <Text style={styles.changeNameText}>Change Name</Text>
-        </TouchableOpacity>
-      </View>
+          </TouchableOpacity>
+          <Text style={styles.profileName}>{userData?.firstName || 'User'}</Text>
+          <TouchableOpacity 
+            style={styles.changeNameButton}
+            onPress={() => {
+              setNewName(userData?.firstName || '');
+              setShowNameModal(true);
+            }}
+          >
+            <Text style={styles.changeNameText}>Change Name</Text>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.settingsSection}>
-        <TouchableOpacity 
-          style={styles.settingsItem}
-          onPress={handleAccountSettings}>
-          <View style={styles.settingsIconContainer}>
-            <Ionicons name="key-outline" size={22} color="#222" />
-          </View>
-          <Text style={styles.settingsText}>Account Settings</Text>
-          <Ionicons name="chevron-forward" size={22} color="#999" />
-        </TouchableOpacity>
+        <View style={styles.settingsSection}>
+          <TouchableOpacity 
+            style={styles.settingsItem}
+            onPress={handleAccountSettings}>
+            <View style={styles.settingsIconContainer}>
+              <Ionicons name="key-outline" size={22} color="#222" />
+            </View>
+            <Text style={styles.settingsText}>Account Settings</Text>
+            <Ionicons name="chevron-forward" size={22} color="#999" />
+          </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.settingsItem}
-          onPress={handleOpenSettings}>
-          <View style={styles.settingsIconContainer}>
-            <Ionicons name="settings-outline" size={22} color="#222" />
-          </View>
-          <Text style={styles.settingsText}>Notification Settings</Text>
-          <Ionicons name="chevron-forward" size={22} color="#999" />
-        </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.settingsItem}
+            onPress={handleOpenSettings}>
+            <View style={styles.settingsIconContainer}>
+              <Ionicons name="settings-outline" size={22} color="#222" />
+            </View>
+            <Text style={styles.settingsText}>Notification Settings</Text>
+            <Ionicons name="chevron-forward" size={22} color="#999" />
+          </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.settingsItem}
-          onPress={() => setShowContactForm(true)}>
-          <View style={styles.settingsIconContainer}>
-            <Ionicons name="help-circle-outline" size={22} color="#222" />
-          </View>
-          <Text style={styles.settingsText}>Help & Support</Text>
-          <Ionicons name="chevron-forward" size={22} color="#999" />
-        </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.settingsItem}
+            onPress={() => setShowContactForm(true)}>
+            <View style={styles.settingsIconContainer}>
+              <Ionicons name="help-circle-outline" size={22} color="#222" />
+            </View>
+            <Text style={styles.settingsText}>Help & Support</Text>
+            <Ionicons name="chevron-forward" size={22} color="#999" />
+          </TouchableOpacity>
+          
+          {/* New privacy policy item */}
+          <TouchableOpacity 
+            style={styles.settingsItem}
+            onPress={handleOpenPrivacyPolicy}>
+            <View style={styles.settingsIconContainer}>
+              <Ionicons name="shield-outline" size={22} color="#222" />
+            </View>
+            <Text style={styles.settingsText}>Privacy Policy</Text>
+            <Ionicons name="chevron-forward" size={22} color="#999" />
+          </TouchableOpacity>
+          
+          {/* New terms of service item */}
+          <TouchableOpacity 
+            style={styles.settingsItem}
+            onPress={handleOpenTermsOfService}>
+            <View style={styles.settingsIconContainer}>
+              <Ionicons name="document-text-outline" size={22} color="#222" />
+            </View>
+            <Text style={styles.settingsText}>Terms of Service</Text>
+            <Ionicons name="chevron-forward" size={22} color="#999" />
+          </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.signOutButton}
-          onPress={handleSignOut}>
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity 
+            style={styles.signOutButton}
+            onPress={handleSignOut}>
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
 
       <Modal
         visible={showContactForm}
@@ -673,6 +838,7 @@ const styles = StyleSheet.create({
   settingsSection: {
     marginTop: 30,
     paddingHorizontal: 16,
+    paddingBottom: 40,
   },
   settingsItem: {
     flexDirection: 'row',
