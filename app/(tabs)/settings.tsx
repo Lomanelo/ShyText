@@ -13,8 +13,8 @@ import { useNotifications } from '../../src/contexts/NotificationContext';
 import { cancelAllNotifications, getAllScheduledNotifications } from '../../src/utils/notifications';
 
 // Privacy and Terms URLs
-const PRIVACY_POLICY_URL = "https://www.yourappname.com/privacy-policy";
-const TERMS_OF_SERVICE_URL = "https://www.yourappname.com/terms-of-service";
+const PRIVACY_POLICY_URL = "https://shytext.com/privacy";
+const TERMS_OF_SERVICE_URL = "https://shytext.com/terms";
 
 export default function SettingsScreen() {
   const [userData, setUserData] = useState<{
