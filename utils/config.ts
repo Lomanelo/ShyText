@@ -10,7 +10,8 @@ export function isDevToolsEnabled(): boolean {
 }
 
 export const CHECK_IN_MS = 60 * 60 * 1000;
-export const MAX_ACTIVE_SHYTEXTS = 3;
+export const MAX_ACTIVE_SHYTEXTS = 1;
 export const MAX_SHYTEXTS_PER_HOUR = 10;
 export const MAX_REQUESTS_PER_HOUR = 20;
 export const MAX_MESSAGE_LENGTH = 160;
+export const MAX_SHYTEXT_MESSAGE_LENGTH = 120;

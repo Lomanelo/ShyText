@@ -8,7 +8,8 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { auth, db, storage } from './firebase';
 import { UserProfile } from '../types/user';
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
@@ -17,28 +18,49 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   return { id: snap.id, ...snap.data() } as UserProfile;
 }
 
+export function sanitizeAge(value?: number): number | undefined {
+  if (value == null || Number.isNaN(value)) return undefined;
+  const age = Math.round(value);
+  if (age < 17 || age > 99) return undefined;
+  return age;
+}
+
 export async function upsertUserProfile(input: {
   id: string;
   displayName: string;
   avatarUrl?: string;
+  age?: number;
 }): Promise<void> {
-  const ref = doc(db, 'users', input.id);
-  const existing = await getDoc(ref);
+  const refDoc = doc(db, 'users', input.id);
+  const existing = await getDoc(refDoc);
+  const age = sanitizeAge(input.age);
   if (existing.exists()) {
-    await updateDoc(ref, {
+    await updateDoc(refDoc, {
       displayName: input.displayName,
       avatarUrl: input.avatarUrl ?? existing.data()?.avatarUrl ?? null,
+      ...(age != null ? { age } : {}),
     });
     return;
   }
-  await setDoc(ref, {
+  await setDoc(refDoc, {
     displayName: input.displayName,
     avatarUrl: input.avatarUrl ?? null,
+    age: age ?? null,
     createdAt: Date.now(),
     serverCreatedAt: serverTimestamp(),
     status: 'active',
     stats: { shytextsPosted: 0, chatsStarted: 0 },
   });
+}
+
+export async function uploadAvatar(localUri: string): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not signed in.');
+  const response = await fetch(localUri);
+  const blob = await response.blob();
+  const file = ref(storage, `avatars/${user.uid}.jpg`);
+  await uploadBytes(file, blob, { contentType: blob.type || 'image/jpeg' });
+  return getDownloadURL(file);
 }
 
 export async function signInWithEmail(email: string, password: string) {
@@ -61,11 +83,16 @@ export async function signInWithAppleToken(identityToken: string, nonce: string)
   );
 }
 
-export async function completeProfile(displayName: string, avatarUrl?: string, bio?: string) {
+export async function completeProfile(
+  displayName: string,
+  avatarUrl?: string,
+  bio?: string,
+  age?: number
+) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not signed in.');
-  await updateProfile(user, { displayName });
-  await upsertUserProfile({ id: user.uid, displayName, avatarUrl });
+  await updateProfile(user, { displayName, photoURL: avatarUrl });
+  await upsertUserProfile({ id: user.uid, displayName, avatarUrl, age });
   if (bio != null) {
     await updateDoc(doc(db, 'users', user.uid), { bio });
   }

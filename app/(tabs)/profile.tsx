@@ -18,7 +18,10 @@ export default function ProfileScreen() {
         <Text style={[styles.title, { color: theme.text }]}>Profile</Text>
         <View style={[styles.card, { backgroundColor: theme.card }]}>
           <Avatar name={profile?.displayName} uri={profile?.avatarUrl} theme={theme} size={72} />
-          <Text style={[styles.name, { color: theme.text }]}>{profile?.displayName || 'You'}</Text>
+          <Text style={[styles.name, { color: theme.text }]}>
+            {profile?.displayName || 'You'}
+            {profile?.age ? `, ${profile.age}` : ''}
+          </Text>
           {profile?.bio ? <Text style={{ color: theme.muted }}>{profile.bio}</Text> : null}
           <Text style={{ color: theme.quiet }}>
             Member since {profile?.createdAt ? memberSince(profile.createdAt) : 'now'}

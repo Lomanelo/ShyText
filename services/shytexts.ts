@@ -2,6 +2,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDoc,
   getDocs,
   increment,
   onSnapshot,
@@ -11,35 +12,42 @@ import {
   where,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { ShyTextCategory, ShyTextPost } from '../types/shytext';
+import { normalizeIntent, ShyTextIntent, ShyTextPost } from '../types/shytext';
 import { moderateText } from './moderation';
-import { MAX_ACTIVE_SHYTEXTS, MAX_SHYTEXTS_PER_HOUR } from '../utils/config';
-import { getActiveCheckIn } from './venues';
+import { MAX_SHYTEXTS_PER_HOUR, MAX_SHYTEXT_MESSAGE_LENGTH } from '../utils/config';
+import { getActiveCheckIn, isDemoVenue } from './venues';
 import { isBlockedEitherWay } from './blocks';
 import { seedShyTexts } from './mockData';
 import { isDevToolsEnabled } from '../utils/config';
-import { isDemoVenue } from './venues';
 
-function mapPost(id: string, data: Record<string, unknown>): ShyTextPost {
+export function mapShyText(id: string, data: Record<string, unknown>): ShyTextPost {
+  const intent = normalizeIntent(data.intent ?? data.category);
+  const authorId = String(data.userId ?? data.authorId);
+  const message = data.message == null ? undefined : String(data.message);
   return {
     id,
-    authorId: String(data.authorId),
+    userId: authorId,
+    authorId,
     authorName: String(data.authorName ?? 'Someone'),
     authorAvatarUrl: data.authorAvatarUrl ? String(data.authorAvatarUrl) : undefined,
+    authorAge: typeof data.authorAge === 'number' ? data.authorAge : undefined,
     venueId: String(data.venueId),
-    message: String(data.message),
-    category: data.category as ShyTextCategory,
+    intent,
+    category: intent,
+    message: message?.trim() ? message.trim() : undefined,
     createdAt: Number(data.createdAt),
     expiresAt: Number(data.expiresAt),
     status: (data.status as ShyTextPost['status']) ?? 'active',
+    visibilityMode: data.visibilityMode === 'shy' ? 'shy' : 'open',
     responseCount: Number(data.responseCount ?? 0),
   };
 }
 
-export function listenShyTexts(
-  venueId: string,
-  onChange: (posts: ShyTextPost[]) => void
-) {
+function isLive(item: ShyTextPost, now = Date.now()) {
+  return item.status === 'active' && item.expiresAt > now;
+}
+
+export function listenShyTexts(venueId: string, onChange: (posts: ShyTextPost[]) => void) {
   const q = query(
     collection(db, 'shytexts'),
     where('venueId', '==', venueId),
@@ -49,8 +57,8 @@ export function listenShyTexts(
     const user = auth.currentUser;
     const now = Date.now();
     let posts = snap.docs
-      .map((item) => mapPost(item.id, item.data()))
-      .filter((item) => item.expiresAt > now)
+      .map((item) => mapShyText(item.id, item.data()))
+      .filter((item) => isLive(item, now))
       .sort((a, b) => b.createdAt - a.createdAt);
 
     if (user) {
@@ -62,59 +70,84 @@ export function listenShyTexts(
       posts = visible;
     }
 
-    if (isDevToolsEnabled() && isDemoVenue(venueId) && posts.length === 0) {
-      onChange(seedShyTexts(venueId));
+    if (isDevToolsEnabled() && isDemoVenue(venueId)) {
+      const real = posts.filter((item) => !item.authorId.startsWith('seed-'));
+      const seeds = seedShyTexts(venueId).filter(
+        (seed) => !real.some((item) => item.authorId === seed.authorId)
+      );
+      onChange(
+        [...real, ...seeds].sort((a, b) => b.createdAt - a.createdAt)
+      );
       return;
     }
     onChange(posts);
   });
 }
 
-export async function createShyText(input: {
+export async function listMyActiveShyTexts(userId: string): Promise<ShyTextPost[]> {
+  const snap = await getDocs(query(collection(db, 'shytexts'), where('authorId', '==', userId)));
+  const now = Date.now();
+  return snap.docs
+    .map((item) => mapShyText(item.id, item.data()))
+    .filter((item) => isLive(item, now));
+}
+
+async function stopActiveForUser(userId: string) {
+  const live = await listMyActiveShyTexts(userId);
+  await Promise.all(live.map((item) => updateDoc(doc(db, 'shytexts', item.id), { status: 'stopped' })));
+}
+
+export async function activateShyText(input: {
   venueId: string;
-  message: string;
-  category: ShyTextCategory;
+  intent: ShyTextIntent;
+  message?: string;
   ttlMinutes: number;
   authorName: string;
   authorAvatarUrl?: string;
+  authorAge?: number;
 }) {
   const user = auth.currentUser;
-  if (!user) throw new Error('Sign in to post.');
+  if (!user) throw new Error('Sign in first.');
   const checkIn = await getActiveCheckIn(user.uid);
   if (!checkIn || checkIn.venueId !== input.venueId) {
     throw new Error('Check in to this venue first.');
   }
-  const moderated = moderateText(input.message);
+  const moderated = moderateText(input.message ?? '', {
+    allowEmpty: true,
+    maxLength: MAX_SHYTEXT_MESSAGE_LENGTH,
+  });
   if (!moderated.ok) throw new Error(moderated.reason);
 
   const existing = await getDocs(query(collection(db, 'shytexts'), where('authorId', '==', user.uid)));
   const now = Date.now();
-  const mine = existing.docs.map((item) => mapPost(item.id, item.data()));
-  const active = mine.filter((item) => item.status === 'active' && item.expiresAt > now);
-  if (active.length >= MAX_ACTIVE_SHYTEXTS) {
-    throw new Error('You already have 3 active ShyTexts.');
-  }
+  const mine = existing.docs.map((item) => mapShyText(item.id, item.data()));
   const lastHour = mine.filter((item) => now - item.createdAt < 60 * 60 * 1000);
   if (lastHour.length >= MAX_SHYTEXTS_PER_HOUR) {
     throw new Error('Slow down — try again in a bit.');
   }
 
+  await stopActiveForUser(user.uid);
+
   await addDoc(collection(db, 'shytexts'), {
+    userId: user.uid,
     authorId: user.uid,
     authorName: input.authorName,
     authorAvatarUrl: input.authorAvatarUrl ?? null,
+    authorAge: input.authorAge ?? null,
     venueId: input.venueId,
-    message: input.message.trim(),
-    category: input.category,
+    intent: input.intent,
+    category: input.intent,
+    message: input.message?.trim() || null,
     createdAt: now,
     expiresAt: now + input.ttlMinutes * 60 * 1000,
     status: 'active',
+    visibilityMode: 'open',
     responseCount: 0,
     serverCreatedAt: serverTimestamp(),
   });
   await updateDoc(doc(db, 'users', user.uid), {
     'stats.shytextsPosted': increment(1),
-  });
+  }).catch(() => undefined);
 }
 
 export async function countActiveShyTexts(venueId: string): Promise<number> {
@@ -129,8 +162,15 @@ export async function countActiveShyTexts(venueId: string): Promise<number> {
   return count;
 }
 
-export async function deleteOwnShyText(id: string) {
+export async function stopVisibility(id: string) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not signed in.');
-  await updateDoc(doc(db, 'shytexts', id), { status: 'deleted' });
+  await updateDoc(doc(db, 'shytexts', id), { status: 'stopped' });
+}
+
+export async function getLiveShyText(id: string): Promise<ShyTextPost | null> {
+  const snap = await getDoc(doc(db, 'shytexts', id));
+  if (!snap.exists()) return null;
+  const post = mapShyText(snap.id, snap.data());
+  return isLive(post) ? post : null;
 }

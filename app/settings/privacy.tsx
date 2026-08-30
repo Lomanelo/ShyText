@@ -6,10 +6,10 @@ import { useTheme } from '../../theme';
 const POINTS = [
   'Your exact location is never shown to other users.',
   'Location is only used in the foreground to suggest a venue.',
-  'You check in on purpose. Presence is not broadcast.',
-  'Check-ins expire after 60 minutes.',
-  'We never show how many silent people are at a venue.',
-  'Chats stay private and do not disappear when a ShyText expires.',
+  'Checking in never makes you visible. You go visible on purpose.',
+  'Only people with an active ShyText appear at a venue.',
+  'We never show how many silent people are checked in.',
+  'Chats stay private after you stop being visible or leave.',
   'Lock-screen notifications do not include private message text.',
 ];
 

@@ -7,11 +7,14 @@ const BLOCKED = [
   /\b(send\s+nudes?)\b/i,
 ];
 
-export function moderateText(text: string): { ok: boolean; reason?: string } {
+export function moderateText(text: string, options?: { allowEmpty?: boolean; maxLength?: number }): { ok: boolean; reason?: string } {
   const value = text.trim();
-  if (!value) return { ok: false, reason: 'Write something first.' };
-  if (value.length > MAX_MESSAGE_LENGTH) {
-    return { ok: false, reason: `Keep it under ${MAX_MESSAGE_LENGTH} characters.` };
+  const max = options?.maxLength ?? MAX_MESSAGE_LENGTH;
+  if (!value) {
+    return options?.allowEmpty ? { ok: true } : { ok: false, reason: 'Write something first.' };
+  }
+  if (value.length > max) {
+    return { ok: false, reason: `Keep it under ${max} characters.` };
   }
   if (BLOCKED.some((pattern) => pattern.test(value))) {
     return { ok: false, reason: 'That text is not allowed.' };

@@ -53,7 +53,7 @@ export default function ChatsScreen() {
           <EmptyState
             theme={theme}
             title="Nothing happening yet."
-            body="Change that. Leave a ShyText and someone may say hello."
+            body="Go visible at a venue. If someone says hi, you’ll talk here."
             action={{ label: 'Go nearby', onPress: () => router.push('/(tabs)/nearby') }}
           />
         ) : (
@@ -69,7 +69,7 @@ export default function ChatsScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.name, { color: theme.text }]}>{names[convo.id] || 'Private chat'}</Text>
                   <Text style={{ color: theme.muted }} numberOfLines={1}>
-                    {convo.lastMessage || 'Say hello'}
+                    {convo.lastMessage || 'Say hi'}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 6 }}>

@@ -16,10 +16,12 @@ import { moderateText } from './moderation';
 import { MAX_REQUESTS_PER_HOUR } from '../utils/config';
 import { isBlockedEitherWay } from './blocks';
 import { notifyUser } from './notifications';
+import { getLiveShyText } from './shytexts';
 
 export async function sendChatRequest(input: {
   shytextId: string;
-  shytextMessage: string;
+  shytextMessage?: string;
+  shytextIntent?: string;
   receiverId: string;
   venueId: string;
   venueName?: string;
@@ -28,10 +30,12 @@ export async function sendChatRequest(input: {
 }) {
   const user = auth.currentUser;
   if (!user) throw new Error('Sign in first.');
-  if (user.uid === input.receiverId) throw new Error('You cannot respond to your own ShyText.');
+  if (user.uid === input.receiverId) throw new Error('You cannot say hi to yourself.');
   if (await isBlockedEitherWay(user.uid, input.receiverId)) {
     throw new Error('You cannot contact this person.');
   }
+  const live = await getLiveShyText(input.shytextId);
+  if (!live) throw new Error('They are no longer visible.');
   if (input.introMessage) {
     const moderated = moderateText(input.introMessage);
     if (!moderated.ok) throw new Error(moderated.reason);
@@ -45,7 +49,7 @@ export async function sendChatRequest(input: {
     )
   );
   if (existing.docs.some((item) => item.data().status === 'pending')) {
-    throw new Error('You already sent a hello.');
+    throw new Error('You already sent a hi.');
   }
 
   const hourSnap = await getDocs(query(collection(db, 'chatRequests'), where('senderId', '==', user.uid)));
@@ -62,8 +66,8 @@ export async function sendChatRequest(input: {
     serverCreatedAt: serverTimestamp(),
   });
   await notifyUser(input.receiverId, {
-    title: 'Someone responded to your ShyText',
-    body: input.introMessage || '👋 Say hello?',
+    title: 'Someone wants to say hi',
+    body: input.introMessage || 'Open ShyText to read it.',
   });
 }
 

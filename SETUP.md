@@ -137,7 +137,7 @@ Preview APK: `--profile preview`.
 ## 11. Known limitations
 
 - Push is best-effort from the client. A Cloud Function is the right next step.
-- Rate limits (3 active ShyTexts, 10/hour, 20 hellos/hour) are enforced in the client SDK plus rules; a function can harden this further.
+- Rate limits (1 active ShyText, 10/hour, 20 hellos/hour) are enforced in the client SDK plus rules; a function can harden this further.
 - Demo check-in distance bypass is development/preview only.
 - Chat is text only.
 - Venue coordinates may be stored for proximity checks; they are never shown as another user's location.
@@ -147,12 +147,11 @@ Preview APK: `--profile preview`.
 
 On two phones, with Firestore enabled:
 
-1. User A creates an account, allows location, checks into the same venue (or Paddy's Corner in DEV mode).
-2. User A posts: “Anyone want to play dominoes?”
-3. The card appears immediately for A.
-4. User B checks into the same venue and sees the ShyText.
-5. B taps Say hello and sends “I'm in.”
-6. A opens Chats → Requests, accepts.
-7. Both chat in realtime.
-8. After expiry the public ShyText disappears; the private chat remains.
-9. Neither user ever sees the other's GPS.
+1. User A creates an account, allows location, checks into a venue (or Paddy's Corner in DEV mode).
+2. A is still invisible. A taps Go visible, chooses Coffee, optional message, 30 min.
+3. User B checks into the same venue and sees A (profile + intent + message).
+4. B taps Say hi and sends an optional intro.
+5. A opens Chats → Requests, accepts.
+6. Both chat in realtime.
+7. A stops visibility or the ShyText expires. A disappears from the venue; the private chat remains.
+8. Neither user ever sees the other's GPS. Checked-in invisible users never appear.

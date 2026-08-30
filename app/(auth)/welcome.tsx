@@ -7,16 +7,16 @@ import { useTheme } from '../../theme';
 
 const SLIDES = [
   {
-    title: 'Say something to the room.',
-    body: 'ShyText lets you meet people who are already where you are.',
+    title: 'Meet people who are already there.',
+    body: 'ShyText helps break the ice with people at the same place.',
   },
   {
-    title: "Post what you're up for.",
-    body: 'Coffee, games, studying, conversation — whatever fits the moment.',
+    title: 'Make yourself approachable.',
+    body: "Choose what you're open to and go visible for a few minutes.",
   },
   {
     title: 'Only when you choose.',
-    body: 'Your exact location is never shown to other users.',
+    body: 'Checking in never makes you visible. Your exact location is never shared.',
   },
 ];
 

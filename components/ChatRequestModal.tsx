@@ -8,12 +8,16 @@ export function ChatRequestModal({
   visible,
   name,
   theme,
+  intentLabel,
+  message,
   onClose,
   onSend,
 }: {
   visible: boolean;
   name: string;
   theme: Theme;
+  intentLabel?: string;
+  message?: string;
   onClose: () => void;
   onSend: (intro?: string) => Promise<void>;
 }) {
@@ -25,18 +29,25 @@ export function ChatRequestModal({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={[styles.sheet, { backgroundColor: theme.card }]}>
-          <Text style={[styles.title, { color: theme.text }]}>Say hello to {name}?</Text>
+          <Text style={[styles.title, { color: theme.text }]}>Say hi to {name}?</Text>
+          {intentLabel || message ? (
+            <Text style={{ color: theme.muted }}>
+              Responding to:{'\n'}
+              {intentLabel ? `${intentLabel}\n` : ''}
+              {message ? `“${message}”` : ''}
+            </Text>
+          ) : null}
           <TextInput
             value={intro}
             onChangeText={setIntro}
             maxLength={MAX_MESSAGE_LENGTH}
-            placeholder="I'm down for dominoes 👋"
+            placeholder="Hey 👋"
             placeholderTextColor={theme.quiet}
             style={[styles.input, { color: theme.text, backgroundColor: theme.bg }]}
           />
           {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}
           <PrimaryButton
-            title="Send request"
+            title="Send"
             theme={theme}
             loading={busy}
             onPress={async () => {

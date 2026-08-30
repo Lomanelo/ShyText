@@ -7,35 +7,24 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 import { useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useCurrentVenue } from '../../hooks/useCurrentVenue';
-import { createShyText } from '../../services/shytexts';
-import { SHYTEXT_CATEGORIES, ShyTextCategory } from '../../types/shytext';
-import { MAX_MESSAGE_LENGTH } from '../../utils/config';
+import { activateShyText } from '../../services/shytexts';
+import { INTENT_LABELS, normalizeIntent, SHYTEXT_INTENTS, ShyTextIntent } from '../../types/shytext';
+import { MAX_SHYTEXT_MESSAGE_LENGTH } from '../../utils/config';
 
-const LABELS: Record<ShyTextCategory, string> = {
-  chat: '💬 Chat',
-  play: '🎲 Play',
-  social: '🍻 Social',
-  study: '📚 Study',
-  watch: '⚽ Watch',
-  network: '🤝 Network',
-  game: '🎮 Game',
-  other: '✨ Other',
-};
-
-export default function CreateShyTextScreen() {
+export default function GoVisibleScreen() {
   const theme = useTheme();
-  const { venueId: paramVenueId } = useLocalSearchParams<{ venueId?: string }>();
+  const params = useLocalSearchParams<{ venueId?: string; intent?: string; message?: string }>();
   const { profile } = useAuth();
   const current = useCurrentVenue();
-  const [category, setCategory] = useState<ShyTextCategory>('chat');
-  const [message, setMessage] = useState('');
+  const [intent, setIntent] = useState<ShyTextIntent>(normalizeIntent(params.intent));
+  const [message, setMessage] = useState(params.message ?? '');
   const [ttl, setTtl] = useState(30);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const venue = current.venue;
-  const venueId = paramVenueId || venue?.id;
-  const canPost = useMemo(
+  const venueId = params.venueId || venue?.id;
+  const canActivate = useMemo(
     () => !!current.checkIn && !current.expired && current.checkIn.venueId === venueId,
     [current.checkIn, current.expired, venueId]
   );
@@ -46,37 +35,35 @@ export default function CreateShyTextScreen() {
         <Pressable onPress={() => router.back()}>
           <Text style={{ color: theme.accent, fontWeight: '700' }}>← Back</Text>
         </Pressable>
-        <Text style={[styles.title, { color: theme.text }]}>Leave a ShyText</Text>
-        <Text style={{ color: theme.muted }}>Say something to the room.</Text>
+        <Text style={[styles.title, { color: theme.text }]}>What are you up for?</Text>
+        <Text style={{ color: theme.muted }}>You’ll only be visible at this venue, and only until time runs out.</Text>
 
         <View style={styles.chips}>
-          {SHYTEXT_CATEGORIES.map((item) => (
+          {SHYTEXT_INTENTS.map((item) => (
             <Pressable
               key={item}
-              onPress={() => setCategory(item)}
-              style={[
-                styles.chip,
-                { backgroundColor: item === category ? theme.accent : theme.card },
-              ]}
+              onPress={() => setIntent(item)}
+              style={[styles.chip, { backgroundColor: item === intent ? theme.accent : theme.card }]}
             >
-              <Text style={{ color: item === category ? '#fff' : theme.text, fontWeight: '700' }}>
-                {LABELS[item]}
+              <Text style={{ color: item === intent ? '#fff' : theme.text, fontWeight: '700' }}>
+                {INTENT_LABELS[item]}
               </Text>
             </Pressable>
           ))}
         </View>
 
+        <Text style={{ color: theme.text, fontWeight: '700' }}>Say something</Text>
         <TextInput
           value={message}
           onChangeText={setMessage}
-          maxLength={MAX_MESSAGE_LENGTH}
+          maxLength={MAX_SHYTEXT_MESSAGE_LENGTH}
           multiline
-          placeholder="Anyone want to play dominoes?"
+          placeholder="Come say hi 👋"
           placeholderTextColor={theme.quiet}
           style={[styles.area, { backgroundColor: theme.card, color: theme.text }]}
         />
         <Text style={{ color: theme.quiet, alignSelf: 'flex-end' }}>
-          {message.length}/{MAX_MESSAGE_LENGTH}
+          {message.length}/{MAX_SHYTEXT_MESSAGE_LENGTH} · optional
         </Text>
 
         <View style={styles.row}>
@@ -94,36 +81,35 @@ export default function CreateShyTextScreen() {
         </View>
 
         <Text style={{ color: theme.muted }}>
-          Posting at:{'\n'}
+          Visible at{'\n'}
           <Text style={{ color: theme.text, fontWeight: '800' }}>{venue?.name ?? 'Unknown venue'}</Text>
         </Text>
         {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}
-        {!canPost ? (
-          <Text style={{ color: theme.danger }}>Check in to this venue first.</Text>
-        ) : null}
+        {!canActivate ? <Text style={{ color: theme.danger }}>Check in to this venue first.</Text> : null}
 
         <PrimaryButton
-          title="Post ShyText"
+          title="Go visible"
           theme={theme}
-          disabled={!canPost || !message.trim()}
+          disabled={!canActivate}
           loading={busy}
           onPress={async () => {
             if (!venueId || !profile) return;
             setBusy(true);
             setError(null);
             try {
-              await createShyText({
+              await activateShyText({
                 venueId,
-                message,
-                category,
+                intent,
+                message: message.trim() || undefined,
                 ttlMinutes: ttl,
                 authorName: profile.displayName,
                 authorAvatarUrl: profile.avatarUrl,
+                authorAge: profile.age,
               });
               await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               router.back();
             } catch (err) {
-              setError(err instanceof Error ? err.message : 'Could not post.');
+              setError(err instanceof Error ? err.message : 'Could not go visible.');
             } finally {
               setBusy(false);
             }
@@ -139,7 +125,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 30, fontWeight: '800' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  area: { minHeight: 140, borderRadius: 18, padding: 16, textAlignVertical: 'top', fontSize: 18 },
+  area: { minHeight: 100, borderRadius: 18, padding: 16, textAlignVertical: 'top', fontSize: 16 },
   row: { flexDirection: 'row', gap: 8 },
   ttl: { flex: 1, borderRadius: 14, padding: 12, alignItems: 'center' },
 });

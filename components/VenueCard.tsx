@@ -4,8 +4,9 @@ import { Theme } from '../theme';
 import { formatDistance } from '../utils/geo';
 
 export function activityLabel(count = 0) {
-  if (count >= 5) return { label: 'Active', icon: '🔥' };
-  if (count >= 1) return { label: 'A few ShyTexts', icon: '🟢' };
+  if (count >= 1) {
+    return { label: `${count} ${count === 1 ? 'person' : 'people'} open`, icon: count >= 5 ? '🔥' : '🟢' };
+  }
   return { label: 'Quiet', icon: '⚪' };
 }
 
@@ -29,7 +30,7 @@ export function VenueCard({
           {distance != null ? formatDistance(distance) : venue.address || venue.category}
         </Text>
         <Text style={{ color: theme.accent, marginTop: 8, fontWeight: '700' }}>
-          {activity.icon} {venue.activeCount ?? 0} active ShyTexts
+          {activity.icon} {activity.label}
         </Text>
       </View>
       <Text style={[styles.cta, { color: theme.accent }]}>Check in</Text>

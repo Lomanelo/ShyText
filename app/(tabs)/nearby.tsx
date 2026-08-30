@@ -84,7 +84,7 @@ export default function NearbyScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
       >
         <Text style={[styles.wordmark, { color: theme.accent }]}>shytext</Text>
-        <Text style={[styles.title, { color: theme.text }]}>Where are you?</Text>
+        <Text style={[styles.title, { color: theme.text }]}>Nearby</Text>
 
         {checkedIn ? (
           <Pressable
@@ -94,7 +94,7 @@ export default function NearbyScreen() {
             <Text style={{ color: theme.muted }}>You're at</Text>
             <Text style={[styles.hereName, { color: theme.text }]}>{current.venue?.name}</Text>
             <Text style={{ color: theme.accent, fontWeight: '700' }}>
-              See ShyTexts · {current.checkIn ? timeLeft(current.checkIn.expiresAt) : ''}
+              See who’s open · {current.checkIn ? timeLeft(current.checkIn.expiresAt) : ''}
             </Text>
           </Pressable>
         ) : null}

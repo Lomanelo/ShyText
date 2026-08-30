@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput } from 'react-native';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { Screen } from '../../components/Screen';
 import { PrimaryButton } from '../../components/PrimaryButton';
+import { Avatar } from '../../components/Avatar';
 import { useTheme } from '../../theme';
-import { completeProfile } from '../../services/auth';
+import { completeProfile, sanitizeAge, uploadAvatar } from '../../services/auth';
 import { useAuth } from '../../hooks/useAuth';
 
 export default function ProfileSetupScreen() {
@@ -12,18 +14,53 @@ export default function ProfileSetupScreen() {
   const { refreshProfile } = useAuth();
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
+  const [ageText, setAgeText] = useState('');
+  const [photoUri, setPhotoUri] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const pickPhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError('Photo access is needed to add a picture.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]?.uri) {
+      setPhotoUri(result.assets[0].uri);
+    }
+  };
 
   return (
     <Screen theme={theme}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrap}>
         <Text style={[styles.title, { color: theme.text }]}>What should people call you?</Text>
-        <Text style={[styles.body, { color: theme.muted }]}>Keep it light. This is not a dating profile.</Text>
+        <Text style={[styles.body, { color: theme.muted }]}>
+          A name and photo help people say hi. Keep it light.
+        </Text>
+        <Pressable onPress={pickPhoto} style={{ alignSelf: 'center' }} accessibilityLabel="Add profile photo">
+          <Avatar name={name} uri={photoUri} theme={theme} size={88} />
+          <Text style={{ color: theme.accent, fontWeight: '700', marginTop: 8, textAlign: 'center' }}>
+            Add photo
+          </Text>
+        </Pressable>
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="Display name"
+          placeholder="First name"
+          placeholderTextColor={theme.quiet}
+          style={[styles.input, { color: theme.text, backgroundColor: theme.card }]}
+        />
+        <TextInput
+          value={ageText}
+          onChangeText={setAgeText}
+          keyboardType="number-pad"
+          placeholder="Age (optional)"
           placeholderTextColor={theme.quiet}
           style={[styles.input, { color: theme.text, backgroundColor: theme.card }]}
         />
@@ -45,7 +82,16 @@ export default function ProfileSetupScreen() {
             setBusy(true);
             setError(null);
             try {
-              await completeProfile(name.trim(), undefined, bio.trim() || undefined);
+              let avatarUrl: string | undefined;
+              if (photoUri) {
+                avatarUrl = await uploadAvatar(photoUri);
+              }
+              await completeProfile(
+                name.trim(),
+                avatarUrl,
+                bio.trim() || undefined,
+                sanitizeAge(Number(ageText))
+              );
               await refreshProfile();
               router.replace('/(tabs)/nearby');
             } catch (err) {

@@ -33,10 +33,16 @@ service cloud.firestore {
     match /shytexts/{shytextId} {
       allow read: if signedIn();
       allow create: if isSelf(request.resource.data.authorId)
-        && request.resource.data.message is string
-        && request.resource.data.message.size() > 0
-        && request.resource.data.message.size() <= 160;
+        && (
+          !('message' in request.resource.data)
+          || request.resource.data.message == null
+          || (
+            request.resource.data.message is string
+            && request.resource.data.message.size() <= 120
+          )
+        );
       allow update: if isSelf(resource.data.authorId)
+        || isSelf(resource.data.userId)
         || (signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['responseCount']));
       allow delete: if false;
     }
