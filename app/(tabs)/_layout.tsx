@@ -1,71 +1,53 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, View, Platform } from 'react-native';
+import { Platform } from 'react-native';
+import { useTheme } from '../../theme';
+import { useAuth } from '../../hooks/useAuth';
+import { useChatRequests } from '../../hooks/useChatRequests';
 
-export default function TabLayout() {
+export default function TabsLayout() {
+  const theme = useTheme();
+  const { user } = useAuth();
+  const { incoming } = useChatRequests(user?.uid);
+
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#222222',
-        tabBarInactiveTintColor: '#999999',
-        tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabBarLabel,
         headerShown: false,
-        tabBarShowLabel: true,
-      }}>
+        tabBarActiveTintColor: theme.accent,
+        tabBarInactiveTintColor: theme.quiet,
+        tabBarStyle: {
+          backgroundColor: theme.card,
+          borderTopColor: theme.border,
+          height: Platform.OS === 'ios' ? 86 : 68,
+          paddingBottom: Platform.OS === 'ios' ? 26 : 10,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: { fontWeight: '700', fontSize: 11 },
+      }}
+    >
       <Tabs.Screen
-        name="index"
+        name="nearby"
         options={{
-          title: 'Discover',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name="compass-outline" size={22} color={focused ? '#222222' : color} />
-          ),
+          title: 'Nearby',
+          tabBarIcon: ({ color, size }) => <Ionicons name="location-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
         name="chats"
         options={{
           title: 'Chats',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name="chatbubble-outline" size={22} color={focused ? '#222222' : color} />
-          ),
+          tabBarBadge: incoming.length || undefined,
+          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name="person-outline" size={22} color={focused ? '#222222' : color} />
-          ),
+          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
         }}
       />
     </Tabs>
   );
 }
-
-const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: '#FFFFFF',
-    borderTopColor: '#EEEEEE',
-    height: 85,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 10,
-    paddingTop: 5,
-    paddingHorizontal: 20,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-  },
-  tabBarLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-});

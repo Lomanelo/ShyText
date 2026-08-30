@@ -1,9 +1,11 @@
 # dependencies
 node_modules/
+.netlify/
 
 # expo
 .expo/
 dist/
+dist-check/
 web-build/
 expo-env.d.ts
 
@@ -28,6 +30,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript

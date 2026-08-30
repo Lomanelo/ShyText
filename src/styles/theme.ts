@@ -12,7 +12,7 @@ export const colors = {
     secondary: '#666666',
     tertiary: '#999999',
     light: '#ffffff',
-    accent: '#0055FF',
+    accent: '#c45c26',
     error: '#FF4444',
   },
   
@@ -20,7 +20,7 @@ export const colors = {
   ui: {
     primary: '#222222',
     secondary: '#f2f2f2',
-    accent: '#0055FF',
+    accent: '#c45c26',
     success: '#4CAF50',
     error: '#FF4444',
     warning: '#FFAA00',

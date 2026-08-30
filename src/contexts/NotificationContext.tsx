@@ -41,10 +41,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         // Save token to user's profile in Firebase
         const currentUser = auth.currentUser;
         if (currentUser) {
-          const userProfileRef = ref(database, `profiles/${currentUser.uid}`);
-          update(userProfileRef, { expoPushToken: token })
-            .then(() => console.log('Push token saved to user profile'))
-            .catch(err => console.error('Error saving push token to profile:', err));
+          const tokenRef = ref(database, `pushTokens/${currentUser.uid}`);
+          update(tokenRef, { expoPushToken: token, updatedAt: Date.now() })
+            .then(() => console.log('Push token saved'))
+            .catch(err => console.error('Error saving push token:', err));
         }
       }
     });

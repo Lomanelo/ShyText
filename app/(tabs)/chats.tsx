@@ -1,217 +1,96 @@
-import { StyleSheet, View, Text, FlatList, TouchableOpacity, Image } from 'react-native';
-import { useConversations } from '../../src/hooks/useConversations';
+import { useEffect, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import ImagePreviewModal from '../components/ImagePreviewModal';
-import { useState } from 'react';
+import { Screen } from '../../components/Screen';
+import { EmptyState } from '../../components/EmptyState';
+import { Avatar } from '../../components/Avatar';
+import { useTheme } from '../../theme';
+import { useAuth } from '../../hooks/useAuth';
+import { useChatRequests } from '../../hooks/useChatRequests';
+import { useChats } from '../../hooks/useChats';
+import { timeAgo } from '../../utils/dates';
+import { getUserProfile } from '../../services/auth';
 
 export default function ChatsScreen() {
-  const { conversations, loading, error } = useConversations();
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [imageModalVisible, setImageModalVisible] = useState(false);
+  const theme = useTheme();
+  const { user } = useAuth();
+  const { incoming } = useChatRequests(user?.uid);
+  const { conversations } = useChats(user?.uid);
+  const [names, setNames] = useState<Record<string, string>>({});
 
-  // Function to navigate to chat detail
-  const navigateToChat = (chatId: string) => {
-    router.push(`/chat/${chatId}`);
-  };
-  
-  // Function to get avatar source outside JSX
-  const getAvatarSource = (user: any) => {
-    const defaultImage = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=80&h=80&fit=crop';
-    return { uri: user?.photoURL || defaultImage };
-  };
-
-  // Function to handle avatar click
-  const handleAvatarClick = (photoURL: string) => {
-    setSelectedImage(photoURL);
-    setImageModalVisible(true);
-  };
-
-  if (loading) {
-    return (
-      <LinearGradient colors={['#f9f1e7', '#f9f1e7']} style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Messages</Text>
-        </View>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading conversations...</Text>
-        </View>
-      </LinearGradient>
-    );
-  }
-
-  if (error) {
-    return (
-      <LinearGradient colors={['#f9f1e7', '#f9f1e7']} style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Messages</Text>
-        </View>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      </LinearGradient>
-    );
-  }
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const next: Record<string, string> = {};
+      for (const convo of conversations) {
+        const other = convo.participantIds.find((id) => id !== user.uid);
+        if (!other) continue;
+        const profile = await getUserProfile(other);
+        next[convo.id] = profile?.displayName ?? 'Someone';
+      }
+      if (!cancelled) setNames(next);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [conversations, user]);
 
   return (
-    <LinearGradient colors={['#f9f1e7', '#f9f1e7']} style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
-      </View>
-      
-      {conversations.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Ionicons name="chatbubble-outline" size={50} color="#999" style={styles.emptyIcon} />
-          <Text style={styles.emptyStateText}>
-            No active conversations yet.{'\n'}
-            Find someone nearby to start chatting!
+    <Screen theme={theme}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <Text style={[styles.title, { color: theme.text }]}>Chats</Text>
+
+        <Pressable onPress={() => router.push('/requests')} style={[styles.requests, { backgroundColor: theme.accentSoft }]}>
+          <Text style={{ color: theme.accent, fontWeight: '800' }}>
+            Requests {incoming.length ? `(${incoming.length})` : ''}
           </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={conversations}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={styles.chatItem}
-              onPress={() => navigateToChat(item.id)}>
-              <TouchableOpacity 
-                onPress={() => {
-                  const photoURL = item.otherUser?.photoURL;
-                  if (photoURL) handleAvatarClick(photoURL);
-                }}
-                activeOpacity={item.otherUser?.photoURL ? 0.7 : 1}>
-                <Image
-                  source={getAvatarSource(item.otherUser)}
-                  style={styles.avatar}
-                />
-              </TouchableOpacity>
-              <View style={styles.chatInfo}>
-                <Text style={styles.chatName}>{item.otherUser?.firstName || 'User'}</Text>
-                <Text style={styles.lastMessage} numberOfLines={1}>
-                  {item.lastMessage || 'No messages yet'}
-                </Text>
-              </View>
-              {item.unreadCount && item.unreadCount > 0 && (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadCount}>{item.unreadCount}</Text>
+          <Text style={{ color: theme.muted }}>Hellos waiting for you</Text>
+        </Pressable>
+
+        <Text style={[styles.section, { color: theme.muted }]}>Messages</Text>
+        {conversations.length === 0 ? (
+          <EmptyState
+            theme={theme}
+            title="Nothing happening yet."
+            body="Change that. Leave a ShyText and someone may say hello."
+            action={{ label: 'Go nearby', onPress: () => router.push('/(tabs)/nearby') }}
+          />
+        ) : (
+          conversations.map((convo) => {
+            const unread = convo.lastSenderId && convo.lastSenderId !== user?.uid;
+            return (
+              <Pressable
+                key={convo.id}
+                onPress={() => router.push(`/chat/${convo.id}`)}
+                style={[styles.card, { backgroundColor: theme.card }]}
+              >
+                <Avatar name={names[convo.id] || convo.venueName || 'Chat'} theme={theme} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.name, { color: theme.text }]}>{names[convo.id] || 'Private chat'}</Text>
+                  <Text style={{ color: theme.muted }} numberOfLines={1}>
+                    {convo.lastMessage || 'Say hello'}
+                  </Text>
                 </View>
-              )}
-            </TouchableOpacity>
-          )}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContentContainer}
-        />
-      )}
-      
-      <ImagePreviewModal
-        visible={imageModalVisible}
-        imageUrl={selectedImage}
-        onClose={() => setImageModalVisible(false)}
-      />
-    </LinearGradient>
+                <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                  <Text style={{ color: theme.quiet, fontSize: 12 }}>{timeAgo(convo.lastMessageAt)}</Text>
+                  {unread ? <View style={[styles.dot, { backgroundColor: theme.accent }]} /> : null}
+                </View>
+              </Pressable>
+            );
+          })
+        )}
+      </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  header: {
-    paddingTop: 60,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  headerTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#222',
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  emptyIcon: {
-    marginBottom: 20,
-  },
-  emptyStateText: {
-    color: '#666',
-    fontSize: 16,
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    color: '#666',
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  errorText: {
-    color: '#ff4444',
-    fontSize: 16,
-    textAlign: 'center',
-    padding: 20,
-    backgroundColor: 'rgba(255, 68, 68, 0.1)',
-    borderRadius: 8,
-  },
-  listContentContainer: {
-    padding: 16,
-  },
-  chatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 15,
-  },
-  chatInfo: {
-    flex: 1,
-  },
-  chatName: {
-    color: '#222',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  lastMessage: {
-    color: '#666',
-    fontSize: 14,
-  },
-  unreadBadge: {
-    backgroundColor: '#222',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  unreadCount: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
+  content: { padding: 20, paddingBottom: 120, gap: 12 },
+  title: { fontSize: 32, fontWeight: '800' },
+  requests: { borderRadius: 18, padding: 16, gap: 4 },
+  section: { fontWeight: '700', marginTop: 8 },
+  card: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18 },
+  name: { fontWeight: '700', fontSize: 16 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
 });

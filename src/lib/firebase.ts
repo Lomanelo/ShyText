@@ -1,51 +1,58 @@
-import { initializeApp } from 'firebase/app';
+import { getApp, getApps, initializeApp } from 'firebase/app';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getDatabase, ref, get, set } from 'firebase/database';
+import { getDatabase, ref, get } from 'firebase/database';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { Alert, Platform } from 'react-native';
-import { GoogleAuthProvider, OAuthProvider, signInWithCredential, onAuthStateChanged } from 'firebase/auth';
+import {
+  Auth,
+  getAuth,
+  GoogleAuthProvider,
+  OAuthProvider,
+  signInWithCredential,
+} from 'firebase/auth';
+import { Platform } from 'react-native';
 import * as ImageManipulator from 'expo-image-manipulator';
 
-// Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyAVnkBhxkzWdh2fLXsBMRDcRGYbY2KnBeE",
-  authDomain: "myshytext.firebaseapp.com",
-  projectId: "myshytext",
-  storageBucket: "myshytext.appspot.com",
-  messagingSenderId: "680911194317",
-  appId: "1:680911194317:web:b5c93b3d272d9e727cc184",
-  databaseURL: "https://myshytext-default-rtdb.firebaseio.com"
+  apiKey: 'AIzaSyAVnkBhxkzWdh2fLXsBMRDcRGYbY2KnBeE',
+  authDomain: 'myshytext.firebaseapp.com',
+  projectId: 'myshytext',
+  storageBucket: 'myshytext.appspot.com',
+  messagingSenderId: '680911194317',
+  appId: '1:680911194317:web:b5c93b3d272d9e727cc184',
+  databaseURL: 'https://myshytext-default-rtdb.firebaseio.com',
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Directly requiring the React Native specific modules to bypass TypeScript errors
-const { initializeAuth } = require('firebase/auth');
-const getReactNativePersistence = require('firebase/auth').getReactNativePersistence;
+function createAuth(): Auth {
+  if (Platform.OS === 'web') {
+    return getAuth(app);
+  }
 
-// Initialize Auth using the direct require, bypassing TypeScript checking
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
+  try {
+    const { initializeAuth, getReactNativePersistence } = require('firebase/auth');
+    if (typeof getReactNativePersistence === 'function') {
+      return initializeAuth(app, {
+        persistence: getReactNativePersistence(AsyncStorage),
+      });
+    }
+  } catch {
+    // Fast Refresh can re-run this file after Auth is already created.
+  }
 
-// Initialize other Firebase services
+  return getAuth(app);
+}
+
+export const auth = createAuth();
+
 export const database = getDatabase(app);
 export const storage = getStorage(app);
 
-// Log database initialization
-console.log("Firebase Realtime Database initialized:", database.app.options.databaseURL);
-console.log("Firebase Storage initialized with bucket:", app.options.storageBucket);
-
-// Check if user profile exists and is complete
 export const checkUserProfileExists = async (userId: string) => {
   try {
-    const userProfileRef = ref(database, 'profiles/' + userId);
-    const snapshot = await get(userProfileRef);
-    
+    const snapshot = await get(ref(database, 'profiles/' + userId));
     if (snapshot.exists()) {
       const profileData = snapshot.val();
-      // Check if profile has essential fields
       return !!profileData && !!profileData.firstName;
     }
     return false;
@@ -55,13 +62,11 @@ export const checkUserProfileExists = async (userId: string) => {
   }
 };
 
-// Google Auth utility
 export const signInWithGoogleCredential = async (idToken: string) => {
   const credential = GoogleAuthProvider.credential(idToken);
   return await signInWithCredential(auth, credential);
 };
 
-// Apple Auth utility
 export const signInWithAppleCredential = async (identityToken: string, nonce: string) => {
   const provider = new OAuthProvider('apple.com');
   const credential = provider.credential({
@@ -71,44 +76,26 @@ export const signInWithAppleCredential = async (identityToken: string, nonce: st
   return await signInWithCredential(auth, credential);
 };
 
-// Process and encode image for direct database storage
-export const processProfileImageForDB = async (uri: string): Promise<string> => {
-  try {
-    console.log('Processing image for database storage');
-    
-    // Resize and compress the image heavily to keep database size reasonable
-    const processedImage = await ImageManipulator.manipulateAsync(
-      uri,
-      [{ resize: { width: 250 } }], // Small thumbnail size
-      { compress: 0.5, format: ImageManipulator.SaveFormat.JPEG, base64: true }
-    );
-    
-    console.log('Image processed successfully');
-    
-    if (!processedImage.base64) {
-      throw new Error('Failed to get base64 data from processed image');
-    }
-    
-    // Return the data URL format that can be used directly as an image source
-    const dataUrl = `data:image/jpeg;base64,${processedImage.base64}`;
-    console.log('Image converted to data URL, length:', dataUrl.length);
-    
-    return dataUrl;
-  } catch (error) {
-    console.error('Error processing image:', error);
-    throw error;
-  }
-};
+async function uriToBlob(uri: string): Promise<Blob> {
+  const response = await fetch(uri);
+  return await response.blob();
+}
 
-// Keep the old function for backward compatibility
 export const uploadProfileImage = async (userId: string, uri: string): Promise<string | null> => {
   try {
-    // Skip storage upload and use direct database storage instead
-    return await processProfileImageForDB(uri);
+    const processed = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 400 } }],
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
+    );
+    const blob = await uriToBlob(processed.uri);
+    const imageRef = storageRef(storage, `avatars/${userId}.jpg`);
+    await uploadBytes(imageRef, blob);
+    return await getDownloadURL(imageRef);
   } catch (error) {
-    console.error('Error in profile image processing:', error);
+    console.error('Error uploading profile image:', error);
     return null;
   }
 };
 
-export default app; 
+export default app;

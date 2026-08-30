@@ -1,41 +1,108 @@
 {
   "rules": {
-    ".read": "auth != null",
-    ".write": "auth != null",
-    "messages": {
-      ".indexOn": ["createdAt"],
-      "$conversationId": {
-        ".indexOn": ["createdAt", "senderId", "receiverId"],
-        ".read": "auth != null",
-        ".write": "auth != null"
-      }
-    },
-    "conversations": {
-      ".indexOn": ["participants/*", "initiatorId", "receiverId"],
-      "$conversationId": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      }
-    },
-    "userStatus": {
-      ".indexOn": ["online", "peerId"],
-      "$uid": {
-        ".read": "auth != null",
-        ".write": "auth != null || $uid === auth.uid"
-      }
-    },
     "profiles": {
-      ".indexOn": ["email", "firstName"],
+      ".indexOn": ["firstName"],
       "$uid": {
         ".read": "auth != null",
-        ".write": "auth != null && $uid === auth.uid"
+        ".write": "auth != null && $uid === auth.uid",
+        ".validate": "newData.hasChildren(['firstName'])"
       }
     },
     "users": {
-      ".indexOn": ["email", "displayName"],
       "$uid": {
-        ".read": "auth != null",
+        ".read": "auth != null && $uid === auth.uid",
         ".write": "auth != null && $uid === auth.uid"
+      }
+    },
+    "venues": {
+      ".read": "auth != null",
+      "$venueId": {
+        ".write": "auth != null && (!data.exists() || data.child('createdBy').val() === auth.uid)",
+        ".validate": "newData.hasChildren(['name']) && newData.child('name').isString() && newData.child('name').val().length <= 80"
+      }
+    },
+    "venuePresence": {
+      "$venueId": {
+        ".read": "auth != null && data.child(auth.uid).exists() && data.child(auth.uid).child('expiresAt').val() > now",
+        "$uid": {
+          ".write": "auth != null && $uid === auth.uid",
+          ".validate": "!newData.exists() || newData.child('expiresAt').isNumber()"
+        }
+      }
+    },
+    "userPresence": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        ".write": "auth != null && $uid === auth.uid"
+      }
+    },
+    "notes": {
+      "$venueId": {
+        ".read": "auth != null && root.child('venuePresence').child($venueId).child(auth.uid).exists() && root.child('venuePresence').child($venueId).child(auth.uid).child('expiresAt').val() > now",
+        "$noteId": {
+          ".write": "auth != null && (!data.exists() && newData.child('authorId').val() === auth.uid && root.child('venuePresence').child($venueId).child(auth.uid).exists() && root.child('profiles').child(auth.uid).child('ghostMode').val() !== true || data.exists() && data.child('authorId').val() === auth.uid)",
+          ".validate": "!newData.exists() || (newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 140 && newData.child('expiresAt').isNumber())"
+        }
+      }
+    },
+    "userNotes": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        ".write": "auth != null && $uid === auth.uid"
+      }
+    },
+    "conversations": {
+      "$conversationId": {
+        ".read": "auth != null && data.child('participants').child(auth.uid).val() === true",
+        ".write": "auth != null && (!data.exists() && newData.child('participants').child(auth.uid).val() === true || data.child('participants').child(auth.uid).val() === true)"
+      }
+    },
+    "userConversations": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        "$conversationId": {
+          ".write": "auth != null && ($uid === auth.uid || root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true)"
+        }
+      }
+    },
+    "messages": {
+      "$conversationId": {
+        ".read": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+        ".write": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true && root.child('blockedUsers').child(auth.uid).child(root.child('conversations').child($conversationId).child('initiatorId').val()).val() == null"
+      }
+    },
+    "blockedUsers": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        "$blockedUid": {
+          ".write": "auth != null && $uid === auth.uid"
+        }
+      }
+    },
+    "activeChats": {
+      "$conversationId": {
+        "$uid": {
+          ".read": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+          ".write": "auth != null && $uid === auth.uid"
+        }
+      }
+    },
+    "pushTokens": {
+      "$uid": {
+        ".read": "auth != null && $uid === auth.uid",
+        ".write": "auth != null && $uid === auth.uid"
+      }
+    },
+    "reports": {
+      "$reportId": {
+        ".read": false,
+        ".write": "auth != null && newData.child('reporterId').val() === auth.uid && newData.child('reason').isString()"
+      }
+    },
+    "forms": {
+      "$formId": {
+        ".read": "auth != null && data.child('userId').val() === auth.uid",
+        ".write": "auth != null && newData.child('userId').val() === auth.uid"
       }
     }
   }
