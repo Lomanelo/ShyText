@@ -30,7 +30,7 @@ export async function sendChatRequest(input: {
 }) {
   const user = auth.currentUser;
   if (!user) throw new Error('Sign in first.');
-  if (user.uid === input.receiverId) throw new Error('You cannot say hi to yourself.');
+  if (user.uid === input.receiverId) throw new Error('You cannot break the ice with yourself.');
   if (await isBlockedEitherWay(user.uid, input.receiverId)) {
     throw new Error('You cannot contact this person.');
   }
@@ -49,13 +49,13 @@ export async function sendChatRequest(input: {
     )
   );
   if (existing.docs.some((item) => item.data().status === 'pending')) {
-    throw new Error('You already sent a hi.');
+    throw new Error('You already broke the ice.');
   }
 
   const hourSnap = await getDocs(query(collection(db, 'chatRequests'), where('senderId', '==', user.uid)));
   const hourCount = hourSnap.docs.filter((item) => Date.now() - Number(item.data().createdAt) < 60 * 60 * 1000).length;
   if (hourCount >= MAX_REQUESTS_PER_HOUR) {
-    throw new Error('Too many hellos this hour.');
+    throw new Error('Too many icebreakers this hour.');
   }
 
   await addDoc(collection(db, 'chatRequests'), {
@@ -66,19 +66,23 @@ export async function sendChatRequest(input: {
     serverCreatedAt: serverTimestamp(),
   });
   await notifyUser(input.receiverId, {
-    title: 'Someone wants to say hi',
+    title: 'Someone wants to break the ice',
     body: input.introMessage || 'Open ShyText to read it.',
   });
 }
 
 export function listenRequests(userId: string, onChange: (items: ChatRequest[]) => void) {
   const incoming = query(collection(db, 'chatRequests'), where('receiverId', '==', userId));
-  return onSnapshot(incoming, (snap) => {
-    const items = snap.docs
-      .map((item) => ({ id: item.id, ...item.data() } as ChatRequest))
-      .sort((a, b) => b.createdAt - a.createdAt);
-    onChange(items);
-  });
+  return onSnapshot(
+    incoming,
+    (snap) => {
+      const items = snap.docs
+        .map((item) => ({ id: item.id, ...item.data() } as ChatRequest))
+        .sort((a, b) => b.createdAt - a.createdAt);
+      onChange(items);
+    },
+    () => onChange([])
+  );
 }
 
 export async function respondToRequest(request: ChatRequest, accept: boolean): Promise<string | null> {
@@ -91,7 +95,7 @@ export async function respondToRequest(request: ChatRequest, accept: boolean): P
       venueName: request.venueName ?? null,
       createdAt: Date.now(),
       lastMessageAt: Date.now(),
-      lastMessage: request.introMessage || 'Hello',
+      lastMessage: request.introMessage || 'Hi',
       lastSenderId: request.senderId,
       status: 'active',
       serverCreatedAt: serverTimestamp(),
@@ -108,7 +112,7 @@ export async function respondToRequest(request: ChatRequest, accept: boolean): P
     await updateDoc(doc(db, 'shytexts', request.shytextId), { responseCount: increment(1) }).catch(() => undefined);
     await updateDoc(doc(db, 'users', user.uid), { 'stats.chatsStarted': increment(1) }).catch(() => undefined);
     await notifyUser(request.senderId, {
-      title: 'Your hello was accepted',
+      title: 'They accepted',
       body: 'You can chat now.',
     });
     return convo.id;
@@ -119,23 +123,31 @@ export async function respondToRequest(request: ChatRequest, accept: boolean): P
 
 export function listenConversations(userId: string, onChange: (items: Conversation[]) => void) {
   const q = query(collection(db, 'conversations'), where('participantIds', 'array-contains', userId));
-  return onSnapshot(q, (snap) => {
-    const items = snap.docs
-      .map((item) => ({ id: item.id, ...item.data() } as Conversation))
-      .filter((item) => item.status !== 'closed')
-      .sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-    onChange(items);
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      const items = snap.docs
+        .map((item) => ({ id: item.id, ...item.data() } as Conversation))
+        .filter((item) => item.status !== 'closed')
+        .sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+      onChange(items);
+    },
+    () => onChange([])
+  );
 }
 
 export function listenMessages(conversationId: string, onChange: (items: ChatMessage[]) => void) {
   const q = collection(db, 'conversations', conversationId, 'messages');
-  return onSnapshot(q, (snap) => {
-    const items = snap.docs
-      .map((item) => ({ id: item.id, conversationId, ...item.data() } as ChatMessage))
-      .sort((a, b) => a.createdAt - b.createdAt);
-    onChange(items);
-  });
+  return onSnapshot(
+    q,
+    (snap) => {
+      const items = snap.docs
+        .map((item) => ({ id: item.id, conversationId, ...item.data() } as ChatMessage))
+        .sort((a, b) => a.createdAt - b.createdAt);
+      onChange(items);
+    },
+    () => onChange([])
+  );
 }
 
 export async function sendMessage(conversationId: string, text: string) {

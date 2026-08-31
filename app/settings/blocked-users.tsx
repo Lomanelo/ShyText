@@ -37,7 +37,7 @@ export default function BlockedUsersScreen() {
         </Text>
         <Text style={[styles.title, { color: theme.text }]}>Blocked users</Text>
         {rows.length === 0 ? (
-          <EmptyState theme={theme} title="Nobody blocked" body="People you block cannot say hello or start a new chat." />
+          <EmptyState theme={theme} title="Nobody blocked" body="People you block cannot break the ice or start a new chat." />
         ) : (
           rows.map((row) => (
             <View key={row.id} style={[styles.row, { backgroundColor: theme.card }]}>

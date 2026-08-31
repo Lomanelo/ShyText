@@ -7,6 +7,7 @@ import { useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { memberSince } from '../../utils/dates';
 import { signOut } from '../../services/auth';
+import { maskPhone } from '../../utils/phone';
 
 export default function ProfileScreen() {
   const theme = useTheme();
@@ -26,6 +27,9 @@ export default function ProfileScreen() {
           <Text style={{ color: theme.quiet }}>
             Member since {profile?.createdAt ? memberSince(profile.createdAt) : 'now'}
           </Text>
+          {user?.phoneNumber ? (
+            <Text style={{ color: theme.quiet }}>{maskPhone(user.phoneNumber)}</Text>
+          ) : null}
         </View>
         <Pressable onPress={() => router.push('/settings')} style={styles.row}>
           <Text style={{ color: theme.text, fontWeight: '700' }}>Settings</Text>

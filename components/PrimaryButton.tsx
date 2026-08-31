@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text } from 'react-native';
-import { Theme } from '../theme';
+import { motion, radius, Theme } from '../theme';
 
 type Props = {
   title: string;
@@ -19,7 +19,15 @@ export function PrimaryButton({ title, onPress, theme, disabled, loading, varian
       accessibilityRole="button"
       onPress={onPress}
       disabled={disabled || loading}
-      style={[styles.btn, { backgroundColor, opacity: disabled ? 0.45 : 1, borderColor: theme.border }]}
+      style={({ pressed }) => [
+        styles.btn,
+        {
+          backgroundColor,
+          borderColor: variant === 'ghost' ? theme.border : 'transparent',
+          opacity: disabled ? 0.45 : 1,
+          transform: [{ scale: pressed && !disabled ? motion.press : 1 }],
+        },
+      ]}
     >
       {loading ? <ActivityIndicator color={color} /> : <Text style={[styles.text, { color }]}>{title}</Text>}
     </Pressable>
@@ -29,12 +37,11 @@ export function PrimaryButton({ title, onPress, theme, disabled, loading, varian
 const styles = StyleSheet.create({
   btn: {
     minHeight: 52,
-    borderRadius: 16,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: 'transparent',
   },
   text: { fontSize: 16, fontWeight: '700' },
 });

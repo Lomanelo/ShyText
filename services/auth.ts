@@ -1,11 +1,9 @@
 import {
-  createUserWithEmailAndPassword,
-  GoogleAuthProvider,
-  OAuthProvider,
+  PhoneAuthProvider,
   signInWithCredential,
-  signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   updateProfile,
+  type ApplicationVerifier,
 } from 'firebase/auth';
 import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
@@ -13,9 +11,13 @@ import { auth, db, storage } from './firebase';
 import { UserProfile } from '../types/user';
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
-  const snap = await getDoc(doc(db, 'users', uid));
-  if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() } as UserProfile;
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    if (!snap.exists()) return null;
+    return { id: snap.id, ...snap.data() } as UserProfile;
+  } catch {
+    return null;
+  }
 }
 
 export function sanitizeAge(value?: number): number | undefined {
@@ -56,31 +58,38 @@ export async function upsertUserProfile(input: {
 export async function uploadAvatar(localUri: string): Promise<string> {
   const user = auth.currentUser;
   if (!user) throw new Error('Not signed in.');
-  const response = await fetch(localUri);
-  const blob = await response.blob();
+  const blob = await readLocalImage(localUri);
   const file = ref(storage, `avatars/${user.uid}.jpg`);
-  await uploadBytes(file, blob, { contentType: blob.type || 'image/jpeg' });
+  await uploadBytes(file, blob, { contentType: 'image/jpeg' });
   return getDownloadURL(file);
 }
 
-export async function signInWithEmail(email: string, password: string) {
-  return signInWithEmailAndPassword(auth, email, password);
+function readLocalImage(uri: string): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.onload = () => {
+      const response = xhr.response as Blob;
+      if (!response) {
+        reject(new Error('Could not read that photo.'));
+        return;
+      }
+      resolve(response);
+    };
+    xhr.onerror = () => reject(new Error('Could not read that photo.'));
+    xhr.responseType = 'blob';
+    xhr.open('GET', uri, true);
+    xhr.send(null);
+  });
 }
 
-export async function signUpWithEmail(email: string, password: string) {
-  return createUserWithEmailAndPassword(auth, email, password);
+export async function sendPhoneVerification(phoneNumber: string, verifier: ApplicationVerifier) {
+  const provider = new PhoneAuthProvider(auth);
+  return provider.verifyPhoneNumber(phoneNumber, verifier);
 }
 
-export async function signInWithGoogleIdToken(idToken: string) {
-  return signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
-}
-
-export async function signInWithAppleToken(identityToken: string, nonce: string) {
-  const provider = new OAuthProvider('apple.com');
-  return signInWithCredential(
-    auth,
-    provider.credential({ idToken: identityToken, rawNonce: nonce })
-  );
+export async function confirmPhoneVerification(verificationId: string, code: string) {
+  const credential = PhoneAuthProvider.credential(verificationId, code);
+  return signInWithCredential(auth, credential);
 }
 
 export async function completeProfile(

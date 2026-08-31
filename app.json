@@ -12,14 +12,12 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.rahimrady.myshytext",
       "requireFullScreen": true,
-      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
-              "com.rahimrady.myshytext",
-              "com.googleusercontent.apps.680911194317-g3amhmkgvie7gdmdcalkn14p46ralg1h"
+              "com.rahimrady.myshytext"
             ]
           }
         ],
@@ -35,7 +33,7 @@
       "package": "com.rahimrady.myshytext",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#5B3FD9"
+        "backgroundColor": "#FCF3E8"
       },
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -71,12 +69,11 @@
         "expo-notifications",
         {
           "icon": "./assets/images/notification-icon.png",
-          "color": "#5B3FD9",
+          "color": "#D05927",
           "sounds": ["./assets/sounds/notification.wav"],
           "enableBackgroundRemoteNotifications": true
         }
       ],
-      "expo-apple-authentication",
       "expo-secure-store",
       "expo-dev-client"
     ],

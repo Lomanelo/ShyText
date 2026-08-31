@@ -13,11 +13,23 @@ export function Avatar({
   theme: Theme;
   size?: number;
 }) {
+  const outline = { borderWidth: 1, borderColor: theme.imageOutline };
   if (uri) {
-    return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
+    return (
+      <Image
+        source={{ uri }}
+        style={{ width: size, height: size, borderRadius: size / 2, ...outline }}
+      />
+    );
   }
   return (
-    <View style={[styles.fallback, { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.accentSoft }]}>
+    <View
+      style={[
+        styles.fallback,
+        outline,
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.accentSoft },
+      ]}
+    >
       <Text style={{ color: theme.accent, fontWeight: '700' }}>{initials(name)}</Text>
     </View>
   );

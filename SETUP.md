@@ -38,7 +38,7 @@ Set `EXPO_PUBLIC_DEV_MODE=true` in `.env` for demo venues (Paddy's Corner) and s
 ## 3. Firebase
 
 1. Open the Firebase project (`myshytext` or a new one).
-2. Enable **Authentication**: Apple, Google, and Email/Password (email is for development).
+2. Enable **Authentication → Phone** (SMS). Optionally add test phone numbers for local work. Real SMS requires the Blaze plan. Do not use Google, Apple, or email for sign-in in the app.
 3. Enable **Cloud Firestore** (this MVP uses Firestore, not Realtime Database).
 4. Enable **Storage** only if you add profile photos later.
 5. Deploy rules and indexes:
@@ -47,7 +47,7 @@ Set `EXPO_PUBLIC_DEV_MODE=true` in `.env` for demo venues (Paddy's Corner) and s
 npx firebase deploy --only firestore:rules,firestore:indexes
 ```
 
-6. Add the same authorized domains / OAuth redirect URIs you already use for `com.rahimrady.myshytext`.
+6. Phone auth uses a reCAPTCHA page at `https://myshytext.firebaseapp.com/phone-recaptcha.html`. Deploy it with `npx firebase deploy --only hosting --project myshytext`.
 
 ## 4. Environment variables
 
@@ -60,15 +60,14 @@ Client (`.env` / EAS env):
 - `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
 - `EXPO_PUBLIC_FIREBASE_APP_ID`
 - `EXPO_PUBLIC_PLACES_PROXY_URL` (example: `https://your-site.netlify.app/api/places`)
-- `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`
-- `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`
-- `EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID`
+- `EXPO_PUBLIC_PHONE_RECAPTCHA_URL` (optional; defaults to Firebase Hosting)
 - `EXPO_PUBLIC_DEV_MODE`
 
-Server / EAS secrets (never ship unrestricted):
+Server / Netlify secrets (never ship in the app):
 
-- `GOOGLE_MAPS_API_KEY` for the Places proxy only
-- Apple / Google OAuth client secrets as required by your console
+- `APPLE_MAPS_TEAM_ID`
+- `APPLE_MAPS_KEY_ID`
+- `APPLE_MAPS_PRIVATE_KEY` (Maps `.p8` key contents; `\n` escaped is fine)
 
 ## 5. Firestore collections
 
@@ -94,16 +93,18 @@ See `firestore.indexes.json`. Important composites:
 - `chatRequests`: `receiverId` + `status` + `createdAt`
 - `conversations`: `participantIds` (array) + `lastMessageAt`
 
-## 8. Google Places
+## 8. Apple Maps venue discovery
 
-Do not put an unrestricted Places key in the app.
+The app never calls Apple Maps with a private key. Nearby/search go through `netlify/functions/places.ts` (`/api/places`).
 
-1. Restrict a server key to Places API.
-2. Deploy `netlify/functions/places.ts` (path `/api/places`).
-3. Set `GOOGLE_MAPS_API_KEY` on Netlify.
-4. Set `EXPO_PUBLIC_PLACES_PROXY_URL` to that URL.
+1. In Apple Developer, create a Maps identifier and a Maps Server API key (`.p8`).
+2. Set Netlify env: `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID`, `APPLE_MAPS_PRIVATE_KEY`.
+3. Deploy the Netlify function.
+4. Set `EXPO_PUBLIC_PLACES_PROXY_URL` to `https://your-site.netlify.app/api/places`.
 
-If the proxy is missing, the app uses demo venues (Paddy's Corner, Campus Library, Riverside Park).
+Do not put Apple private keys in `EXPO_PUBLIC_*` variables.
+
+If the proxy is missing, the app uses demo venues (Paddy's Corner, Campus Library, Riverside Park). There is no map UI — only a list of venue names.
 
 ## 9. iOS development build
 

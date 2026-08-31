@@ -8,7 +8,7 @@ import { useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useChatRequests } from '../../hooks/useChatRequests';
 import { respondToRequest } from '../../services/chat';
-import { INTENT_LABELS, normalizeIntent } from '../../types/shytext';
+import { VIBE_LABELS, normalizeVibe } from '../../types/shytext';
 import { useState } from 'react';
 
 export default function RequestsScreen() {
@@ -28,16 +28,16 @@ export default function RequestsScreen() {
         {incoming.length === 0 ? (
           <EmptyState
             theme={theme}
-            title="No hellos yet"
-            body="When someone says hi to you, it shows up here."
+            title="No icebreakers yet"
+            body="When someone wants to break the ice, it shows up here."
           />
         ) : (
           incoming.map((request) => (
             <View key={request.id} style={[styles.card, { backgroundColor: theme.card }]}>
-              <Text style={[styles.name, { color: theme.text }]}>{request.senderName} wants to say hi</Text>
+              <Text style={[styles.name, { color: theme.text }]}>{request.senderName} wants to break the ice</Text>
               <Text style={{ color: theme.muted }}>Responding to your:</Text>
               <Text style={{ color: theme.text, fontWeight: '600' }}>
-                {request.shytextIntent ? INTENT_LABELS[normalizeIntent(request.shytextIntent)] : ''}
+                {request.shytextIntent ? VIBE_LABELS[normalizeVibe(request.shytextIntent)] : ''}
                 {request.shytextMessage ? `\n“${request.shytextMessage}”` : ''}
               </Text>
               {request.introMessage ? (

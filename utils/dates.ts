@@ -7,11 +7,17 @@ export function timeAgo(timestamp: number): string {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-export function timeLeft(expiresAt: number): string {
+export function remainingCompact(expiresAt: number): string {
   const minutes = Math.max(0, Math.round((expiresAt - Date.now()) / 60000));
-  if (minutes < 1) return 'ending';
-  if (minutes < 60) return `${minutes}m left`;
-  return `${Math.round(minutes / 60)}h left`;
+  if (minutes < 1) return '<1m';
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.round(minutes / 60)}h`;
+}
+
+export function timeLeft(expiresAt: number): string {
+  const compact = remainingCompact(expiresAt);
+  if (compact === '<1m') return 'ending';
+  return compact;
 }
 
 export function memberSince(timestamp: number): string {

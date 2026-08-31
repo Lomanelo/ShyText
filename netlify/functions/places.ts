@@ -1,4 +1,21 @@
 import type { Config, Context } from '@netlify/functions';
+import { appleMapsConfigured } from './_shared/appleMapsAuth';
+import { searchAppleVenues } from './_shared/appleMapsClient';
+
+type CacheEntry = { at: number; body: unknown };
+const cache = new Map<string, CacheEntry>();
+const CACHE_TTL_MS = 90_000;
+
+function cacheKey(lat: number, lng: number, q: string) {
+  return `${lat.toFixed(3)}:${lng.toFixed(3)}:${q}`;
+}
+
+function json(body: unknown, status = 200, extra?: HeadersInit) {
+  return Response.json(body, {
+    status,
+    headers: { 'Cache-Control': 'no-store', ...extra },
+  });
+}
 
 export default async (req: Request, _context: Context) => {
   if (req.method !== 'GET') {
@@ -8,44 +25,34 @@ export default async (req: Request, _context: Context) => {
   const url = new URL(req.url);
   const lat = Number(url.searchParams.get('lat'));
   const lng = Number(url.searchParams.get('lng'));
+  const q = (url.searchParams.get('q') || '').trim();
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return Response.json({ error: 'lat and lng are required' }, { status: 400 });
+    return json({ error: 'lat and lng are required', code: 'bad_request' }, 400);
+  }
+  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+    return json({ error: 'Invalid coordinates.', code: 'bad_request' }, 400);
   }
 
-  const key = Netlify.env.get('GOOGLE_MAPS_API_KEY');
-  if (!key) {
-    return Response.json({ error: 'Places is not configured' }, { status: 501 });
+  if (!appleMapsConfigured()) {
+    return json({ error: 'Apple Maps is not configured.', code: 'not_configured' }, 501);
   }
 
-  const endpoint = new URL('https://maps.googleapis.com/maps/api/place/nearbysearch/json');
-  endpoint.searchParams.set('location', `${lat},${lng}`);
-  endpoint.searchParams.set('radius', '400');
-  endpoint.searchParams.set('type', 'cafe|bar|restaurant|library|park|university');
-  endpoint.searchParams.set('key', key);
-
-  const response = await fetch(endpoint);
-  if (!response.ok) {
-    return Response.json({ error: 'Places request failed' }, { status: 502 });
+  const key = cacheKey(lat, lng, q.toLowerCase());
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
+    return json(hit.body);
   }
-  const payload = await response.json();
-  const venues = (payload.results ?? []).slice(0, 15).map((place: {
-    place_id: string;
-    name: string;
-    vicinity?: string;
-    types?: string[];
-    geometry?: { location?: { lat: number; lng: number } };
-  }) => ({
-    id: `google-${place.place_id}`,
-    provider: 'google',
-    providerPlaceId: place.place_id,
-    name: place.name,
-    address: place.vicinity,
-    category: place.types?.[0],
-    latitude: place.geometry?.location?.lat,
-    longitude: place.geometry?.location?.lng,
-  }));
 
-  return Response.json(venues);
+  try {
+    const venues = await searchAppleVenues(lat, lng, q || undefined);
+    cache.set(key, { at: Date.now(), body: venues });
+    return json(venues);
+  } catch (err) {
+    const status = typeof err === 'object' && err && 'status' in err ? Number((err as { status: number }).status) : 502;
+    const message = err instanceof Error ? err.message : 'Could not load nearby venues.';
+    const code = status === 429 ? 'rate_limited' : status === 401 ? 'apple_auth' : 'apple_request';
+    return json({ error: message, code }, status);
+  }
 };
 
 export const config: Config = {

@@ -7,7 +7,7 @@ import { ChatRequestModal } from '../../components/ChatRequestModal';
 import { ReportModal } from '../../components/ReportModal';
 import { useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
-import { ShyTextPost, INTENT_LABELS } from '../../types/shytext';
+import { ShyTextPost } from '../../types/shytext';
 import { sendChatRequest } from '../../services/chat';
 import { getLiveShyText, mapShyText } from '../../services/shytexts';
 import { getVenue } from '../../services/venues';
@@ -50,13 +50,13 @@ export default function ShyTextDetailScreen() {
       <ApproachableUserCard
         post={post}
         theme={theme}
-        onSayHi={() => setHello(true)}
+        onBreakIce={() => setHello(true)}
         onReport={() => setReport(true)}
       />
       <ChatRequestModal
         visible={hello}
         name={post.authorName}
-        intentLabel={INTENT_LABELS[post.intent]}
+        vibe={post.vibe}
         message={post.message}
         theme={theme}
         onClose={() => setHello(false)}

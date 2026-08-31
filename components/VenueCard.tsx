@@ -1,13 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Venue } from '../types/venue';
-import { Theme } from '../theme';
+import { cardShadow, radius, space, Theme, type } from '../theme';
 import { formatDistance } from '../utils/geo';
 
 export function activityLabel(count = 0) {
   if (count >= 1) {
-    return { label: `${count} ${count === 1 ? 'person' : 'people'} open`, icon: count >= 5 ? '🔥' : '🟢' };
+    return { label: `${count} ${count === 1 ? 'ShyText' : 'ShyTexts'}`, live: true };
   }
-  return { label: 'Quiet', icon: '⚪' };
+  return { label: 'Quiet', live: false };
 }
 
 export function VenueCard({
@@ -23,34 +23,40 @@ export function VenueCard({
 }) {
   const activity = activityLabel(venue.activeCount);
   return (
-    <Pressable onPress={onPress} style={[styles.card, { backgroundColor: theme.card, shadowColor: '#000' }]}>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.name, { color: theme.text }]}>{venue.name}</Text>
-        <Text style={{ color: theme.muted, marginTop: 4 }}>
-          {distance != null ? formatDistance(distance) : venue.address || venue.category}
-        </Text>
-        <Text style={{ color: theme.accent, marginTop: 8, fontWeight: '700' }}>
-          {activity.icon} {activity.label}
-        </Text>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${venue.name}`}
+      style={({ pressed }) => [
+        styles.card,
+        cardShadow(theme),
+        { backgroundColor: theme.card, transform: [{ scale: pressed ? 0.96 : 1 }] },
+      ]}
+    >
+      <View style={styles.top}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={[type.title, { color: theme.text }]}>{venue.name}</Text>
+          <Text style={[type.caption, { color: theme.muted }]}>
+            {distance != null ? formatDistance(distance) : venue.address || venue.category}
+          </Text>
+        </View>
+        <View style={[styles.badge, { backgroundColor: activity.live ? theme.accentSoft : theme.bg }]}>
+          <Text style={[type.caption, { color: activity.live ? theme.accent : theme.quiet, fontWeight: '700' }]}>
+            {activity.label}
+          </Text>
+        </View>
       </View>
-      <Text style={[styles.cta, { color: theme.accent }]}>Check in</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    padding: 18,
-    borderRadius: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
-    elevation: 2,
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    padding: space[16],
+    borderRadius: radius.lg,
+    gap: space[16],
+    marginBottom: space[12],
   },
-  name: { fontSize: 18, fontWeight: '700' },
-  cta: { fontWeight: '700' },
+  top: { flexDirection: 'row', alignItems: 'flex-start', gap: space[12] },
+  badge: { borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
 });

@@ -45,7 +45,7 @@ export default function ChatsScreen() {
           <Text style={{ color: theme.accent, fontWeight: '800' }}>
             Requests {incoming.length ? `(${incoming.length})` : ''}
           </Text>
-          <Text style={{ color: theme.muted }}>Hellos waiting for you</Text>
+          <Text style={{ color: theme.muted }}>Icebreakers waiting for you</Text>
         </Pressable>
 
         <Text style={[styles.section, { color: theme.muted }]}>Messages</Text>
@@ -53,7 +53,7 @@ export default function ChatsScreen() {
           <EmptyState
             theme={theme}
             title="Nothing happening yet."
-            body="Go visible at a venue. If someone says hi, you’ll talk here."
+            body="Drop a ShyText at a venue. If someone breaks the ice, you’ll talk here."
             action={{ label: 'Go nearby', onPress: () => router.push('/(tabs)/nearby') }}
           />
         ) : (
@@ -69,7 +69,7 @@ export default function ChatsScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.name, { color: theme.text }]}>{names[convo.id] || 'Private chat'}</Text>
                   <Text style={{ color: theme.muted }} numberOfLines={1}>
-                    {convo.lastMessage || 'Say hi'}
+                    {convo.lastMessage || 'Break the ice'}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 6 }}>

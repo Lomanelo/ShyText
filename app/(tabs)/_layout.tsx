@@ -30,7 +30,9 @@ export default function TabsLayout() {
         name="nearby"
         options={{
           title: 'Nearby',
-          tabBarIcon: ({ color, size }) => <Ionicons name="location-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'location' : 'location-outline'} size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
@@ -38,14 +40,18 @@ export default function TabsLayout() {
         options={{
           title: 'Chats',
           tabBarBadge: incoming.length || undefined,
-          tabBarIcon: ({ color, size }) => <Ionicons name="chatbubble-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'chatbubble' : 'chatbubble-outline'} size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
+          ),
         }}
       />
     </Tabs>

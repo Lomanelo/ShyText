@@ -20,7 +20,7 @@ export interface UserProfile {
   stats: UserStats;
   expoPushToken?: string;
   /**
-   * Reserved for a future Shy Mode. MVP visibility is derived from an active
+   * Reserved for a future Shy Mode. Visibility is derived from an active
    * ShyText, not this field.
    */
   visibilityMode?: VisibilityMode;

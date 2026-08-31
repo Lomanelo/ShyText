@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { timeLeft } from '../utils/dates';
-import { Theme } from '../theme';
+import { radius, Theme, type } from '../theme';
 
 export function CountdownBadge({ expiresAt, theme }: { expiresAt: number; theme: Theme }) {
   return (
@@ -11,6 +11,6 @@ export function CountdownBadge({ expiresAt, theme }: { expiresAt: number; theme:
 }
 
 const styles = StyleSheet.create({
-  badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  text: { fontSize: 12, fontWeight: '700' },
+  badge: { borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
+  text: { ...type.caption, fontWeight: '700', fontVariant: ['tabular-nums'] },
 });

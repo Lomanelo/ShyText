@@ -32,12 +32,9 @@ ShyText is a **Social Networking** venue icebreaker. People check into a place, 
 
 ### Demo account
 
-Create in Firebase Auth (email/password) before submit:
+Add Firebase **test phone numbers** (Authentication → Sign-in method → Phone → Phone numbers for testing) before submit. Put the numbers and codes in App Review notes; do not commit them here.
 
-- Email: `reviewer@shytext.com` (or username `reviewer` → `reviewer@shytext.com`)
-- Password: set a unique password in App Review notes; do not commit it here
-
-A second account (`reviewer2@shytext.com`) lets you test reply + chat.
+A second test number lets reviewers try reply + chat.
 
 ## Windows / TestFlight path
 

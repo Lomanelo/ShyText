@@ -2,7 +2,7 @@
 
 Make yourself approachable.
 
-See who's open to meeting at the same place, right now. Checking in never makes you visible.
+See who's open to meeting at the same place, right now. Being at a venue never makes you visible.
 
 This is an Expo SDK 57 development-client app. Do not use Expo Go.
 

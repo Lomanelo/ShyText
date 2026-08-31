@@ -12,12 +12,18 @@ export function useAuth() {
   useEffect(() => {
     return onAuthStateChanged(auth, async (next) => {
       setUser(next);
-      if (next) {
-        setProfile(await getUserProfile(next.uid));
-      } else {
+      try {
+        if (next) {
+          await next.getIdToken();
+          setProfile(await getUserProfile(next.uid));
+        } else {
+          setProfile(null);
+        }
+      } catch {
         setProfile(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     });
   }, []);
 

@@ -1,56 +1,76 @@
-export const SHYTEXT_INTENTS = [
+export const SHYTEXT_VIBES = [
   'chat',
-  'meet',
-  'coffee',
   'drink',
+  'coffee',
   'play',
+  'study',
   'network',
   'flirt',
   'other',
 ] as const;
 
-export type ShyTextIntent = (typeof SHYTEXT_INTENTS)[number];
+export type ShyTextVibe = (typeof SHYTEXT_VIBES)[number];
 
-/** @deprecated Use ShyTextIntent. Kept so older documents still type-check. */
-export type ShyTextCategory = ShyTextIntent | 'social' | 'study' | 'watch' | 'game';
+/** @deprecated Use ShyTextVibe. */
+export type ShyTextIntent = ShyTextVibe;
+/** @deprecated Use ShyTextVibe. */
+export type ShyTextCategory = ShyTextVibe | 'meet' | 'social' | 'watch' | 'game';
 
 export type ShyTextStatus = 'active' | 'expired' | 'stopped' | 'deleted' | 'moderated';
 
-/** Future matching modes. MVP only writes and reads "open". */
 export type VisibilityMode = 'invisible' | 'open' | 'shy';
 
-export const INTENT_LABELS: Record<ShyTextIntent, string> = {
+export const VIBE_LABELS: Record<ShyTextVibe, string> = {
   chat: '💬 Chat',
-  meet: '👋 Meet',
-  coffee: '☕ Coffee',
   drink: '🍺 Drink',
+  coffee: '☕ Coffee',
   play: '🎱 Play',
+  study: '📚 Study',
   network: '🤝 Network',
   flirt: '❤️ Flirt',
   other: '✨ Other',
 };
 
-const LEGACY_INTENT: Record<string, ShyTextIntent> = {
+/** @deprecated Use VIBE_LABELS. */
+export const INTENT_LABELS = VIBE_LABELS;
+
+export const SHYTEXT_INTENTS = SHYTEXT_VIBES;
+
+const LEGACY_VIBE: Record<string, ShyTextVibe> = {
   chat: 'chat',
-  meet: 'meet',
-  coffee: 'coffee',
   drink: 'drink',
+  coffee: 'coffee',
   play: 'play',
+  study: 'study',
   network: 'network',
   flirt: 'flirt',
   other: 'other',
+  meet: 'chat',
   social: 'drink',
-  study: 'other',
   watch: 'other',
   game: 'play',
 };
 
-export function normalizeIntent(value: unknown): ShyTextIntent {
-  if (typeof value === 'string' && value in LEGACY_INTENT) {
-    return LEGACY_INTENT[value];
+export function normalizeVibe(value: unknown): ShyTextVibe {
+  if (typeof value === 'string' && value in LEGACY_VIBE) {
+    return LEGACY_VIBE[value];
   }
-  return 'other';
+  return 'chat';
 }
+
+/** @deprecated Use normalizeVibe. */
+export const normalizeIntent = normalizeVibe;
+
+export const ICEBREAKERS: Record<ShyTextVibe, string[]> = {
+  chat: ['Hey 💬', 'Come say hi?', 'What are you up to?'],
+  drink: ["I'm in 🍺", 'What are you drinking?', 'Mind if I join?'],
+  coffee: ["I'm down ☕", 'Come say hi?', 'How long are you here?'],
+  play: ["I'm in 🎱", 'Got room for one more?', 'How many are playing?'],
+  study: ['Need a study buddy?', 'What are you working on?', 'Mind if I sit nearby?'],
+  network: ['Mind if I say hi?', 'What brought you here?', 'Happy to connect'],
+  flirt: ['You seem fun ❤️', 'Come say hi?', 'Can I buy you a drink?'],
+  other: ['Hey', 'Come say hi?', 'How long are you here?'],
+};
 
 export interface ShyTextPost {
   id: string;
@@ -59,10 +79,11 @@ export interface ShyTextPost {
   authorName: string;
   authorAvatarUrl?: string;
   authorAge?: number;
+  authorBio?: string;
   venueId: string;
-  intent: ShyTextIntent;
-  /** Legacy field — same as intent after normalizeIntent. */
-  category: ShyTextIntent;
+  vibe: ShyTextVibe;
+  intent: ShyTextVibe;
+  category: ShyTextVibe;
   message?: string;
   createdAt: number;
   expiresAt: number;

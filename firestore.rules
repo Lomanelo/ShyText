@@ -12,7 +12,8 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow read: if signedIn();
+      allow get: if signedIn();
+      allow list: if signedIn();
       allow create: if isSelf(userId);
       allow update: if isSelf(userId);
       allow delete: if false;
@@ -33,6 +34,10 @@ service cloud.firestore {
     match /shytexts/{shytextId} {
       allow read: if signedIn();
       allow create: if isSelf(request.resource.data.authorId)
+        && (
+          request.resource.data.vibe is string
+          || request.resource.data.intent is string
+        )
         && (
           !('message' in request.resource.data)
           || request.resource.data.message == null

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ShyText</title>
+  <style>
+    :root { color-scheme: light; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: #FCF3E8;
+      color: #993818;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: min(100%, 360px);
+      background: #fff;
+      border-radius: 24px;
+      padding: 28px 24px 32px;
+      box-shadow: 0 12px 40px rgba(153, 56, 24, 0.08);
+    }
+    h1 { font-family: Georgia, serif; font-size: 28px; font-weight: 400; margin: 0 0 8px; }
+    p { margin: 0 0 20px; line-height: 1.45; color: #8A5A3C; }
+    #recaptcha-cont { min-height: 78px; }
+    .error { color: #B42318; margin-top: 12px; display: none; }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+</head>
+<body>
+  <div class="card">
+    <h1>Quick check</h1>
+    <p>Confirm you’re not a bot, then we’ll text you a code.</p>
+    <div id="recaptcha-cont"></div>
+    <p class="error" id="error"></p>
+  </div>
+  <script>
+    var firebaseConfig = {
+      apiKey: 'AIzaSyAVnkBhxkzWdh2fLXsBMRDcRGYbY2KnBeE',
+      authDomain: 'myshytext.firebaseapp.com',
+      projectId: 'myshytext'
+    };
+    var params = new URLSearchParams(location.search);
+    var redirect = params.get('redirect') || '';
+
+    function allowedRedirect(value) {
+      if (!value) return false;
+      return /^(com\.rahimrady\.myshytext|exp\+[\w.-]+|exp):\/\//.test(value);
+    }
+
+    function showError(message) {
+      var el = document.getElementById('error');
+      el.style.display = 'block';
+      el.textContent = message;
+    }
+
+    if (!allowedRedirect(redirect)) {
+      showError('This page can only be opened from the ShyText app.');
+    } else {
+      firebase.initializeApp(firebaseConfig);
+      window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-cont', {
+        size: 'normal',
+        callback: function (token) {
+          var join = redirect.indexOf('?') >= 0 ? '&' : '?';
+          location.href = redirect + join + 'token=' + encodeURIComponent(token);
+        },
+        'expired-callback': function () {
+          showError('That check expired. Tick the box again.');
+        }
+      });
+      window.recaptchaVerifier.render();
+    }
+  </script>
+</body>
+</html>

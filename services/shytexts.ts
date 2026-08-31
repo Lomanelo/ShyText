@@ -12,18 +12,20 @@ import {
   where,
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
-import { normalizeIntent, ShyTextIntent, ShyTextPost } from '../types/shytext';
+import { normalizeVibe, ShyTextPost, ShyTextVibe } from '../types/shytext';
 import { moderateText } from './moderation';
 import { MAX_SHYTEXTS_PER_HOUR, MAX_SHYTEXT_MESSAGE_LENGTH } from '../utils/config';
-import { getActiveCheckIn, isDemoVenue } from './venues';
+import { checkInToVenue, getActiveCheckIn, isDemoVenue } from './venues';
+import { Venue } from '../types/venue';
 import { isBlockedEitherWay } from './blocks';
 import { seedShyTexts } from './mockData';
 import { isDevToolsEnabled } from '../utils/config';
 
 export function mapShyText(id: string, data: Record<string, unknown>): ShyTextPost {
-  const intent = normalizeIntent(data.intent ?? data.category);
+  const vibe = normalizeVibe(data.vibe ?? data.intent ?? data.category);
   const authorId = String(data.userId ?? data.authorId);
   const message = data.message == null ? undefined : String(data.message);
+  const bio = data.authorBio == null ? undefined : String(data.authorBio).trim();
   return {
     id,
     userId: authorId,
@@ -31,9 +33,11 @@ export function mapShyText(id: string, data: Record<string, unknown>): ShyTextPo
     authorName: String(data.authorName ?? 'Someone'),
     authorAvatarUrl: data.authorAvatarUrl ? String(data.authorAvatarUrl) : undefined,
     authorAge: typeof data.authorAge === 'number' ? data.authorAge : undefined,
+    authorBio: bio || undefined,
     venueId: String(data.venueId),
-    intent,
-    category: intent,
+    vibe,
+    intent: vibe,
+    category: vibe,
     message: message?.trim() ? message.trim() : undefined,
     createdAt: Number(data.createdAt),
     expiresAt: Number(data.expiresAt),
@@ -81,7 +85,7 @@ export function listenShyTexts(venueId: string, onChange: (posts: ShyTextPost[])
       return;
     }
     onChange(posts);
-  });
+  }, () => onChange([]));
 }
 
 export async function listMyActiveShyTexts(userId: string): Promise<ShyTextPost[]> {
@@ -99,18 +103,26 @@ async function stopActiveForUser(userId: string) {
 
 export async function activateShyText(input: {
   venueId: string;
-  intent: ShyTextIntent;
+  vibe: ShyTextVibe;
   message?: string;
   ttlMinutes: number;
   authorName: string;
   authorAvatarUrl?: string;
   authorAge?: number;
+  authorBio?: string;
+  venue?: Venue;
+  userLat?: number;
+  userLon?: number;
 }) {
   const user = auth.currentUser;
   if (!user) throw new Error('Sign in first.');
-  const checkIn = await getActiveCheckIn(user.uid);
-  if (!checkIn || checkIn.venueId !== input.venueId) {
-    throw new Error('Check in to this venue first.');
+  if (input.venue && input.userLat != null && input.userLon != null) {
+    await checkInToVenue(input.venue, input.userLat, input.userLon);
+  } else {
+    const checkIn = await getActiveCheckIn(user.uid);
+    if (!checkIn || checkIn.venueId !== input.venueId) {
+      throw new Error('Move closer to this venue to drop a ShyText.');
+    }
   }
   const moderated = moderateText(input.message ?? '', {
     allowEmpty: true,
@@ -134,9 +146,11 @@ export async function activateShyText(input: {
     authorName: input.authorName,
     authorAvatarUrl: input.authorAvatarUrl ?? null,
     authorAge: input.authorAge ?? null,
+    authorBio: input.authorBio?.trim() || null,
     venueId: input.venueId,
-    intent: input.intent,
-    category: input.intent,
+    vibe: input.vibe,
+    intent: input.vibe,
+    category: input.vibe,
     message: input.message?.trim() || null,
     createdAt: now,
     expiresAt: now + input.ttlMinutes * 60 * 1000,
@@ -162,11 +176,20 @@ export async function countActiveShyTexts(venueId: string): Promise<number> {
   return count;
 }
 
-export async function stopVisibility(id: string) {
+export async function takeDownShyText(id: string) {
   const user = auth.currentUser;
   if (!user) throw new Error('Not signed in.');
   await updateDoc(doc(db, 'shytexts', id), { status: 'stopped' });
 }
+
+export async function takeDownMyShyTexts() {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not signed in.');
+  await stopActiveForUser(user.uid);
+}
+
+/** @deprecated Use takeDownShyText. */
+export const stopVisibility = takeDownShyText;
 
 export async function getLiveShyText(id: string): Promise<ShyTextPost | null> {
   const snap = await getDoc(doc(db, 'shytexts', id));

@@ -16,5 +16,5 @@ export function ShyTextCard({
   onReport: () => void;
   onDelete?: () => void;
 }) {
-  return <ApproachableUserCard post={post} theme={theme} onSayHi={onHello} onReport={onReport} />;
+  return <ApproachableUserCard post={post} theme={theme} onBreakIce={onHello} onReport={onReport} />;
 }

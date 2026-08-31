@@ -28,11 +28,16 @@ export function useCurrentVenue() {
     })();
   }, []);
 
-  const checkInHere = useCallback(async (next: Venue, lat?: number, lon?: number) => {
-    const created = await checkInToVenue(next, lat, lon);
+  const rememberVenue = useCallback(async (next: Venue) => {
     setVenue(next);
-    setCheckIn(created);
     await AsyncStorage.setItem(KEY, JSON.stringify(next));
+  }, []);
+
+  const checkInHere = useCallback(async (next: Venue, lat?: number, lon?: number) => {
+    const { checkIn: created, venue: internal } = await checkInToVenue(next, lat, lon);
+    setVenue(internal);
+    setCheckIn(created);
+    await AsyncStorage.setItem(KEY, JSON.stringify(internal));
     return created;
   }, []);
 
@@ -49,5 +54,5 @@ export function useCurrentVenue() {
 
   const expired = !!checkIn && checkIn.expiresAt <= now;
 
-  return { venue, checkIn, loading, expired, checkInHere, leave, setVenue };
+  return { venue, checkIn, loading, expired, checkInHere, leave, setVenue, rememberVenue };
 }

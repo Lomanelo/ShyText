@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
-import { SafeAreaView, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Theme } from '../theme';
 
 export function Screen({ children, theme }: { children: ReactNode; theme: Theme }) {

@@ -1,68 +1,66 @@
-import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '../../components/Screen';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { useTheme } from '../../theme';
-
-const SLIDES = [
-  {
-    title: 'Meet people who are already there.',
-    body: 'ShyText helps break the ice with people at the same place.',
-  },
-  {
-    title: 'Make yourself approachable.',
-    body: "Choose what you're open to and go visible for a few minutes.",
-  },
-  {
-    title: 'Only when you choose.',
-    body: 'Checking in never makes you visible. Your exact location is never shared.',
-  },
-];
+import { Avatar } from '../../components/Avatar';
+import { FlameMark } from '../../components/flame-mark';
+import { Wordmark } from '../../components/wordmark';
+import { cardShadow, radius, space, type, useTheme } from '../../theme';
 
 export default function WelcomeScreen() {
   const theme = useTheme();
-  const [index, setIndex] = useState(0);
-  const slide = SLIDES[index];
 
   return (
     <Screen theme={theme}>
       <View style={styles.wrap}>
-        <Text style={[styles.wordmark, { color: theme.accent }]}>shytext</Text>
-        <View style={{ flex: 1, justifyContent: 'center', gap: 16 }}>
-          <Text style={[styles.title, { color: theme.text }]}>{slide.title}</Text>
-          <Text style={[styles.body, { color: theme.muted }]}>{slide.body}</Text>
+        <Wordmark theme={theme} size={28} />
+
+        <View style={styles.hero}>
+          <FlameMark size={88} />
+          <Text style={[type.display, { color: theme.text }]}>
+            Meet people who{'\n'}are already there.
+          </Text>
+          <Text style={[type.body, { color: theme.muted }]}>
+            Same café. Same bar. You decide when you’re approachable.
+          </Text>
+
+          <View style={[styles.person, cardShadow(theme), { backgroundColor: theme.card }]}>
+            <View style={styles.personTop}>
+              <Avatar name="Sarah" theme={theme} size={48} />
+              <View style={{ flex: 1 }}>
+                <Text style={[type.title, { color: theme.text, fontSize: 18, lineHeight: 24 }]}>Sarah, 23</Text>
+                <Text style={[type.caption, { color: theme.muted }]}>Architecture student</Text>
+              </View>
+            </View>
+            <Text style={[type.caption, { color: theme.accent, fontWeight: '700' }]}>☕ Coffee · 14m</Text>
+            <Text style={[type.body, { color: theme.muted }]}>“Waiting for a friend, happy to chat.”</Text>
+            <View style={[styles.hi, { backgroundColor: theme.accent }]}>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>Break the ice</Text>
+            </View>
+          </View>
         </View>
-        <View style={styles.dots}>
-          {SLIDES.map((_, i) => (
-            <View
-              key={i}
-              style={[
-                styles.dot,
-                { backgroundColor: i === index ? theme.accent : theme.border },
-              ]}
-            />
-          ))}
+
+        <View style={styles.actions}>
+          <PrimaryButton title="Get started" theme={theme} onPress={() => router.push('/(auth)/create-account')} />
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/(auth)/sign-in')}
+            style={styles.secondary}
+          >
+            <Text style={{ color: theme.accent, fontWeight: '700', fontSize: 16 }}>I already have an account</Text>
+          </Pressable>
         </View>
-        {index < SLIDES.length - 1 ? (
-          <PrimaryButton title="Next" theme={theme} onPress={() => setIndex(index + 1)} />
-        ) : (
-          <PrimaryButton title="Get started" theme={theme} onPress={() => router.push('/(auth)/sign-in')} />
-        )}
-        <Pressable onPress={() => router.push('/(auth)/sign-in')} accessibilityRole="button">
-          <Text style={[styles.skip, { color: theme.muted }]}>I already have an account</Text>
-        </Pressable>
       </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, padding: 28, justifyContent: 'space-between' },
-  wordmark: { fontSize: 18, fontWeight: '800', letterSpacing: 0.4 },
-  title: { fontSize: 34, fontWeight: '800', lineHeight: 40 },
-  body: { fontSize: 18, lineHeight: 26 },
-  dots: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  skip: { textAlign: 'center', marginTop: 16, fontWeight: '600' },
+  wrap: { flex: 1, paddingHorizontal: space[24], paddingBottom: space[8], justifyContent: 'space-between' },
+  hero: { gap: space[16], paddingTop: space[16] },
+  person: { borderRadius: radius.lg, padding: space[16], gap: space[12], marginTop: space[8] },
+  personTop: { flexDirection: 'row', alignItems: 'center', gap: space[12] },
+  hi: { alignSelf: 'flex-start', borderRadius: radius.pill, paddingHorizontal: space[16], minHeight: 40, justifyContent: 'center' },
+  actions: { gap: space[12], paddingBottom: space[8] },
+  secondary: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
 });

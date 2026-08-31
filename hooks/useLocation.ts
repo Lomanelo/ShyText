@@ -6,6 +6,7 @@ export function useLocation() {
   const [status, setStatus] = useState<Location.PermissionStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
 
   const refresh = useCallback(async () => {
     setBusy(true);
@@ -20,6 +21,7 @@ export function useLocation() {
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
+      setAccuracy(position.coords.accuracy ?? null);
       const next = {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
@@ -34,5 +36,5 @@ export function useLocation() {
     }
   }, []);
 
-  return { coords, status, error, busy, refresh };
+  return { coords, status, error, busy, accuracy, refresh };
 }

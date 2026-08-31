@@ -1,9 +1,9 @@
-export const PRIVACY_POLICY_TEXT = `Last updated: August 29, 2026
+export const PRIVACY_POLICY_TEXT = `Last updated: August 31, 2026
 
 ShyText is a venue icebreaker app operated by an independent developer (shytext.info@gmail.com). It helps people leave short, time-boxed notes at a place they are in and reply privately. It is not a dating app and does not show a public social feed.
 
 1. Data we collect
-- Account: first name, optional profile photo, email if you use Google or Apple sign-in, or a username for password accounts.
+- Account: mobile phone number (for sign-in and verification only — other people never see it), first name, optional profile photo.
 - Venue presence: a venue name and coarse geohash while you are checked in. We do not share your precise coordinates with other users.
 - Notes and messages you write.
 - Reports you submit about other users.
@@ -31,7 +31,7 @@ ShyText is 17+. We do not knowingly collect data from anyone under 17.
 8. Contact
 shytext.info@gmail.com`;
 
-export const TERMS_OF_SERVICE_TEXT = `Last updated: August 29, 2026
+export const TERMS_OF_SERVICE_TEXT = `Last updated: August 31, 2026
 
 By using ShyText you agree to these terms.
 
@@ -39,7 +39,7 @@ By using ShyText you agree to these terms.
 ShyText lets people 17 or older leave short icebreaker notes at a venue and reply in private chat. It is not a dating, hookup, or anonymous chat service.
 
 2. Accounts
-You must be at least 17. Provide accurate information. You are responsible for activity on your account. You may delete your account in the app at any time.
+You must be at least 17. Accounts are created with a mobile phone number and SMS verification. You are responsible for activity on your account. You may delete your account in the app at any time.
 
 3. Conduct
 Do not harass, threaten, impersonate, spam, solicit sex, share others' private information, or use the app for illegal activity. We may remove content and accounts that break these rules.
