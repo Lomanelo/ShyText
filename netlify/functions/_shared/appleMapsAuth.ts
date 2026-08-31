@@ -5,6 +5,7 @@ const TOKEN_URL = 'https://maps-api.apple.com/v1/token';
 type CachedToken = { token: string; expiresAt: number };
 
 let cached: CachedToken | null = null;
+let inflight: Promise<string> | null = null;
 
 function normalizePem(value: string) {
   let raw = value.trim().replace(/^\uFEFF/, '');
@@ -66,27 +67,34 @@ export async function getAppleMapsAccessToken(): Promise<string> {
   if (cached && cached.expiresAt - 60_000 > Date.now()) {
     return cached.token;
   }
+  if (inflight) return inflight;
 
-  const teamId = Netlify.env.get('APPLE_MAPS_TEAM_ID');
-  const keyId = Netlify.env.get('APPLE_MAPS_KEY_ID');
-  const privateKey = Netlify.env.get('APPLE_MAPS_PRIVATE_KEY');
-  if (!teamId || !keyId || !privateKey) {
-    throw Object.assign(new Error('Apple Maps is not configured.'), { status: 501 });
-  }
+  inflight = (async () => {
+    const teamId = Netlify.env.get('APPLE_MAPS_TEAM_ID');
+    const keyId = Netlify.env.get('APPLE_MAPS_KEY_ID');
+    const privateKey = Netlify.env.get('APPLE_MAPS_PRIVATE_KEY');
+    if (!teamId || !keyId || !privateKey) {
+      throw Object.assign(new Error('Apple Maps is not configured.'), { status: 501 });
+    }
 
-  const jwt = createMapsJwt(teamId, keyId, privateKey);
-  const response = await fetch(TOKEN_URL, {
-    headers: { Authorization: `Bearer ${jwt}` },
+    const jwt = createMapsJwt(teamId, keyId, privateKey);
+    const response = await fetch(TOKEN_URL, {
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
+    if (!response.ok) {
+      const status = response.status === 401 ? 401 : 502;
+      throw Object.assign(new Error('Apple Maps authentication failed.'), { status });
+    }
+    const body = (await response.json()) as { accessToken?: string; expiresInSeconds?: number };
+    if (!body.accessToken) {
+      throw Object.assign(new Error('Apple Maps authentication failed.'), { status: 502 });
+    }
+    const ttlMs = Math.max(60, body.expiresInSeconds ?? 30 * 60) * 1000;
+    cached = { token: body.accessToken, expiresAt: Date.now() + ttlMs };
+    return cached.token;
+  })().finally(() => {
+    inflight = null;
   });
-  if (!response.ok) {
-    const status = response.status === 401 ? 401 : 502;
-    throw Object.assign(new Error('Apple Maps authentication failed.'), { status });
-  }
-  const body = (await response.json()) as { accessToken?: string; expiresInSeconds?: number };
-  if (!body.accessToken) {
-    throw Object.assign(new Error('Apple Maps authentication failed.'), { status: 502 });
-  }
-  const ttlMs = Math.max(60, body.expiresInSeconds ?? 30 * 60) * 1000;
-  cached = { token: body.accessToken, expiresAt: Date.now() + ttlMs };
-  return body.accessToken;
+
+  return inflight;
 }

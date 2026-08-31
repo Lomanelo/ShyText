@@ -21,9 +21,12 @@ import { auth } from '../../services/firebase';
 
 async function hydrate(candidates: VenueCandidate[]): Promise<Venue[]> {
   const existing = await findVenuesByProviderPlaceIds(candidates.map((item) => item.providerPlaceId));
+  return candidates.map((candidate) => toVenue(candidate, existing.get(candidate.providerPlaceId)?.id));
+}
+
+async function attachCounts(venues: Venue[]): Promise<Venue[]> {
   return Promise.all(
-    candidates.map(async (candidate) => {
-      const venue = toVenue(candidate, existing.get(candidate.providerPlaceId)?.id);
+    venues.map(async (venue) => {
       const countable = !venue.id.startsWith('apple:') && !venue.id.startsWith('pending:');
       return {
         ...venue,
@@ -46,12 +49,12 @@ export default function NearbyScreen() {
   const [visibleAt, setVisibleAt] = useState<{ post: ShyTextPost; name: string } | null>(null);
 
   const load = useCallback(
-    async (search?: string) => {
+    async (search?: string, relock = false) => {
       setLoading(true);
       setError(null);
       setRateLimited(false);
       try {
-        const next = await refresh();
+        const next = await refresh(relock);
         if (!next) {
           setLoading(false);
           return;
@@ -70,20 +73,20 @@ export default function NearbyScreen() {
             throw err;
           }
         }
-        setVenues(
-          pickClosest(
-            (await hydrate(candidates)).map((venue) => ({
-              ...venue,
-              distanceMeters:
-                venue.latitude != null && venue.longitude != null
-                  ? distanceBetween(next.latitude, next.longitude, venue.latitude, venue.longitude)
-                  : venue.distanceMeters ?? 9999,
-            }))
-          )
+        const listed = pickClosest(
+          (await hydrate(candidates)).map((venue) => ({
+            ...venue,
+            distanceMeters:
+              venue.latitude != null && venue.longitude != null
+                ? distanceBetween(next.latitude, next.longitude, venue.latitude, venue.longitude)
+                : venue.distanceMeters ?? 9999,
+          }))
         );
+        setVenues(listed);
+        setLoading(false);
+        void attachCounts(listed).then(setVenues);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not load venues.');
-      } finally {
         setLoading(false);
       }
     },
@@ -158,7 +161,7 @@ export default function NearbyScreen() {
         contentContainerStyle={styles.content}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load()} tintColor={theme.accent} />}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load(query || undefined, true)} tintColor={theme.accent} />}
       >
         <Text style={[type.body, { color: theme.muted, marginBottom: space[16] }]}>
           The five closest places within {NEARBY_RADIUS_METERS} m. You stay private until you drop a ShyText.

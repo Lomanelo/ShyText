@@ -23,8 +23,7 @@ function asPlacesError(message: string, status: number) {
   return Object.assign(new Error(message), { status });
 }
 
-async function appleSearch(params: URLSearchParams) {
-  const token = await getAppleMapsAccessToken();
+async function appleSearch(params: URLSearchParams, token: string) {
   const response = await fetch(`${SEARCH_URL}?${params.toString()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -60,8 +59,11 @@ export async function searchAppleVenues(
   query?: string
 ): Promise<VenueCandidate[]> {
   const q = query?.trim();
-  const terms = q ? [q] : ['cafe', 'restaurant', 'bar', 'park', 'bakery'];
-  const pages = await Promise.all(terms.map((term) => appleSearch(nearbyParams(latitude, longitude, term))));
+  const terms = q ? [q] : ['food'];
+  const token = await getAppleMapsAccessToken();
+  const pages = await Promise.all(
+    terms.map((term) => appleSearch(nearbyParams(latitude, longitude, term), token))
+  );
   const venues = pages
     .flat()
     .map((place) => normalizeApplePlace(place, latitude, longitude))
