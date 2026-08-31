@@ -59,7 +59,7 @@ export async function searchAppleVenues(
   query?: string
 ): Promise<VenueCandidate[]> {
   const q = query?.trim();
-  const terms = q ? [q] : ['food'];
+  const terms = q ? [q] : ['cafe', 'restaurant', 'bar', 'park', 'bakery'];
   const token = await getAppleMapsAccessToken();
   const pages = await Promise.all(
     terms.map((term) => appleSearch(nearbyParams(latitude, longitude, term), token))

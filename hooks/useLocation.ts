@@ -1,10 +1,11 @@
 import { useCallback, useRef, useState } from 'react';
 import * as Location from 'expo-location';
+import { PRECISE_ACCURACY_METERS } from '../utils/geo';
 
 export type UserCoords = { latitude: number; longitude: number };
 
-const GPS_BUDGET_MS = 2_200;
-const FRESH_MS = 25_000;
+const FIX_WAIT_MS = 8_000;
+const FRESH_MS = 20_000;
 
 function asCoords(position: Location.LocationObject): UserCoords {
   return {
@@ -13,33 +14,45 @@ function asCoords(position: Location.LocationObject): UserCoords {
   };
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('gps-timeout')), ms);
-    promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
+async function getPrecisePosition(): Promise<Location.LocationObject> {
+  const first = await Location.getCurrentPositionAsync({
+    accuracy: Location.Accuracy.BestForNavigation,
+  });
+  if ((first.coords.accuracy ?? 999) <= PRECISE_ACCURACY_METERS) {
+    return first;
+  }
+
+  return new Promise((resolve) => {
+    let best = first;
+    let settled = false;
+    const finish = (value: Location.LocationObject) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+
+    const watch = Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.BestForNavigation,
+        distanceInterval: 1,
+        timeInterval: 400,
       },
-      (err) => {
-        clearTimeout(timer);
-        reject(err);
+      (position) => {
+        const nextAcc = position.coords.accuracy ?? 999;
+        const bestAcc = best.coords.accuracy ?? 999;
+        if (nextAcc <= bestAcc) best = position;
+        if (nextAcc <= PRECISE_ACCURACY_METERS) {
+          void watch.then((sub) => sub.remove());
+          finish(best);
+        }
       }
     );
-  });
-}
 
-async function getQuickPosition(): Promise<Location.LocationObject> {
-  const last = await Location.getLastKnownPositionAsync();
-  try {
-    return await withTimeout(
-      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
-      GPS_BUDGET_MS
-    );
-  } catch {
-    if (last) return last;
-    return Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-  }
+    setTimeout(() => {
+      void watch.then((sub) => sub.remove());
+      finish(best);
+    }, FIX_WAIT_MS);
+  });
 }
 
 export function useLocation() {
@@ -49,12 +62,17 @@ export function useLocation() {
   const [busy, setBusy] = useState(false);
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const coordsRef = useRef<UserCoords | null>(null);
+  const accuracyRef = useRef<number | null>(null);
   const atRef = useRef(0);
 
   const refresh = useCallback(async (force = false) => {
-    if (!force && coordsRef.current && Date.now() - atRef.current < FRESH_MS) {
-      return coordsRef.current;
-    }
+    const freshPrecise =
+      !force &&
+      coordsRef.current &&
+      Date.now() - atRef.current < FRESH_MS &&
+      (accuracyRef.current ?? 999) <= PRECISE_ACCURACY_METERS;
+    if (freshPrecise) return coordsRef.current;
+
     setBusy(true);
     setError(null);
     try {
@@ -64,8 +82,10 @@ export function useLocation() {
         setError('Location is needed to verify which venue you\'re at.');
         return null;
       }
-      const position = await getQuickPosition();
-      setAccuracy(position.coords.accuracy ?? null);
+      const position = await getPrecisePosition();
+      const nextAcc = position.coords.accuracy ?? null;
+      setAccuracy(nextAcc);
+      accuracyRef.current = nextAcc;
       const next = asCoords(position);
       coordsRef.current = next;
       atRef.current = Date.now();
