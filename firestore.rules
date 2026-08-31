@@ -25,6 +25,21 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /venueHeat/{heatId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.venueId is string
+        && request.resource.data.dayKey is string
+        && request.resource.data.name is string
+        && request.resource.data.count is number
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number;
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['count', 'updatedAt', 'name', 'latitude', 'longitude']);
+      allow delete: if false;
+    }
+
     match /checkins/{checkInId} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
       allow create: if isSelf(request.resource.data.userId);

@@ -15,7 +15,7 @@ import { countActiveShyTexts, listMyActiveShyTexts } from '../../services/shytex
 import { ensureInternalVenue, findVenuesByProviderPlaceIds, getVenue, toVenue } from '../../services/venues';
 import { PlacesRequestError, Venue, VenueCandidate } from '../../types/venue';
 import { ShyTextPost } from '../../types/shytext';
-import { distanceBetween } from '../../utils/geo';
+import { distanceBetween, NEARBY_RADIUS_METERS, pickClosest, PRECISE_ACCURACY_METERS } from '../../utils/geo';
 import { remainingCompact } from '../../utils/dates';
 import { auth } from '../../services/firebase';
 
@@ -70,7 +70,17 @@ export default function NearbyScreen() {
             throw err;
           }
         }
-        setVenues(await hydrate(candidates));
+        setVenues(
+          pickClosest(
+            (await hydrate(candidates)).map((venue) => ({
+              ...venue,
+              distanceMeters:
+                venue.latitude != null && venue.longitude != null
+                  ? distanceBetween(next.latitude, next.longitude, venue.latitude, venue.longitude)
+                  : venue.distanceMeters ?? 9999,
+            }))
+          )
+        );
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not load venues.');
       } finally {
@@ -139,7 +149,7 @@ export default function NearbyScreen() {
     );
   }
 
-  const fuzzy = accuracy != null && accuracy > 150;
+  const fuzzy = accuracy != null && accuracy > PRECISE_ACCURACY_METERS;
   const placesReady = isPlacesConfigured();
 
   return (
@@ -151,7 +161,7 @@ export default function NearbyScreen() {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load()} tintColor={theme.accent} />}
       >
         <Text style={[type.body, { color: theme.muted, marginBottom: space[16] }]}>
-          Pick the place that matches. You stay private until you drop a ShyText.
+          The five closest places within {NEARBY_RADIUS_METERS} m. You stay private until you drop a ShyText.
         </Text>
 
         {visibleAt ? (
@@ -179,7 +189,7 @@ export default function NearbyScreen() {
         ) : null}
         {fuzzy ? (
           <Text style={[type.caption, { color: theme.muted, marginBottom: space[12] }]}>
-            Location is a bit fuzzy. Choose the matching place below.
+            GPS is about ±{Math.round(accuracy ?? 0)} m. Distances update as the fix tightens.
           </Text>
         ) : null}
 
@@ -189,12 +199,12 @@ export default function NearbyScreen() {
           <EmptyState
             theme={theme}
             icon="location-outline"
-            title={rateLimited ? 'Try again in a moment' : placesReady ? 'No venues nearby' : 'Venue search isn’t connected'}
+            title={rateLimited ? 'Try again in a moment' : placesReady ? 'Nothing within 100 m' : 'Venue search isn’t connected'}
             body={
               rateLimited
                 ? 'Apple Maps asked us to slow down. Pull to refresh shortly.'
                 : placesReady
-                  ? 'We couldn’t find a social place around you. Search by name, or pull to refresh.'
+                  ? 'No social place is within 100 meters. Move closer to a café, bar, or park, then pull to refresh.'
                   : 'Add EXPO_PUBLIC_PLACES_PROXY_URL to your .env (your Netlify /api/places URL) and reload.'
             }
             action={{

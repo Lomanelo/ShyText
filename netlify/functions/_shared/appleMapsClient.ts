@@ -1,4 +1,5 @@
 import { getAppleMapsAccessToken } from './appleMapsAuth';
+import { searchRegionBox } from './geo';
 import {
   ApplePlace,
   SOCIAL_POI_CATEGORIES,
@@ -8,7 +9,10 @@ import {
 } from './normalizeApplePlace';
 
 const SEARCH_URL = 'https://maps-api.apple.com/v1/search';
-const MAX_DISTANCE_M = 800;
+const MAX_DISTANCE_M = 100;
+const MAX_RESULTS = 5;
+/** Slightly larger than 100 m so building centroids still count when you are at the door. */
+const SEARCH_BOX_M = 140;
 
 type SearchResponse = {
   results?: ApplePlace[];
@@ -38,11 +42,12 @@ async function appleSearch(params: URLSearchParams) {
   return payload.results ?? payload.places ?? [];
 }
 
-function baseParams(latitude: number, longitude: number, query: string) {
+function nearbyParams(latitude: number, longitude: number, query: string) {
   const params = new URLSearchParams();
   params.set('q', query);
-  params.set('searchLocation', `${latitude},${longitude}`);
   params.set('userLocation', `${latitude},${longitude}`);
+  params.set('searchRegion', searchRegionBox(latitude, longitude, SEARCH_BOX_M));
+  params.set('searchRegionPriority', 'required');
   params.set('resultTypeFilter', 'Poi');
   params.set('includePoiCategories', SOCIAL_POI_CATEGORIES.join(','));
   params.set('lang', 'en-US');
@@ -55,15 +60,12 @@ export async function searchAppleVenues(
   query?: string
 ): Promise<VenueCandidate[]> {
   const q = query?.trim();
-  const searches = (q ? [q] : ['cafe', 'restaurant', 'bar', 'park']).map((term) =>
-    appleSearch(baseParams(latitude, longitude, term))
-  );
-
-  const pages = await Promise.all(searches);
+  const terms = q ? [q] : ['cafe', 'restaurant', 'bar', 'park', 'bakery'];
+  const pages = await Promise.all(terms.map((term) => appleSearch(nearbyParams(latitude, longitude, term))));
   const venues = pages
     .flat()
     .map((place) => normalizeApplePlace(place, latitude, longitude))
     .filter((item): item is VenueCandidate => item != null);
 
-  return dedupeAndRank(venues, q ? 4_000 : MAX_DISTANCE_M, q ? 20 : 20);
+  return dedupeAndRank(venues, MAX_DISTANCE_M, MAX_RESULTS);
 }

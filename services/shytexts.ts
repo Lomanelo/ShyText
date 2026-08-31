@@ -15,11 +15,12 @@ import { auth, db } from './firebase';
 import { normalizeVibe, ShyTextPost, ShyTextVibe } from '../types/shytext';
 import { moderateText } from './moderation';
 import { MAX_SHYTEXTS_PER_HOUR, MAX_SHYTEXT_MESSAGE_LENGTH } from '../utils/config';
-import { checkInToVenue, getActiveCheckIn, isDemoVenue } from './venues';
+import { checkInToVenue, getActiveCheckIn, getVenue, isDemoVenue } from './venues';
 import { Venue } from '../types/venue';
 import { isBlockedEitherWay } from './blocks';
 import { seedShyTexts } from './mockData';
 import { isDevToolsEnabled } from '../utils/config';
+import { recordVenueShyText } from './venueHeat';
 
 export function mapShyText(id: string, data: Record<string, unknown>): ShyTextPost {
   const vibe = normalizeVibe(data.vibe ?? data.intent ?? data.category);
@@ -159,6 +160,15 @@ export async function activateShyText(input: {
     responseCount: 0,
     serverCreatedAt: serverTimestamp(),
   });
+  const heatVenue = input.venue ?? (await getVenue(input.venueId));
+  if (heatVenue) {
+    await recordVenueShyText({
+      venueId: input.venueId,
+      name: heatVenue.name,
+      latitude: heatVenue.latitude,
+      longitude: heatVenue.longitude,
+    }).catch(() => undefined);
+  }
   await updateDoc(doc(db, 'users', user.uid), {
     'stats.shytextsPosted': increment(1),
   }).catch(() => undefined);

@@ -1,4 +1,9 @@
-export const CHECK_IN_RADIUS_METERS = 150;
+/** How close you must be to appear on Nearby and to drop a ShyText. */
+export const NEARBY_RADIUS_METERS = 100;
+export const NEARBY_MAX_VENUES = 5;
+export const CHECK_IN_RADIUS_METERS = NEARBY_RADIUS_METERS;
+/** Treat a GPS fix as precise enough to rank 100 m places. */
+export const PRECISE_ACCURACY_METERS = 25;
 
 export function distanceBetween(
   lat1: number,
@@ -28,6 +33,18 @@ export function isWithinCheckInRadius(
 
 export function formatDistance(meters?: number): string {
   if (meters == null || Number.isNaN(meters)) return '';
+  if (meters < 10) return `${meters.toFixed(0)} m`;
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(1)} km`;
+}
+
+export function pickClosest<T extends { distanceMeters: number }>(
+  items: T[],
+  radiusMeters = NEARBY_RADIUS_METERS,
+  limit = NEARBY_MAX_VENUES
+): T[] {
+  return [...items]
+    .filter((item) => Number.isFinite(item.distanceMeters) && item.distanceMeters <= radiusMeters)
+    .sort((a, b) => a.distanceMeters - b.distanceMeters)
+    .slice(0, limit);
 }

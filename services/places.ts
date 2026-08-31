@@ -1,12 +1,12 @@
 import { Venue, VenueCandidate, PlacesProvider, PlacesRequestError } from '../types/venue';
-import { distanceBetween } from '../utils/geo';
+import { distanceBetween, pickClosest } from '../utils/geo';
 import { isDevToolsEnabled } from '../utils/config';
 import { DEMO_VENUES } from './mockData';
 
 export const PADDYS_CORNER_ID = 'demo-paddys-corner';
 
-const CACHE_TTL_MS = 2 * 60 * 1000;
-const MOVE_THRESHOLD_M = 80;
+const CACHE_TTL_MS = 45 * 1000;
+const MOVE_THRESHOLD_M = 20;
 
 type CacheEntry = {
   latitude: number;
@@ -33,7 +33,7 @@ function remember(latitude: number, longitude: number, query: string, venues: Ve
 
 class DemoPlacesProvider implements PlacesProvider {
   async getNearbyVenues(latitude: number, longitude: number): Promise<VenueCandidate[]> {
-    return DEMO_VENUES.map((venue) => ({
+    const ranked = DEMO_VENUES.map((venue) => ({
       provider: 'demo' as const,
       providerPlaceId: venue.providerPlaceId,
       name: venue.name,
@@ -47,7 +47,8 @@ class DemoPlacesProvider implements PlacesProvider {
         venue.latitude ?? latitude,
         venue.longitude ?? longitude
       ),
-    })).sort((a, b) => a.distanceMeters - b.distanceMeters);
+    }));
+    return pickClosest(ranked);
   }
 
   async searchVenues(query: string, latitude: number, longitude: number) {
@@ -91,14 +92,19 @@ class ApplePlacesProvider implements PlacesProvider {
     if (!Array.isArray(payload)) {
       throw new PlacesRequestError(payload.error || 'Could not load nearby venues.');
     }
-    const venues = payload.filter(
-      (item) =>
-        item &&
-        item.provider === 'apple' &&
-        typeof item.providerPlaceId === 'string' &&
-        typeof item.name === 'string' &&
-        Number.isFinite(item.latitude) &&
-        Number.isFinite(item.longitude)
+    const venues = pickClosest(
+      payload.filter(
+        (item) =>
+          item &&
+          item.provider === 'apple' &&
+          typeof item.providerPlaceId === 'string' &&
+          typeof item.name === 'string' &&
+          Number.isFinite(item.latitude) &&
+          Number.isFinite(item.longitude)
+      ).map((item) => ({
+        ...item,
+        distanceMeters: distanceBetween(latitude, longitude, item.latitude, item.longitude),
+      }))
     );
     remember(latitude, longitude, query ?? '', venues);
     return venues;

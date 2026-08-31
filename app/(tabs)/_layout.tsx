@@ -36,6 +36,16 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="map"
+        options={{
+          title: 'Map',
+          headerShown: false,
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'map' : 'map-outline'} size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="chats"
         options={{
           title: 'Chats',
