@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Screen } from '../../components/Screen';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { useTheme } from '../../theme';
+import { type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useCurrentVenue } from '../../hooks/useCurrentVenue';
 import { useLocation } from '../../hooks/useLocation';
@@ -41,13 +41,11 @@ export default function DropShyTextScreen() {
   }, [params.venueId, current.venue]);
 
   return (
-    <Screen theme={theme}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrap}>
-        <Pressable onPress={() => router.back()}>
-          <Text style={{ color: theme.accent, fontWeight: '700' }}>← Back</Text>
-        </Pressable>
-        <Text style={[styles.title, { color: theme.text }]}>Drop a ShyText</Text>
-        <Text style={{ color: theme.muted }}>
+    <Screen theme={theme} inset={false}>
+      <Stack.Screen options={{ title: 'Drop a ShyText' }} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.wrap} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled">
+        <Text style={[type.body, { color: theme.muted }]}>
           You’re here, you’re open to being approached, and this is what you’re up for.
         </Text>
 
@@ -135,17 +133,17 @@ export default function DropShyTextScreen() {
             }
           }}
         />
+        </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, padding: 20, gap: 12 },
-  title: { fontSize: 30, fontWeight: '800' },
+  wrap: { padding: 20, gap: 12, paddingBottom: 40 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  area: { minHeight: 88, borderRadius: 18, padding: 16, textAlignVertical: 'top', fontSize: 16 },
+  area: { minHeight: 88, borderRadius: 16, borderCurve: 'continuous', padding: 16, textAlignVertical: 'top', fontSize: 17 },
   row: { flexDirection: 'row', gap: 8 },
-  ttl: { flex: 1, borderRadius: 14, padding: 12, alignItems: 'center' },
+  ttl: { flex: 1, borderRadius: 14, borderCurve: 'continuous', padding: 12, alignItems: 'center' },
 });

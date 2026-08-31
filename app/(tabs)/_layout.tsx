@@ -1,7 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Platform } from 'react-native';
-import { useTheme } from '../../theme';
+import { brand, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useChatRequests } from '../../hooks/useChatRequests';
 
@@ -13,17 +12,18 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: theme.accent,
+        headerShown: true,
+        headerShadowVisible: false,
+        headerTintColor: brand.accent,
+        headerStyle: { backgroundColor: theme.bg },
+        headerTitleStyle: { fontWeight: '700' },
+        tabBarActiveTintColor: brand.accent,
         tabBarInactiveTintColor: theme.quiet,
         tabBarStyle: {
           backgroundColor: theme.card,
           borderTopColor: theme.border,
-          height: Platform.OS === 'ios' ? 86 : 68,
-          paddingBottom: Platform.OS === 'ios' ? 26 : 10,
-          paddingTop: 8,
         },
-        tabBarLabelStyle: { fontWeight: '700', fontSize: 11 },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}
     >
       <Tabs.Screen

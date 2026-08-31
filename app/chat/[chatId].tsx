@@ -9,12 +9,14 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { doc, getDoc } from 'firebase/firestore';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/Screen';
 import { ReportModal } from '../../components/ReportModal';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { useTheme } from '../../theme';
+import { type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { db } from '../../services/firebase';
 import { ChatMessage, Conversation } from '../../types/chat';
@@ -26,6 +28,7 @@ import { MAX_MESSAGE_LENGTH } from '../../utils/config';
 export default function ChatScreen() {
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [convo, setConvo] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -52,21 +55,29 @@ export default function ChatScreen() {
   }, [chatId, user?.uid]);
 
   return (
-    <Screen theme={theme}>
+    <Screen theme={theme} inset={false}>
+      <Stack.Screen
+        options={{
+          title: otherName,
+          headerRight: () => (
+            <Pressable
+              accessibilityLabel="More"
+              onPress={() => setReport(true)}
+              hitSlop={8}
+              style={{ minWidth: 44, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
+            >
+              <Ionicons name="ellipsis-horizontal" size={22} color={theme.quiet} />
+            </Pressable>
+          ),
+        }}
+      />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <Pressable onPress={() => router.back()}>
-            <Text style={{ color: theme.accent, fontWeight: '700' }}>←</Text>
-          </Pressable>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.name, { color: theme.text }]}>{otherName}</Text>
-            <Text style={{ color: theme.muted }}>{convo?.venueName}</Text>
-          </View>
-          <Pressable onPress={() => setReport(true)}>
-            <Text style={{ color: theme.quiet }}>⋯</Text>
-          </Pressable>
-        </View>
-        <ScrollView contentContainerStyle={styles.thread}>
+        {convo?.venueName ? (
+          <Text style={[type.caption, { color: theme.muted, textAlign: 'center', paddingTop: 8 }]}>
+            {convo.venueName}
+          </Text>
+        ) : null}
+        <ScrollView contentContainerStyle={styles.thread} contentInsetAdjustmentBehavior="automatic">
           {messages.map((item) => {
             const mine = item.senderId === user?.uid;
             return (
@@ -80,25 +91,32 @@ export default function ChatScreen() {
                   },
                 ]}
               >
-                <Text style={{ color: mine ? '#fff' : theme.quiet, fontSize: 12, marginBottom: 4 }}>
+                <Text style={{ color: mine ? theme.onAccent : theme.quiet, fontSize: 12, marginBottom: 4 }}>
                   {mine ? 'You' : otherName}
                 </Text>
-                <Text style={{ color: mine ? '#fff' : theme.text, fontSize: 16 }}>{item.text}</Text>
+                <Text style={[type.body, { color: mine ? theme.onAccent : theme.text }]}>{item.text}</Text>
               </View>
             );
           })}
         </ScrollView>
-        {error ? <Text style={{ color: theme.danger, paddingHorizontal: 16 }}>{error}</Text> : null}
+        {error ? (
+          <Text selectable style={[type.body, { color: theme.danger, paddingHorizontal: 16 }]}>
+            {error}
+          </Text>
+        ) : null}
         <View style={[styles.composer, { backgroundColor: theme.card }]}>
           <TextInput
             value={text}
             onChangeText={setText}
             maxLength={MAX_MESSAGE_LENGTH}
-            placeholder="Message..."
+            placeholder="Message"
             placeholderTextColor={theme.quiet}
             style={[styles.input, { color: theme.text }]}
           />
           <Pressable
+            accessibilityRole="button"
+            hitSlop={8}
+            style={{ minHeight: 44, justifyContent: 'center' }}
             onPress={async () => {
               if (!chatId || !text.trim()) return;
               try {
@@ -110,10 +128,10 @@ export default function ChatScreen() {
               }
             }}
           >
-            <Text style={{ color: theme.accent, fontWeight: '800' }}>Send</Text>
+            <Text style={[type.headline, { color: theme.accent }]}>Send</Text>
           </Pressable>
         </View>
-        <View style={{ padding: 12, gap: 8 }}>
+        <View style={{ padding: 12, gap: 8, paddingBottom: Math.max(insets.bottom, 12) }}>
           <PrimaryButton
             title="Leave conversation"
             theme={theme}
@@ -149,10 +167,15 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
-  name: { fontSize: 18, fontWeight: '800' },
   thread: { padding: 16, gap: 10, flexGrow: 1 },
-  bubble: { maxWidth: '80%', borderRadius: 18, padding: 12 },
-  composer: { flexDirection: 'row', alignItems: 'center', margin: 12, borderRadius: 16, paddingHorizontal: 12 },
-  input: { flex: 1, minHeight: 48 },
+  bubble: { maxWidth: '80%', borderRadius: 18, borderCurve: 'continuous', padding: 12 },
+  composer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 12,
+    borderRadius: 16,
+    borderCurve: 'continuous',
+    paddingHorizontal: 12,
+  },
+  input: { flex: 1, minHeight: 48, fontSize: 17 },
 });

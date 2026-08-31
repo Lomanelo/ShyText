@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { Screen } from '../../components/Screen';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { EmptyState } from '../../components/EmptyState';
-import { useTheme } from '../../theme';
+import { radius, type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useChatRequests } from '../../hooks/useChatRequests';
 import { respondToRequest } from '../../services/chat';
@@ -18,13 +18,13 @@ export default function RequestsScreen() {
   const [error, setError] = useState<string | null>(null);
 
   return (
-    <Screen theme={theme}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.back, { color: theme.accent }]} onPress={() => router.back()}>
-          ← Back
-        </Text>
-        <Text style={[styles.title, { color: theme.text }]}>Requests</Text>
-        {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}
+    <Screen theme={theme} inset={false}>
+      <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
+        {error ? (
+          <Text selectable style={[type.body, { color: theme.danger }]}>
+            {error}
+          </Text>
+        ) : null}
         {incoming.length === 0 ? (
           <EmptyState
             theme={theme}
@@ -34,16 +34,16 @@ export default function RequestsScreen() {
         ) : (
           incoming.map((request) => (
             <View key={request.id} style={[styles.card, { backgroundColor: theme.card }]}>
-              <Text style={[styles.name, { color: theme.text }]}>{request.senderName} wants to break the ice</Text>
-              <Text style={{ color: theme.muted }}>Responding to your:</Text>
-              <Text style={{ color: theme.text, fontWeight: '600' }}>
+              <Text style={[type.title, { color: theme.text }]}>{request.senderName} wants to break the ice</Text>
+              <Text style={[type.caption, { color: theme.muted }]}>Responding to your:</Text>
+              <Text style={[type.body, { color: theme.text }]}>
                 {request.shytextIntent ? VIBE_LABELS[normalizeVibe(request.shytextIntent)] : ''}
                 {request.shytextMessage ? `\n“${request.shytextMessage}”` : ''}
               </Text>
               {request.introMessage ? (
                 <>
-                  <Text style={{ color: theme.muted, marginTop: 8 }}>Message:</Text>
-                  <Text style={{ color: theme.text }}>“{request.introMessage}”</Text>
+                  <Text style={[type.caption, { color: theme.muted, marginTop: 8 }]}>Message:</Text>
+                  <Text style={[type.body, { color: theme.text }]}>“{request.introMessage}”</Text>
                 </>
               ) : null}
               <View style={styles.row}>
@@ -82,10 +82,7 @@ export default function RequestsScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 20, gap: 14 },
-  back: { fontWeight: '700' },
-  title: { fontSize: 32, fontWeight: '800' },
-  card: { borderRadius: 20, padding: 16, gap: 6 },
-  name: { fontSize: 20, fontWeight: '800' },
+  content: { padding: 16, gap: 14 },
+  card: { borderRadius: radius.lg, borderCurve: 'continuous', padding: 16, gap: 6 },
   row: { flexDirection: 'row', gap: 8, marginTop: 10 },
 });

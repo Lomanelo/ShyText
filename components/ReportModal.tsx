@@ -67,7 +67,7 @@ export function ReportModal({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 20 },
-  sheet: { borderRadius: 22, padding: 20, gap: 8 },
-  title: { fontSize: 22, fontWeight: '800', marginBottom: 8 },
-  input: { borderRadius: 12, padding: 12, minHeight: 64 },
+  sheet: { borderRadius: 22, borderCurve: 'continuous', padding: 20, gap: 8 },
+  title: { fontSize: 22, fontWeight: '700', marginBottom: 8 },
+  input: { borderRadius: 12, borderCurve: 'continuous', padding: 12, minHeight: 64, fontSize: 17 },
 });

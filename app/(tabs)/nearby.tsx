@@ -7,17 +7,15 @@ import { VenueCard } from '../../components/VenueCard';
 import { Skeleton } from '../../components/Skeleton';
 import { EmptyState } from '../../components/EmptyState';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { Wordmark } from '../../components/wordmark';
 import { radius, space, type, useTheme } from '../../theme';
 import { useLocation } from '../../hooks/useLocation';
 import { useCurrentVenue } from '../../hooks/useCurrentVenue';
-import { candidateListKey, demoCandidates, getPlacesProvider } from '../../services/places';
+import { candidateListKey, getPlacesProvider, isPlacesConfigured } from '../../services/places';
 import { countActiveShyTexts, listMyActiveShyTexts } from '../../services/shytexts';
 import { ensureInternalVenue, findVenuesByProviderPlaceIds, getVenue, toVenue } from '../../services/venues';
 import { PlacesRequestError, Venue, VenueCandidate } from '../../types/venue';
 import { ShyTextPost } from '../../types/shytext';
 import { distanceBetween } from '../../utils/geo';
-import { isDevToolsEnabled } from '../../utils/config';
 import { remainingCompact } from '../../utils/dates';
 import { auth } from '../../services/firebase';
 
@@ -54,32 +52,23 @@ export default function NearbyScreen() {
       setRateLimited(false);
       try {
         const next = await refresh();
-        if (!next && !isDevToolsEnabled()) {
+        if (!next) {
           setLoading(false);
           return;
         }
-        const lat = next?.latitude ?? 48.853;
-        const lon = next?.longitude ?? 2.35;
         const provider = getPlacesProvider();
         let candidates: VenueCandidate[] = [];
         try {
           candidates = search?.trim()
-            ? (await provider.searchVenues?.(search.trim(), lat, lon)) ?? []
-            : await provider.getNearbyVenues(lat, lon);
+            ? (await provider.searchVenues?.(search.trim(), next.latitude, next.longitude)) ?? []
+            : await provider.getNearbyVenues(next.latitude, next.longitude);
         } catch (err) {
           if (err instanceof PlacesRequestError && err.status === 429) {
             setRateLimited(true);
             setError(err.message);
-          } else if (isDevToolsEnabled()) {
-            candidates = [];
           } else {
             throw err;
           }
-        }
-        if (isDevToolsEnabled() && !search?.trim()) {
-          const demo = await demoCandidates(lat, lon);
-          const seen = new Set(candidates.map((item) => item.providerPlaceId));
-          candidates = [...demo.filter((item) => !seen.has(item.providerPlaceId)), ...candidates];
         }
         setVenues(await hydrate(candidates));
       } catch (err) {
@@ -142,30 +131,27 @@ export default function NearbyScreen() {
     }
   };
 
-  if (!coords && status !== 'granted' && !venues.length && !isDevToolsEnabled()) {
+  if (!coords && status !== 'granted' && !venues.length) {
     return (
-      <Screen theme={theme}>
+      <Screen theme={theme} inset={false}>
         <LocationPermission theme={theme} error={locationError} busy={busy} onAllow={() => load()} />
       </Screen>
     );
   }
 
   const fuzzy = accuracy != null && accuracy > 150;
+  const placesReady = isPlacesConfigured();
 
   return (
-    <Screen theme={theme}>
+      <Screen theme={theme} inset={false}>
       <ScrollView
         contentContainerStyle={styles.content}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load()} tintColor={theme.accent} />}
       >
-        <Wordmark theme={theme} />
-        <Text style={[type.display, { color: theme.text, marginBottom: space[8], marginTop: space[12] }]}>
-          Where are you?
-        </Text>
         <Text style={[type.body, { color: theme.muted, marginBottom: space[16] }]}>
-          GPS can be a bit off. Pick the place that matches.
+          Pick the place that matches. You stay private until you drop a ShyText.
         </Text>
 
         {visibleAt ? (
@@ -174,17 +160,27 @@ export default function NearbyScreen() {
             style={[styles.here, { backgroundColor: theme.accentSoft }]}
           >
             <Text style={[type.caption, { color: theme.muted }]}>You’re visible at</Text>
-            <Text style={[type.title, { color: theme.text }]}>{visibleAt.name}</Text>
-            <Text style={[type.caption, { color: theme.accent, fontWeight: '700', fontVariant: ['tabular-nums'] }]}>
+            <Text style={[type.headline, { color: theme.text }]}>{visibleAt.name}</Text>
+            <Text style={[type.caption, { color: theme.accent, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
               ShyText · {remainingCompact(visibleAt.post.expiresAt)}
             </Text>
           </Pressable>
         ) : null}
 
-        {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}
-        {locationError ? <Text style={{ color: theme.danger }}>{locationError}</Text> : null}
+        {error ? (
+          <Text selectable style={[type.body, { color: theme.danger }]}>
+            {error}
+          </Text>
+        ) : null}
+        {locationError ? (
+          <Text selectable style={[type.body, { color: theme.danger }]}>
+            {locationError}
+          </Text>
+        ) : null}
         {fuzzy ? (
-          <Text style={{ color: theme.muted }}>Location is a bit fuzzy. Choose the matching place below.</Text>
+          <Text style={[type.caption, { color: theme.muted, marginBottom: space[12] }]}>
+            Location is a bit fuzzy. Choose the matching place below.
+          </Text>
         ) : null}
 
         {loading && !venues.length ? <Skeleton theme={theme} /> : null}
@@ -193,13 +189,18 @@ export default function NearbyScreen() {
           <EmptyState
             theme={theme}
             icon="location-outline"
-            title={rateLimited ? 'Try again in a moment' : 'No venues nearby'}
+            title={rateLimited ? 'Try again in a moment' : placesReady ? 'No venues nearby' : 'Venue search isn’t connected'}
             body={
               rateLimited
                 ? 'Apple Maps asked us to slow down. Pull to refresh shortly.'
-                : "We couldn't find a social place around you. Search by name, or pull to refresh."
+                : placesReady
+                  ? 'We couldn’t find a social place around you. Search by name, or pull to refresh.'
+                  : 'Add EXPO_PUBLIC_PLACES_PROXY_URL to your .env (your Netlify /api/places URL) and reload.'
             }
-            action={{ label: rateLimited ? 'Retry' : 'Search places', onPress: rateLimited ? () => load() : () => setSearchOpen(true) }}
+            action={{
+              label: rateLimited ? 'Retry' : placesReady ? 'Search places' : 'Retry',
+              onPress: rateLimited || !placesReady ? () => load() : () => setSearchOpen(true),
+            }}
           />
         ) : (
           venues.map((venue) => (
@@ -234,7 +235,7 @@ export default function NearbyScreen() {
           </View>
         ) : (
           <Pressable onPress={() => setSearchOpen(true)} style={styles.searchLink}>
-            <Text style={{ color: theme.accent, fontWeight: '700' }}>Can't find where you are? Search places</Text>
+            <Text style={[type.headline, { color: theme.accent }]}>Can’t find where you are? Search places</Text>
           </Pressable>
         )}
       </ScrollView>
@@ -243,8 +244,8 @@ export default function NearbyScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: space[16], paddingBottom: 120 },
-  here: { borderRadius: radius.lg, padding: space[16], marginBottom: space[16], gap: 4 },
-  search: { borderRadius: radius.md, padding: space[16], minHeight: 52, fontSize: 16 },
+  content: { paddingHorizontal: space[16], paddingBottom: space[32] },
+  here: { borderRadius: radius.lg, borderCurve: 'continuous', padding: space[16], marginBottom: space[16], gap: 4 },
+  search: { borderRadius: radius.md, borderCurve: 'continuous', padding: space[16], minHeight: 52, fontSize: 17 },
   searchLink: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
 });

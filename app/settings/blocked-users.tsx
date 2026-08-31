@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
 import { Screen } from '../../components/Screen';
 import { EmptyState } from '../../components/EmptyState';
-import { useTheme } from '../../theme';
+import { radius, type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { listBlockedIds, unblockUser } from '../../services/blocks';
 import { getUserProfile } from '../../services/auth';
@@ -30,26 +29,25 @@ export default function BlockedUsersScreen() {
   }, [user?.uid]);
 
   return (
-    <Screen theme={theme}>
-      <ScrollView contentContainerStyle={styles.wrap}>
-        <Text style={{ color: theme.accent, fontWeight: '700' }} onPress={() => router.back()}>
-          ← Back
-        </Text>
-        <Text style={[styles.title, { color: theme.text }]}>Blocked users</Text>
+    <Screen theme={theme} inset={false}>
+      <ScrollView contentContainerStyle={styles.wrap} contentInsetAdjustmentBehavior="automatic">
         {rows.length === 0 ? (
           <EmptyState theme={theme} title="Nobody blocked" body="People you block cannot break the ice or start a new chat." />
         ) : (
           rows.map((row) => (
             <View key={row.id} style={[styles.row, { backgroundColor: theme.card }]}>
-              <Text style={{ color: theme.text, fontWeight: '700' }}>{row.name}</Text>
+              <Text style={[type.headline, { color: theme.text }]}>{row.name}</Text>
               <Pressable
+                accessibilityRole="button"
+                hitSlop={8}
                 onPress={async () => {
                   if (!user) return;
                   await unblockUser(user.uid, row.id);
                   load();
                 }}
+                style={{ minHeight: 44, justifyContent: 'center' }}
               >
-                <Text style={{ color: theme.accent, fontWeight: '700' }}>Unblock</Text>
+                <Text style={[type.headline, { color: theme.accent }]}>Unblock</Text>
               </Pressable>
             </View>
           ))
@@ -60,7 +58,13 @@ export default function BlockedUsersScreen() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { padding: 20, gap: 12 },
-  title: { fontSize: 32, fontWeight: '800' },
-  row: { borderRadius: 16, padding: 16, flexDirection: 'row', justifyContent: 'space-between' },
+  wrap: { padding: 16, gap: 12 },
+  row: {
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
 });

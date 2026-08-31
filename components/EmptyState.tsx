@@ -29,11 +29,12 @@ export function EmptyState({
 }
 
 const styles = StyleSheet.create({
-  wrap: { padding: space[24], gap: space[12], borderRadius: radius.lg },
+  wrap: { padding: space[24], gap: space[12], borderRadius: radius.lg, borderCurve: 'continuous' },
   iconWell: {
     width: 48,
     height: 48,
     borderRadius: radius.sm,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
   },

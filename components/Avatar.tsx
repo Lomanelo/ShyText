@@ -1,6 +1,6 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
 import { initials } from '../utils/validation';
-import { Theme } from '../theme';
+import { Theme, type } from '../theme';
 
 export function Avatar({
   name,
@@ -24,17 +24,17 @@ export function Avatar({
   }
   return (
     <View
-      style={[
-        styles.fallback,
-        outline,
-        { width: size, height: size, borderRadius: size / 2, backgroundColor: theme.accentSoft },
-      ]}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: theme.accentSoft,
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...outline,
+      }}
     >
-      <Text style={{ color: theme.accent, fontWeight: '700' }}>{initials(name)}</Text>
+      <Text style={[type.headline, { color: theme.accent, fontSize: size * 0.36 }]}>{initials(name)}</Text>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  fallback: { alignItems: 'center', justifyContent: 'center' },
-});

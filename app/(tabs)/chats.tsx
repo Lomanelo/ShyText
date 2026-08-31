@@ -5,6 +5,7 @@ import { Screen } from '../../components/Screen';
 import { EmptyState } from '../../components/EmptyState';
 import { Avatar } from '../../components/Avatar';
 import { useTheme } from '../../theme';
+import { type } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useChatRequests } from '../../hooks/useChatRequests';
 import { useChats } from '../../hooks/useChats';
@@ -37,22 +38,19 @@ export default function ChatsScreen() {
   }, [conversations, user]);
 
   return (
-    <Screen theme={theme}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.title, { color: theme.text }]}>Chats</Text>
-
+    <Screen theme={theme} inset={false}>
+      <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
         <Pressable onPress={() => router.push('/requests')} style={[styles.requests, { backgroundColor: theme.accentSoft }]}>
-          <Text style={{ color: theme.accent, fontWeight: '800' }}>
+          <Text style={[type.headline, { color: theme.accent }]}>
             Requests {incoming.length ? `(${incoming.length})` : ''}
           </Text>
-          <Text style={{ color: theme.muted }}>Icebreakers waiting for you</Text>
+          <Text style={[type.caption, { color: theme.muted }]}>Icebreakers waiting for you</Text>
         </Pressable>
 
-        <Text style={[styles.section, { color: theme.muted }]}>Messages</Text>
         {conversations.length === 0 ? (
           <EmptyState
             theme={theme}
-            title="Nothing happening yet."
+            title="Nothing happening yet"
             body="Drop a ShyText at a venue. If someone breaks the ice, you’ll talk here."
             action={{ label: 'Go nearby', onPress: () => router.push('/(tabs)/nearby') }}
           />
@@ -67,13 +65,15 @@ export default function ChatsScreen() {
               >
                 <Avatar name={names[convo.id] || convo.venueName || 'Chat'} theme={theme} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.name, { color: theme.text }]}>{names[convo.id] || 'Private chat'}</Text>
-                  <Text style={{ color: theme.muted }} numberOfLines={1}>
+                  <Text style={[type.headline, { color: theme.text }]}>{names[convo.id] || 'Private chat'}</Text>
+                  <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
                     {convo.lastMessage || 'Break the ice'}
                   </Text>
                 </View>
                 <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                  <Text style={{ color: theme.quiet, fontSize: 12 }}>{timeAgo(convo.lastMessageAt)}</Text>
+                  <Text style={[type.caption, { color: theme.quiet, fontVariant: ['tabular-nums'] }]}>
+                    {timeAgo(convo.lastMessageAt)}
+                  </Text>
                   {unread ? <View style={[styles.dot, { backgroundColor: theme.accent }]} /> : null}
                 </View>
               </Pressable>
@@ -86,11 +86,15 @@ export default function ChatsScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 20, paddingBottom: 120, gap: 12 },
-  title: { fontSize: 32, fontWeight: '800' },
-  requests: { borderRadius: 18, padding: 16, gap: 4 },
-  section: { fontWeight: '700', marginTop: 8 },
-  card: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18 },
-  name: { fontWeight: '700', fontSize: 16 },
+  content: { padding: 16, paddingBottom: 32, gap: 12 },
+  requests: { borderRadius: 16, borderCurve: 'continuous', padding: 16, gap: 4 },
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    borderRadius: 16,
+    borderCurve: 'continuous',
+  },
   dot: { width: 8, height: 8, borderRadius: 4 },
 });

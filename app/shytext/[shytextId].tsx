@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Pressable, Text } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { ScrollView, Text } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { Screen } from '../../components/Screen';
 import { ApproachableUserCard } from '../../components/ApproachableUserCard';
 import { ChatRequestModal } from '../../components/ChatRequestModal';
 import { ReportModal } from '../../components/ReportModal';
-import { useTheme } from '../../theme';
+import { type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { ShyTextPost } from '../../types/shytext';
 import { sendChatRequest } from '../../services/chat';
@@ -36,23 +36,22 @@ export default function ShyTextDetailScreen() {
 
   if (!post) {
     return (
-      <Screen theme={theme}>
-        <Text style={{ padding: 20, color: theme.muted }}>They’re no longer visible.</Text>
+      <Screen theme={theme} inset={false}>
+        <Text style={[type.body, { padding: 20, color: theme.muted }]}>They’re no longer visible.</Text>
       </Screen>
     );
   }
 
   return (
-    <Screen theme={theme}>
-      <Pressable onPress={() => router.back()} style={{ padding: 20 }}>
-        <Text style={{ color: theme.accent, fontWeight: '700' }}>← Back</Text>
-      </Pressable>
-      <ApproachableUserCard
-        post={post}
-        theme={theme}
-        onBreakIce={() => setHello(true)}
-        onReport={() => setReport(true)}
-      />
+    <Screen theme={theme} inset={false}>
+      <ScrollView contentContainerStyle={{ padding: 16 }} contentInsetAdjustmentBehavior="automatic">
+        <ApproachableUserCard
+          post={post}
+          theme={theme}
+          onBreakIce={() => setHello(true)}
+          onReport={() => setReport(true)}
+        />
+      </ScrollView>
       <ChatRequestModal
         visible={hello}
         name={post.authorName}

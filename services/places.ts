@@ -113,6 +113,10 @@ class ApplePlacesProvider implements PlacesProvider {
   }
 }
 
+export function isPlacesConfigured() {
+  return Boolean(process.env.EXPO_PUBLIC_PLACES_PROXY_URL?.trim());
+}
+
 export function getPlacesProvider(): PlacesProvider {
   const endpoint = process.env.EXPO_PUBLIC_PLACES_PROXY_URL?.trim();
   if (endpoint) return new ApplePlacesProvider(endpoint);

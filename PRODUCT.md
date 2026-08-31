@@ -24,7 +24,7 @@ Expo SDK 57, Expo Router, EAS development/preview/production clients (`com.rahim
 
 ## Capabilities and Constraints
 
-Auth: mobile phone number + SMS verification only. Venue list from Apple Maps Server API (via a server proxy) or demo venues in development. One active ShyText per user. Vibes: Chat, Drink, Coffee, Play, Study, Network, Flirt, Other. Optional message max 120. Default lifetime 30 minutes (15m / 30m / 1h). Chat survives expiry. Block/report exist. No Shy Mode, swipe, followers, or background location.
+Auth: mobile phone number + SMS verification only. Venue list from Apple Maps Server API via a server proxy. One active ShyText per user. Vibes: Chat, Drink, Coffee, Play, Study, Network, Flirt, Other. Optional message max 120. Default lifetime 30 minutes (15m / 30m / 1h). Chat survives expiry. Block/report exist. No Shy Mode, swipe, followers, or background location. Demo venues and seed people are off unless EXPO_PUBLIC_DEV_MODE is explicitly true.
 
 ## Brand Commitments
 

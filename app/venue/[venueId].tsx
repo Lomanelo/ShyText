@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Screen } from '../../components/Screen';
 import { ApproachableUserCard } from '../../components/ApproachableUserCard';
@@ -15,6 +15,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useCurrentVenue } from '../../hooks/useCurrentVenue';
 import { useLocation } from '../../hooks/useLocation';
 import { useShyTexts } from '../../hooks/useShyTexts';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getVenue } from '../../services/venues';
 import { takeDownMyShyTexts } from '../../services/shytexts';
 import { sendChatRequest } from '../../services/chat';
@@ -25,6 +26,7 @@ import { VIBE_LABELS, ShyTextPost } from '../../types/shytext';
 export default function VenueScreen() {
   const { venueId } = useLocalSearchParams<{ venueId: string }>();
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
   const current = useCurrentVenue();
   const { refresh } = useLocation();
@@ -49,16 +51,13 @@ export default function VenueScreen() {
   };
 
   return (
-    <Screen theme={theme}>
+    <Screen theme={theme} inset={false}>
+      <Stack.Screen options={{ title: venue?.name ?? 'Venue' }} />
       <ScrollView
         contentContainerStyle={styles.content}
         contentInsetAdjustmentBehavior="automatic"
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => undefined} tintColor={theme.accent} />}
       >
-        <Pressable onPress={() => router.back()} accessibilityLabel="Back" style={styles.back}>
-          <Text style={{ color: theme.accent, fontWeight: '700' }}>Back</Text>
-        </Pressable>
-        <Text style={[type.display, { color: theme.text }]}>{venue?.name ?? 'Venue'}</Text>
         <Text style={[type.body, { color: theme.muted }]}>People who dropped a ShyText</Text>
 
         {mine ? (
@@ -132,7 +131,7 @@ export default function VenueScreen() {
       </ScrollView>
 
       {!mine ? (
-        <View style={[styles.dock, { backgroundColor: theme.bg }]}>
+        <View style={[styles.dock, { backgroundColor: theme.bg, paddingBottom: Math.max(insets.bottom, 16) }]}>
           <PrimaryButton
             title="Drop a ShyText"
             theme={theme}
@@ -178,9 +177,8 @@ export default function VenueScreen() {
 
 const styles = StyleSheet.create({
   content: { padding: space[16], paddingBottom: 120, gap: space[12] },
-  back: { minHeight: 44, justifyContent: 'center' },
-  own: { borderRadius: radius.lg, padding: space[16], gap: space[8] },
+  own: { borderRadius: radius.lg, borderCurve: 'continuous', padding: space[16], gap: space[8] },
   ownIntent: { ...type.title },
   ownActions: { gap: space[8] },
-  dock: { paddingHorizontal: space[16], paddingBottom: space[16], paddingTop: space[8] },
+  dock: { paddingHorizontal: space[16], paddingTop: space[8] },
 });

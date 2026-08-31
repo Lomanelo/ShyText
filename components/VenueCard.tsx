@@ -30,21 +30,27 @@ export function VenueCard({
       style={({ pressed }) => [
         styles.card,
         cardShadow(theme),
-        { backgroundColor: theme.card, transform: [{ scale: pressed ? 0.96 : 1 }] },
+        {
+          backgroundColor: theme.card,
+          transform: [{ scale: pressed ? 0.96 : 1 }],
+        },
       ]}
     >
-      <View style={styles.top}>
-        <View style={{ flex: 1, gap: 4 }}>
-          <Text style={[type.title, { color: theme.text }]}>{venue.name}</Text>
-          <Text style={[type.caption, { color: theme.muted }]}>
-            {distance != null ? formatDistance(distance) : venue.address || venue.category}
-          </Text>
-        </View>
-        <View style={[styles.badge, { backgroundColor: activity.live ? theme.accentSoft : theme.bg }]}>
-          <Text style={[type.caption, { color: activity.live ? theme.accent : theme.quiet, fontWeight: '700' }]}>
-            {activity.label}
-          </Text>
-        </View>
+      <View style={{ flex: 1, gap: 4 }}>
+        <Text style={[type.headline, { color: theme.text }]}>{venue.name}</Text>
+        <Text style={[type.caption, { color: theme.muted }]}>
+          {distance != null ? formatDistance(distance) : venue.address || venue.category}
+        </Text>
+      </View>
+      <View style={[styles.badge, { backgroundColor: activity.live ? theme.accentSoft : theme.bg }]}>
+        <Text
+          style={[
+            type.caption,
+            { color: activity.live ? theme.accent : theme.quiet, fontWeight: '600', fontVariant: ['tabular-nums'] },
+          ]}
+        >
+          {activity.label}
+        </Text>
       </View>
     </Pressable>
   );
@@ -54,9 +60,11 @@ const styles = StyleSheet.create({
   card: {
     padding: space[16],
     borderRadius: radius.lg,
-    gap: space[16],
+    borderCurve: 'continuous',
     marginBottom: space[12],
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: space[12],
   },
-  top: { flexDirection: 'row', alignItems: 'flex-start', gap: space[12] },
   badge: { borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
 });

@@ -12,5 +12,5 @@ export function Skeleton({ theme, count = 3 }: { theme: Theme; count?: number })
 }
 
 const styles = StyleSheet.create({
-  block: { height: 96, borderRadius: 20, marginBottom: 12 },
+  block: { height: 96, borderRadius: 16, borderCurve: 'continuous', marginBottom: 12 },
 });

@@ -1,12 +1,19 @@
 import { ReactNode } from 'react';
-import { StyleSheet } from 'react-native';
+import { View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Theme } from '../theme';
 
-export function Screen({ children, theme }: { children: ReactNode; theme: Theme }) {
-  return <SafeAreaView style={[styles.safe, { backgroundColor: theme.bg }]}>{children}</SafeAreaView>;
+export function Screen({
+  children,
+  theme,
+  inset = true,
+}: {
+  children: ReactNode;
+  theme: Theme;
+  inset?: boolean;
+}) {
+  if (!inset) {
+    return <View style={{ flex: 1, backgroundColor: theme.bg }}>{children}</View>;
+  }
+  return <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }}>{children}</SafeAreaView>;
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1 },
-});

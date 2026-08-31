@@ -1,9 +1,10 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '../../components/Screen';
 import { Avatar } from '../../components/Avatar';
 import { PrimaryButton } from '../../components/PrimaryButton';
-import { useTheme } from '../../theme';
+import { Group, ListRow } from '../../components/ListRow';
+import { type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { memberSince } from '../../utils/dates';
 import { signOut } from '../../services/auth';
@@ -14,33 +15,27 @@ export default function ProfileScreen() {
   const { profile, user } = useAuth();
 
   return (
-    <Screen theme={theme}>
-      <View style={styles.wrap}>
-        <Text style={[styles.title, { color: theme.text }]}>Profile</Text>
+    <Screen theme={theme} inset={false}>
+      <ScrollView contentContainerStyle={styles.wrap} contentInsetAdjustmentBehavior="automatic">
         <View style={[styles.card, { backgroundColor: theme.card }]}>
           <Avatar name={profile?.displayName} uri={profile?.avatarUrl} theme={theme} size={72} />
-          <Text style={[styles.name, { color: theme.text }]}>
+          <Text style={[type.title, { color: theme.text }]}>
             {profile?.displayName || 'You'}
             {profile?.age ? `, ${profile.age}` : ''}
           </Text>
-          {profile?.bio ? <Text style={{ color: theme.muted }}>{profile.bio}</Text> : null}
-          <Text style={{ color: theme.quiet }}>
+          {profile?.bio ? <Text style={[type.body, { color: theme.muted, textAlign: 'center' }]}>{profile.bio}</Text> : null}
+          <Text style={[type.caption, { color: theme.quiet }]}>
             Member since {profile?.createdAt ? memberSince(profile.createdAt) : 'now'}
           </Text>
           {user?.phoneNumber ? (
-            <Text style={{ color: theme.quiet }}>{maskPhone(user.phoneNumber)}</Text>
+            <Text style={[type.caption, { color: theme.quiet }]}>{maskPhone(user.phoneNumber)}</Text>
           ) : null}
         </View>
-        <Pressable onPress={() => router.push('/settings')} style={styles.row}>
-          <Text style={{ color: theme.text, fontWeight: '700' }}>Settings</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/settings/privacy')} style={styles.row}>
-          <Text style={{ color: theme.text, fontWeight: '700' }}>Privacy</Text>
-        </Pressable>
-        <Pressable onPress={() => router.push('/settings/blocked-users')} style={styles.row}>
-          <Text style={{ color: theme.text, fontWeight: '700' }}>Blocked users</Text>
-        </Pressable>
-        <Text style={{ color: theme.quiet, fontSize: 12 }}>{user?.uid ? `id ${user.uid.slice(0, 8)}` : ''}</Text>
+        <Group theme={theme}>
+          <ListRow title="Settings" theme={theme} onPress={() => router.push('/settings')} />
+          <ListRow title="Privacy" theme={theme} onPress={() => router.push('/settings/privacy')} />
+          <ListRow title="Blocked users" theme={theme} last onPress={() => router.push('/settings/blocked-users')} />
+        </Group>
         <PrimaryButton
           title="Sign out"
           theme={theme}
@@ -50,15 +45,12 @@ export default function ProfileScreen() {
             router.replace('/(auth)/welcome');
           }}
         />
-      </View>
+      </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, padding: 20, gap: 14 },
-  title: { fontSize: 32, fontWeight: '800' },
-  card: { borderRadius: 22, padding: 22, alignItems: 'center', gap: 8 },
-  name: { fontSize: 24, fontWeight: '800' },
-  row: { paddingVertical: 16 },
+  wrap: { padding: 16, gap: 16, paddingBottom: 32 },
+  card: { borderRadius: 16, borderCurve: 'continuous', padding: 22, alignItems: 'center', gap: 8 },
 });

@@ -1,13 +1,11 @@
-import { Platform, TextStyle, useColorScheme } from 'react-native';
+import { ColorValue, Platform, TextStyle, useColorScheme } from 'react-native';
+import { Color } from 'expo-router';
 
-const displayFace = Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' });
-
-/** Exact colors sampled from assets/images/icon.png */
-export const palette = {
-  cream: '#FCF3E8',
-  flame: '#D05927',
-  rust: '#993818',
-};
+/** Logo flame. The only brand hex; everything else is a system semantic color. */
+export const brand = {
+  accent: '#D05927',
+  onAccent: '#FFFFFF',
+} as const;
 
 export const space = {
   4: 4,
@@ -28,14 +26,14 @@ export const radius = {
 
 export const type = {
   display: {
-    fontFamily: displayFace,
     fontSize: 34,
-    lineHeight: 40,
-    fontWeight: '400',
-    letterSpacing: -0.4,
+    lineHeight: 41,
+    fontWeight: '700',
+    letterSpacing: 0.37,
   } satisfies TextStyle,
-  title: { fontSize: 22, lineHeight: 28, fontWeight: '700', letterSpacing: -0.2 } satisfies TextStyle,
-  body: { fontSize: 16, lineHeight: 22, fontWeight: '400' } satisfies TextStyle,
+  title: { fontSize: 22, lineHeight: 28, fontWeight: '600', letterSpacing: 0.35 } satisfies TextStyle,
+  headline: { fontSize: 17, lineHeight: 22, fontWeight: '600' } satisfies TextStyle,
+  body: { fontSize: 17, lineHeight: 22, fontWeight: '400' } satisfies TextStyle,
   caption: { fontSize: 13, lineHeight: 18, fontWeight: '400' } satisfies TextStyle,
 };
 
@@ -44,52 +42,79 @@ export const motion = {
   duration: 150,
 } as const;
 
-export const lightTheme = {
-  bg: palette.cream,
-  card: '#FFFFFF',
-  text: palette.rust,
-  muted: '#8A5A3C',
-  border: '#E8D4C4',
-  accent: palette.flame,
-  accentSoft: '#F6E0D4',
-  danger: '#B42318',
-  success: '#2F7A4A',
-  quiet: '#B08970',
-  shadow: palette.rust,
-  imageOutline: 'rgba(0,0,0,0.10)',
+export const shadows = {
+  card: '0 8px 24px rgba(28, 18, 14, 0.08)',
+} as const;
+
+export type Theme = {
+  bg: ColorValue;
+  card: ColorValue;
+  text: ColorValue;
+  muted: ColorValue;
+  quiet: ColorValue;
+  border: ColorValue;
+  accent: string;
+  accentSoft: string;
+  danger: ColorValue;
+  success: ColorValue;
+  onAccent: string;
+  imageOutline: string;
 };
 
-export const darkTheme = {
-  bg: '#1A0E0A',
-  card: '#2A1814',
-  text: palette.cream,
-  muted: '#C9A892',
-  border: '#3D241C',
-  accent: palette.flame,
-  accentSoft: '#3A1C12',
-  danger: '#F07187',
-  success: '#4CC38A',
-  quiet: '#8A5A3C',
-  shadow: '#000000',
-  imageOutline: 'rgba(255,255,255,0.10)',
-};
+function semanticTheme(): Theme {
+  return {
+    bg: Platform.select({
+      ios: Color.ios.systemGroupedBackground,
+      android: Color.android.dynamic.background,
+      default: '#F2EDE6',
+    })!,
+    card: Platform.select({
+      ios: Color.ios.secondarySystemGroupedBackground,
+      android: Color.android.dynamic.surfaceContainer,
+      default: '#FFFFFF',
+    })!,
+    text: Platform.select({
+      ios: Color.ios.label,
+      android: Color.android.dynamic.onSurface,
+      default: '#1C120E',
+    })!,
+    muted: Platform.select({
+      ios: Color.ios.secondaryLabel,
+      android: Color.android.dynamic.onSurfaceVariant,
+      default: '#6B5344',
+    })!,
+    quiet: Platform.select({
+      ios: Color.ios.tertiaryLabel,
+      android: Color.android.dynamic.outline,
+      default: '#8A735F',
+    })!,
+    border: Platform.select({
+      ios: Color.ios.separator,
+      android: Color.android.dynamic.outlineVariant,
+      default: '#E4D6C8',
+    })!,
+    accent: brand.accent,
+    accentSoft: 'rgba(208, 89, 39, 0.14)',
+    danger: Platform.select({
+      ios: Color.ios.systemRed,
+      android: Color.android.dynamic.error,
+      default: '#B42318',
+    })!,
+    success: Platform.select({
+      ios: Color.ios.systemGreen,
+      android: Color.android.dynamic.primary,
+      default: '#2F7A4A',
+    })!,
+    onAccent: brand.onAccent,
+    imageOutline: 'rgba(0,0,0,0.10)',
+  };
+}
 
-export type Theme = typeof lightTheme;
-
-export function cardShadow(theme: Theme) {
-  return Platform.select({
-    ios: {
-      shadowColor: theme.shadow,
-      shadowOpacity: 0.1,
-      shadowRadius: 16,
-      shadowOffset: { width: 0, height: 8 },
-    },
-    android: { elevation: 3 },
-    default: {},
-  });
+export function cardShadow(_theme?: Theme) {
+  return { boxShadow: shadows.card };
 }
 
 export function useTheme(): Theme {
-  const scheme = useColorScheme();
-  return scheme === 'dark' ? darkTheme : lightTheme;
+  useColorScheme();
+  return semanticTheme();
 }

@@ -109,9 +109,9 @@ export function ChatRequestModal({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 20 },
-  sheet: { borderRadius: 22, padding: 20, gap: 12 },
-  title: { fontSize: 22, fontWeight: '800' },
+  sheet: { borderRadius: 22, borderCurve: 'continuous', padding: 20, gap: 12 },
+  title: { fontSize: 22, fontWeight: '700' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10 },
-  input: { borderRadius: 14, padding: 14, minHeight: 80 },
+  chip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10, minHeight: 44, justifyContent: 'center' },
+  input: { borderRadius: 14, borderCurve: 'continuous', padding: 14, minHeight: 80, fontSize: 17 },
 });
