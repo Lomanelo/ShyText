@@ -7,9 +7,29 @@ type CachedToken = { token: string; expiresAt: number };
 let cached: CachedToken | null = null;
 
 function normalizePem(value: string) {
-  const trimmed = value.replace(/\\n/g, '\n').trim();
-  if (trimmed.includes('BEGIN')) return trimmed;
-  return `-----BEGIN PRIVATE KEY-----\n${trimmed}\n-----END PRIVATE KEY-----`;
+  let raw = value.trim().replace(/^\uFEFF/, '');
+  if (
+    (raw.startsWith('"') && raw.endsWith('"')) ||
+    (raw.startsWith("'") && raw.endsWith("'"))
+  ) {
+    raw = raw.slice(1, -1).trim();
+  }
+  raw = raw
+    .replace(/\\r\\n/g, '\n')
+    .replace(/\\n/g, '\n')
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
+
+  const body = raw
+    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----/g, '')
+    .replace(/-----END [A-Z ]*PRIVATE KEY-----/g, '')
+    .replace(/[^A-Za-z0-9+/=]/g, '');
+  if (body.length < 80) {
+    throw Object.assign(new Error('Apple Maps private key is invalid.'), { status: 401 });
+  }
+
+  const wrapped = body.match(/.{1,64}/g)?.join('\n') ?? body;
+  return `-----BEGIN PRIVATE KEY-----\n${wrapped}\n-----END PRIVATE KEY-----`;
 }
 
 function base64url(input: Buffer | string) {
@@ -22,7 +42,14 @@ function createMapsJwt(teamId: string, keyId: string, privateKeyPem: string) {
   const now = Math.floor(Date.now() / 1000);
   const payload = base64url(JSON.stringify({ iss: teamId, iat: now, exp: now + 20 * 60 }));
   const data = `${header}.${payload}`;
-  const key = createPrivateKey(normalizePem(privateKeyPem));
+  let key;
+  try {
+    key = createPrivateKey(normalizePem(privateKeyPem));
+  } catch {
+    throw Object.assign(new Error('Apple Maps private key is invalid. Re-paste APPLE_MAPS_PRIVATE_KEY from the .p8 file.'), {
+      status: 401,
+    });
+  }
   const signature = sign('SHA256', Buffer.from(data), { key, dsaEncoding: 'ieee-p1363' });
   return `${data}.${base64url(signature)}`;
 }
