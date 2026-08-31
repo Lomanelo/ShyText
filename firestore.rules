@@ -41,9 +41,37 @@ service cloud.firestore {
     }
 
     match /checkins/{checkInId} {
-      allow read: if signedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSelf(request.resource.data.userId);
-      allow update, delete: if false;
+      function isValidCheckIn() {
+        return request.resource.data.userId is string
+          && request.resource.data.venueId is string
+          && request.resource.data.expiresAt is number
+          && request.resource.data.createdAt is number
+          && (!('vibe' in request.resource.data)
+            || request.resource.data.vibe == null
+            || request.resource.data.vibe is string)
+          && (!('displayName' in request.resource.data)
+            || request.resource.data.displayName == null
+            || request.resource.data.displayName is string)
+          && (!('avatarUrl' in request.resource.data)
+            || request.resource.data.avatarUrl == null
+            || request.resource.data.avatarUrl is string)
+          && (!('age' in request.resource.data)
+            || request.resource.data.age == null
+            || request.resource.data.age is int || request.resource.data.age is float)
+          && (!('status' in request.resource.data)
+            || request.resource.data.status == null
+            || (request.resource.data.status is string
+              && request.resource.data.status.size() <= 40));
+      }
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.auth.uid == checkInId
+        && isSelf(request.resource.data.userId)
+        && isValidCheckIn();
+      allow update: if isSelf(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && isValidCheckIn();
+      allow delete: if false;
     }
 
     match /shytexts/{shytextId} {

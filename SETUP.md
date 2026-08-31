@@ -1,6 +1,6 @@
 # ShyText MVP setup
 
-Venue icebreaker. People at the same place leave a short ShyText. Someone can say hello. Chat starts only if the author accepts. Exact GPS is never shown to other users.
+Venue check-in. People at the same place become visible only after they check in. You send a ShyText to one person. Chat starts only if they accept. Exact GPS is never shown to other users.
 
 ## 1. Folder structure
 

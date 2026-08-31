@@ -16,10 +16,11 @@ import { moderateText } from './moderation';
 import { MAX_REQUESTS_PER_HOUR } from '../utils/config';
 import { isBlockedEitherWay } from './blocks';
 import { notifyUser } from './notifications';
-import { getLiveShyText } from './shytexts';
+import { getActiveCheckIn } from './venues';
 
 export async function sendChatRequest(input: {
-  shytextId: string;
+  checkInId?: string;
+  shytextId?: string;
   shytextMessage?: string;
   shytextIntent?: string;
   receiverId: string;
@@ -30,43 +31,53 @@ export async function sendChatRequest(input: {
 }) {
   const user = auth.currentUser;
   if (!user) throw new Error('Sign in first.');
-  if (user.uid === input.receiverId) throw new Error('You cannot break the ice with yourself.');
+  if (user.uid === input.receiverId) throw new Error('You cannot send a ShyText to yourself.');
   if (await isBlockedEitherWay(user.uid, input.receiverId)) {
     throw new Error('You cannot contact this person.');
   }
-  const live = await getLiveShyText(input.shytextId);
-  if (!live) throw new Error('They are no longer visible.');
+
+  const mine = await getActiveCheckIn(user.uid);
+  if (!mine || mine.venueId !== input.venueId || mine.expiresAt <= Date.now()) {
+    throw new Error('Check in here first.');
+  }
+  const theirs = await getActiveCheckIn(input.receiverId);
+  if (!theirs || theirs.venueId !== input.venueId || theirs.expiresAt <= Date.now()) {
+    throw new Error('They’re no longer checked in.');
+  }
+
   if (input.introMessage) {
     const moderated = moderateText(input.introMessage);
     if (!moderated.ok) throw new Error(moderated.reason);
   }
 
-  const existing = await getDocs(
-    query(
-      collection(db, 'chatRequests'),
-      where('senderId', '==', user.uid),
-      where('shytextId', '==', input.shytextId)
+  const existing = await getDocs(query(collection(db, 'chatRequests'), where('senderId', '==', user.uid)));
+  if (
+    existing.docs.some(
+      (item) =>
+        item.data().status === 'pending' &&
+        item.data().receiverId === input.receiverId &&
+        item.data().venueId === input.venueId
     )
-  );
-  if (existing.docs.some((item) => item.data().status === 'pending')) {
-    throw new Error('You already broke the ice.');
+  ) {
+    throw new Error('You already sent a ShyText.');
   }
 
-  const hourSnap = await getDocs(query(collection(db, 'chatRequests'), where('senderId', '==', user.uid)));
-  const hourCount = hourSnap.docs.filter((item) => Date.now() - Number(item.data().createdAt) < 60 * 60 * 1000).length;
+  const hourCount = existing.docs.filter((item) => Date.now() - Number(item.data().createdAt) < 60 * 60 * 1000).length;
   if (hourCount >= MAX_REQUESTS_PER_HOUR) {
-    throw new Error('Too many icebreakers this hour.');
+    throw new Error('Too many ShyTexts this hour.');
   }
 
   await addDoc(collection(db, 'chatRequests'), {
     ...input,
+    checkInId: theirs.id,
+    shytextId: input.shytextId ?? theirs.id,
     senderId: user.uid,
     status: 'pending',
     createdAt: Date.now(),
     serverCreatedAt: serverTimestamp(),
   });
   await notifyUser(input.receiverId, {
-    title: 'Someone wants to break the ice',
+    title: 'Someone sent you a ShyText',
     body: input.introMessage || 'Open ShyText to read it.',
   });
 }
@@ -91,7 +102,7 @@ export async function respondToRequest(request: ChatRequest, accept: boolean): P
   if (accept) {
     const convo = await addDoc(collection(db, 'conversations'), {
       participantIds: [request.senderId, request.receiverId],
-      createdFromShytextId: request.shytextId,
+      createdFromShytextId: request.checkInId ?? request.shytextId,
       venueName: request.venueName ?? null,
       createdAt: Date.now(),
       lastMessageAt: Date.now(),
@@ -109,7 +120,6 @@ export async function respondToRequest(request: ChatRequest, accept: boolean): P
       });
     }
     await updateDoc(doc(db, 'chatRequests', request.id), { status: 'accepted', conversationId: convo.id });
-    await updateDoc(doc(db, 'shytexts', request.shytextId), { responseCount: increment(1) }).catch(() => undefined);
     await updateDoc(doc(db, 'users', user.uid), { 'stats.chatsStarted': increment(1) }).catch(() => undefined);
     await notifyUser(request.senderId, {
       title: 'They accepted',

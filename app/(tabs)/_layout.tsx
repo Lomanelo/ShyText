@@ -1,8 +1,10 @@
 import { Tabs } from 'expo-router';
+import { StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { brand, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useChatRequests } from '../../hooks/useChatRequests';
+import { HapticTab } from '../../components/HapticTab';
 
 export default function TabsLayout() {
   const theme = useTheme();
@@ -19,9 +21,11 @@ export default function TabsLayout() {
         headerTitleStyle: { fontWeight: '700' },
         tabBarActiveTintColor: brand.accent,
         tabBarInactiveTintColor: theme.quiet,
+        tabBarButton: (props) => <HapticTab {...props} />,
         tabBarStyle: {
           backgroundColor: theme.card,
           borderTopColor: theme.border,
+          borderTopWidth: StyleSheet.hairlineWidth,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}
@@ -32,16 +36,6 @@ export default function TabsLayout() {
           title: 'Nearby',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'location' : 'location-outline'} size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="map"
-        options={{
-          title: 'Map',
-          headerShown: false,
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'map' : 'map-outline'} size={size} color={color} />
           ),
         }}
       />

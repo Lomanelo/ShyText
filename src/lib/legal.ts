@@ -1,6 +1,6 @@
 export const PRIVACY_POLICY_TEXT = `Last updated: August 31, 2026
 
-ShyText is a venue icebreaker app operated by an independent developer (shytext.info@gmail.com). It helps people leave short, time-boxed notes at a place they are in and reply privately. It is not a dating app and does not show a public social feed.
+ShyText is a venue check-in app operated by an independent developer (shytext.info@gmail.com). It helps people check into a place they are in, send a short ShyText to someone else checked in there, and chat privately if they accept. It is not a dating app and does not show a public social feed.
 
 1. Data we collect
 - Account: mobile phone number (for sign-in and verification only — other people never see it), first name, optional profile photo.
@@ -11,10 +11,10 @@ ShyText is a venue icebreaker app operated by an independent developer (shytext.
 - Support messages you send through Help & Support.
 
 2. How we use it
-We use this data to run check-in, notes, chat, Ghost Mode, safety (block/report), and account deletion. Precise location is used only on-device to suggest a venue. If you decline location, you can still pick a place manually or enter a venue code.
+We use this data to run check-in, ShyTexts, chat, safety (block/report), and account deletion. Precise location is used only on-device to confirm you are at a venue.
 
 3. What other people see
-People checked into the same venue can see your first name, photo, and notes unless you are in Ghost Mode. Ghost Mode lets you read notes without appearing or posting. Messages are visible only to the two participants.
+People checked into the same venue can see your first name, photo, and vibe after they check in too. Messages are visible only to the two participants.
 
 4. Storage and processors
 Data is stored in Firebase (Google): Authentication, Realtime Database, and Storage, primarily in the United States. Expo is used to build and deliver the app.
@@ -36,7 +36,7 @@ export const TERMS_OF_SERVICE_TEXT = `Last updated: August 31, 2026
 By using ShyText you agree to these terms.
 
 1. The service
-ShyText lets people 17 or older leave short icebreaker notes at a venue and reply in private chat. It is not a dating, hookup, or anonymous chat service.
+ShyText lets people 17 or older check into a venue and send a short ShyText to someone else checked in there. Chat starts only if they accept. It is not a dating, hookup, or anonymous chat service.
 
 2. Accounts
 You must be at least 17. Accounts are created with a mobile phone number and SMS verification. You are responsible for activity on your account. You may delete your account in the app at any time.

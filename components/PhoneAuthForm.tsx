@@ -17,6 +17,8 @@ import * as WebBrowser from 'expo-web-browser';
 import { Screen } from './Screen';
 import { PrimaryButton } from './PrimaryButton';
 import { Wordmark } from './wordmark';
+import { OtpSlots } from './OtpSlots';
+import { PressScale } from './PressScale';
 import { radius, space, type, useTheme } from '../theme';
 import { usePhoneAuth } from '../hooks/usePhoneAuth';
 import {
@@ -69,7 +71,6 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrap}>
         <Pressable onPress={() => router.back()} accessibilityRole="button" style={styles.back}>
           <Ionicons name="chevron-back" size={22} color={theme.text} />
-          <Text style={{ color: theme.text, fontWeight: '700' }}>Back</Text>
         </Pressable>
 
         <View style={styles.hero}>
@@ -77,24 +78,26 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
           <Text style={[type.display, { color: theme.text }]}>
             {auth.step === 'code' ? 'Enter the code' : title}
           </Text>
-          <Text style={[type.body, { color: theme.muted }]}>
-            {auth.step === 'code' ? `We sent a 6-digit code to ${phone}.` : body}
-          </Text>
+          {auth.step === 'code' ? (
+            <Text style={[type.body, { color: theme.muted }]}>Sent to {phone}</Text>
+          ) : (
+            <Text style={[type.caption, { color: theme.quiet }]}>{body}</Text>
+          )}
         </View>
 
         {auth.error ? <Text style={{ color: theme.danger }}>{auth.error}</Text> : null}
 
         {auth.step === 'phone' ? (
           <View style={styles.phoneRow}>
-            <Pressable
+            <PressScale
               accessibilityRole="button"
               accessibilityLabel="Country code"
               onPress={() => setPickerOpen(true)}
               style={[styles.codeBtn, { backgroundColor: theme.card }]}
             >
               <Text style={[styles.codeText, { color: theme.text }]}>{callingCode}</Text>
-              <Ionicons name="chevron-down" size={16} color={theme.muted} />
-            </Pressable>
+              <Ionicons name="chevron-down" size={14} color={theme.muted} />
+            </PressScale>
             <TextInput
               value={national}
               onChangeText={(value) => {
@@ -109,16 +112,18 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
               keyboardType="phone-pad"
               autoComplete="tel"
               textContentType="telephoneNumber"
-              placeholder="Mobile number"
+              autoCorrect={false}
+              returnKeyType="done"
+              placeholder="Phone"
               placeholderTextColor={theme.quiet}
-              style={[styles.input, styles.national, { color: theme.text, backgroundColor: theme.card }]}
+              style={[styles.national, { color: theme.text }]}
             />
           </View>
         ) : (
-          <TextInput
+          <OtpSlots
             value={code}
-            onChangeText={(value) => {
-              const next = value.replace(/\D/g, '').slice(0, 6);
+            theme={theme}
+            onChange={(next) => {
               setCode(next);
               if (next.length === 6 && !auth.loading && submittedCode.current !== next) {
                 submittedCode.current = next;
@@ -126,26 +131,28 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
                 auth.confirmCode(next);
               }
             }}
-            keyboardType="number-pad"
-            autoComplete="sms-otp"
-            textContentType="oneTimeCode"
-            placeholder="000000"
-            placeholderTextColor={theme.quiet}
-            maxLength={6}
-            style={[styles.input, styles.otp, { color: theme.text, backgroundColor: theme.card }]}
           />
         )}
 
+        <View style={{ flex: 1 }} />
+
         {auth.step === 'phone' ? (
-          <PrimaryButton
-            title="Send code"
-            theme={theme}
-            disabled={!phoneReady}
-            loading={auth.loading}
-            onPress={() => auth.sendCode(phone)}
-          />
+          <View style={styles.dock}>
+            <PrimaryButton
+              title="Send code"
+              theme={theme}
+              disabled={!phoneReady}
+              loading={auth.loading}
+              onPress={() => auth.sendCode(phone)}
+            />
+            <Pressable onPress={() => router.push(footerHref)} style={styles.footer}>
+              <Text style={{ color: theme.muted }}>
+                {footerLabel} <Text style={{ color: theme.accent, fontWeight: '700' }}>{footerAction}</Text>
+              </Text>
+            </Pressable>
+          </View>
         ) : (
-          <View style={{ gap: space[8] }}>
+          <View style={styles.dock}>
             <PrimaryButton
               title="Verify"
               theme={theme}
@@ -156,7 +163,7 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
             <PrimaryButton
               title={auth.resendIn > 0 ? `Resend in ${auth.resendIn}s` : 'Resend code'}
               theme={theme}
-              variant="ghost"
+              variant="secondary"
               disabled={auth.resendIn > 0 || auth.loading}
               onPress={() => {
                 setCode('');
@@ -176,49 +183,59 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
             </Pressable>
           </View>
         )}
-
-        {auth.step === 'phone' ? (
-          <Pressable onPress={() => router.push(footerHref)} style={styles.footer}>
-            <Text style={{ color: theme.muted }}>
-              {footerLabel} <Text style={{ color: theme.accent, fontWeight: '700' }}>{footerAction}</Text>
-            </Text>
-          </Pressable>
-        ) : null}
       </KeyboardAvoidingView>
 
       <Modal visible={pickerOpen} animationType="slide" onRequestClose={() => setPickerOpen(false)}>
         <Screen theme={theme}>
           <View style={styles.picker}>
-            <Pressable onPress={() => setPickerOpen(false)} style={styles.back}>
-              <Ionicons name="chevron-back" size={22} color={theme.text} />
-              <Text style={{ color: theme.text, fontWeight: '700' }}>Country</Text>
-            </Pressable>
+            <View style={styles.pickerHead}>
+              <Pressable
+                onPress={() => setPickerOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+                style={[styles.close, { backgroundColor: theme.card }]}
+              >
+                <Ionicons name="close" size={18} color={theme.text} />
+              </Pressable>
+              <Text style={[type.headline, { color: theme.text }]}>Country</Text>
+              <View style={{ width: 36 }} />
+            </View>
             <TextInput
               value={query}
               onChangeText={setQuery}
               autoCapitalize="none"
-              placeholder="Search country or code"
+              placeholder="Search"
               placeholderTextColor={theme.quiet}
-              style={[styles.input, { color: theme.text, backgroundColor: theme.card, marginTop: 48 }]}
+              style={[styles.search, { color: theme.text, backgroundColor: theme.card }]}
             />
-            <FlatList
-              data={countries}
-              keyExtractor={(item) => `${item.code}-${item.name}`}
-              keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => (
-                <Pressable
-                  onPress={() => {
-                    setCallingCode(item.code);
-                    setPickerOpen(false);
-                    setQuery('');
-                  }}
-                  style={styles.countryRow}
-                >
-                  <Text style={{ color: theme.text, fontWeight: '700' }}>{item.name}</Text>
-                  <Text style={{ color: theme.muted }}>{item.code}</Text>
-                </Pressable>
-              )}
-            />
+            <View style={[styles.countryCard, { backgroundColor: theme.card }]}>
+              <FlatList
+                data={countries}
+                keyExtractor={(item) => `${item.code}-${item.name}`}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item, index }) => (
+                  <Pressable
+                    onPress={() => {
+                      setCallingCode(item.code);
+                      setPickerOpen(false);
+                      setQuery('');
+                    }}
+                    style={[
+                      styles.countryRow,
+                      index < countries.length - 1
+                        ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }
+                        : null,
+                    ]}
+                  >
+                    <Text style={[type.body, { color: theme.text, flex: 1 }]}>{item.name}</Text>
+                    <Text style={[type.body, { color: theme.muted }]}>{item.code}</Text>
+                    {item.code === callingCode ? (
+                      <Ionicons name="checkmark-circle" size={20} color={theme.accent} style={{ marginLeft: 8 }} />
+                    ) : null}
+                  </Pressable>
+                )}
+              />
+            </View>
           </View>
         </Screen>
       </Modal>
@@ -227,23 +244,27 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1, paddingHorizontal: space[24], paddingBottom: space[12], justifyContent: 'center', gap: space[16] },
-  back: { flexDirection: 'row', alignItems: 'center', position: 'absolute', top: 8, left: space[24], zIndex: 2, minHeight: 44 },
-  hero: { gap: space[8], marginBottom: space[8] },
-  phoneRow: { flexDirection: 'row', gap: space[8] },
+  wrap: { flex: 1, paddingHorizontal: space[24], paddingBottom: space[12], paddingTop: 52 },
+  back: { position: 'absolute', top: 8, left: space[16], zIndex: 2, width: 44, height: 44, justifyContent: 'center' },
+  hero: { gap: space[8], marginBottom: space[16] },
+  phoneRow: { flexDirection: 'row', alignItems: 'center', gap: space[12] },
   codeBtn: {
     borderRadius: radius.md,
+    borderCurve: 'continuous',
     paddingHorizontal: space[12],
-    minHeight: 52,
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  codeText: { fontSize: 16, fontWeight: '700' },
-  national: { flex: 1 },
-  input: { borderRadius: radius.md, padding: space[16], minHeight: 52, fontSize: 16 },
-  otp: { letterSpacing: 8, fontSize: 28, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  codeText: { fontSize: 17, fontWeight: '700' },
+  national: { flex: 1, minHeight: 52, fontSize: 34, fontWeight: '700', letterSpacing: 0.3 },
+  dock: { gap: space[8], paddingBottom: space[8] },
   footer: { alignItems: 'center', paddingTop: space[4], minHeight: 44, justifyContent: 'center' },
-  picker: { flex: 1, paddingHorizontal: space[24], paddingTop: space[8] },
-  countryRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  picker: { flex: 1, paddingHorizontal: space[16], paddingTop: space[8], gap: space[12] },
+  pickerHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
+  close: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  search: { borderRadius: radius.pill, borderCurve: 'continuous', paddingHorizontal: space[16], minHeight: 44, fontSize: 17 },
+  countryCard: { flex: 1, borderRadius: radius.lg, borderCurve: 'continuous', overflow: 'hidden' },
+  countryRow: { minHeight: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space[16] },
 });

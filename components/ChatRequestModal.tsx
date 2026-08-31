@@ -1,8 +1,10 @@
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useEffect, useState } from 'react';
-import { ICEBREAKERS, ShyTextVibe, VIBE_LABELS } from '../types/shytext';
-import { Theme } from '../theme';
+import * as Haptics from 'expo-haptics';
+import { ICEBREAKERS, ShyTextVibe } from '../types/shytext';
+import { radius, space, Theme, type } from '../theme';
 import { PrimaryButton } from './PrimaryButton';
+import { PressScale } from './PressScale';
 import { MAX_MESSAGE_LENGTH } from '../utils/config';
 
 export function ChatRequestModal({
@@ -26,7 +28,7 @@ export function ChatRequestModal({
   const [writeOwn, setWriteOwn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const replies = vibe ? ICEBREAKERS[vibe] : [];
+  const replies = vibe ? ICEBREAKERS[vibe] : ICEBREAKERS.chat;
 
   useEffect(() => {
     if (visible) {
@@ -52,34 +54,36 @@ export function ChatRequestModal({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable style={[styles.sheet, { backgroundColor: theme.card }]}>
-          <Text style={[styles.title, { color: theme.text }]}>Break the ice with {name}?</Text>
-          {vibe ? (
-            <Text style={{ color: theme.muted }}>They’re up for {VIBE_LABELS[vibe]}</Text>
-          ) : null}
-          {message ? <Text style={{ color: theme.muted }}>“{message}”</Text> : null}
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.frame}>
+        <Pressable style={styles.overlay} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
+        <View style={[styles.sheet, { backgroundColor: theme.card }]}>
+          <View style={[styles.handle, { backgroundColor: theme.border }]} />
+          <Text style={[type.title, { color: theme.text }]}>Send a ShyText to {name}?</Text>
+          {message ? <Text style={[type.body, { color: theme.muted }]}>“{message}”</Text> : null}
 
           {!writeOwn ? (
             <View style={styles.chips}>
               {replies.map((reply) => (
-                <Pressable
+                <PressScale
                   key={reply}
                   disabled={busy}
-                  onPress={() => send(reply)}
+                  onPress={() => {
+                    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    void send(reply);
+                  }}
                   style={[styles.chip, { backgroundColor: theme.bg }]}
                 >
-                  <Text style={{ color: theme.text, fontWeight: '700' }}>{reply}</Text>
-                </Pressable>
+                  <Text style={[type.headline, { color: theme.text }]}>{reply}</Text>
+                </PressScale>
               ))}
-              <Pressable
+              <PressScale
                 disabled={busy}
                 onPress={() => setWriteOwn(true)}
                 style={[styles.chip, { backgroundColor: theme.accentSoft }]}
               >
-                <Text style={{ color: theme.accent, fontWeight: '700' }}>Write my own…</Text>
-              </Pressable>
+                <Text style={[type.headline, { color: theme.accent }]}>Write my own…</Text>
+              </PressScale>
             </View>
           ) : (
             <>
@@ -90,28 +94,43 @@ export function ChatRequestModal({
                 placeholder="Write a short hello…"
                 placeholderTextColor={theme.quiet}
                 autoFocus
+                returnKeyType="send"
+                onSubmitEditing={() => send(intro)}
                 style={[styles.input, { color: theme.text, backgroundColor: theme.bg }]}
               />
-              <PrimaryButton
-                title="Send"
-                theme={theme}
-                loading={busy}
-                onPress={() => send(intro)}
-              />
+              <PrimaryButton title="Send" theme={theme} loading={busy} onPress={() => send(intro)} />
             </>
           )}
           {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}
-        </Pressable>
-      </Pressable>
+          <Pressable onPress={onClose} style={styles.cancel} accessibilityRole="button">
+            <Text style={[type.headline, { color: theme.muted }]}>Not now</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 20 },
-  sheet: { borderRadius: 22, borderCurve: 'continuous', padding: 20, gap: 12 },
-  title: { fontSize: 22, fontWeight: '700' },
+  frame: { flex: 1, justifyContent: 'flex-end' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.48)' },
+  sheet: {
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderCurve: 'continuous',
+    padding: space[24],
+    paddingBottom: space[32],
+    gap: space[12],
+  },
+  handle: { width: 36, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10, minHeight: 44, justifyContent: 'center' },
-  input: { borderRadius: 14, borderCurve: 'continuous', padding: 14, minHeight: 80, fontSize: 17 },
+  chip: {
+    borderRadius: radius.pill,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  input: { borderRadius: radius.md, borderCurve: 'continuous', padding: 14, minHeight: 80, fontSize: 17 },
+  cancel: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
 });

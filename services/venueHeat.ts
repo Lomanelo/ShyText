@@ -1,26 +1,7 @@
-import {
-  collection,
-  doc,
-  getDoc,
-  increment,
-  onSnapshot,
-  query,
-  setDoc,
-  updateDoc,
-  where,
-} from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { doc, getDoc, increment, setDoc, updateDoc } from 'firebase/firestore';
+import { db } from './firebase';
 
-export type VenueHeatSpot = {
-  venueId: string;
-  name: string;
-  latitude: number;
-  longitude: number;
-  count: number;
-  dayKey: string;
-};
-
-export function venueHeatDayKey(now = Date.now()) {
+function venueHeatDayKey(now = Date.now()) {
   return new Date(now).toISOString().slice(0, 10);
 }
 
@@ -60,40 +41,4 @@ export async function recordVenueShyText(input: {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   });
-}
-
-function mapSpot(id: string, data: Record<string, unknown>): VenueHeatSpot | null {
-  const latitude = Number(data.latitude);
-  const longitude = Number(data.longitude);
-  const count = Number(data.count);
-  const name = String(data.name ?? '').trim();
-  const venueId = String(data.venueId ?? id);
-  if (!name || !Number.isFinite(latitude) || !Number.isFinite(longitude) || count < 1) return null;
-  return {
-    venueId,
-    name,
-    latitude,
-    longitude,
-    count,
-    dayKey: String(data.dayKey ?? ''),
-  };
-}
-
-export function listenTodayVenueHeat(onChange: (spots: VenueHeatSpot[]) => void) {
-  if (!auth.currentUser) {
-    onChange([]);
-    return () => undefined;
-  }
-  const q = query(collection(db, 'venueHeat'), where('dayKey', '==', venueHeatDayKey()));
-  return onSnapshot(
-    q,
-    (snap) => {
-      const spots = snap.docs
-        .map((item) => mapSpot(item.id, item.data()))
-        .filter((item): item is VenueHeatSpot => item != null)
-        .sort((a, b) => b.count - a.count);
-      onChange(spots);
-    },
-    () => onChange([])
-  );
 }

@@ -1,9 +1,9 @@
 /**
- * THESIS: People at a real venue, not a paper-cream feed of fake names.
- * OWN-WORLD: System grouped surfaces + flame tint from the mark. System type only.
- * STORY: Pick the place. Drop a ShyText. Chat starts only if they accept.
- * FIRST VIEWPORT: Nearby large title, live Apple Maps venues, no seed people.
- * FORM: Native Operate / HIG. Inherited logo tint; Georgia cream is the anti-reference.
+ * THESIS: A ShyText is a directed note to one person checked in at the same venue — not a dating deck, people map, or paper-cream feed.
+ * OWN-WORLD: Dim-bar / disposable-camera. System grouped surfaces, flame #D05927, lowercase shytext wordmark, tabular TTL.
+ * STORY: Invisible until you check in. Hold a place. Send a ShyText. Chat only if they accept.
+ * FIRST VIEWPORT: Nearby large title, live venues, hold-to-check-in hint, live stamp if you’re visible.
+ * FORM: Native Operate / HIG. Assigned BeReal disposable-camera world, seed 0441a7e4. Signature: hold-to-check-in.
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
  */
 import { useEffect } from 'react';
@@ -44,7 +44,7 @@ export default function RootLayout() {
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="venue/[venueId]" options={{ headerShown: true, title: 'Venue' }} />
-          <Stack.Screen name="shytext/create" options={{ headerShown: true, title: 'Drop a ShyText' }} />
+          <Stack.Screen name="shytext/create" options={{ headerShown: true, title: 'Check in' }} />
           <Stack.Screen name="shytext/[shytextId]" options={{ headerShown: true, title: 'ShyText' }} />
           <Stack.Screen name="chat/[chatId]" options={{ headerShown: true, title: 'Chat' }} />
           <Stack.Screen name="requests/index" options={{ headerShown: true, title: 'Requests' }} />

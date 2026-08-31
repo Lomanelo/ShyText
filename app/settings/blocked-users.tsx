@@ -32,7 +32,7 @@ export default function BlockedUsersScreen() {
     <Screen theme={theme} inset={false}>
       <ScrollView contentContainerStyle={styles.wrap} contentInsetAdjustmentBehavior="automatic">
         {rows.length === 0 ? (
-          <EmptyState theme={theme} title="Nobody blocked" body="People you block cannot break the ice or start a new chat." />
+          <EmptyState theme={theme} title="Nobody blocked" />
         ) : (
           rows.map((row) => (
             <View key={row.id} style={[styles.row, { backgroundColor: theme.card }]}>

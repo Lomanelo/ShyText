@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { Theme, type } from '../theme';
 
 export function ListRow({
@@ -16,11 +17,16 @@ export function ListRow({
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={onPress}
+      onPress={() => {
+        void Haptics.selectionAsync();
+        onPress();
+      }}
       style={({ pressed }) => [
         styles.row,
         {
-          opacity: pressed ? 0.7 : 1,
+          marginHorizontal: -16,
+          paddingHorizontal: 16,
+          backgroundColor: pressed ? theme.bg : 'transparent',
           borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
           borderBottomColor: theme.border,
         },
@@ -37,7 +43,7 @@ export function Group({ children, theme }: { children: React.ReactNode; theme: T
     <View
       style={{
         backgroundColor: theme.card,
-        borderRadius: 12,
+        borderRadius: 16,
         borderCurve: 'continuous',
         overflow: 'hidden',
         paddingHorizontal: 16,
@@ -50,7 +56,7 @@ export function Group({ children, theme }: { children: React.ReactNode; theme: T
 
 const styles = StyleSheet.create({
   row: {
-    minHeight: 44,
+    minHeight: 52,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',

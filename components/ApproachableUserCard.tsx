@@ -1,51 +1,78 @@
+import { useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { VIBE_LABELS, ShyTextPost } from '../types/shytext';
+import { Swipeable } from 'react-native-gesture-handler';
+import * as Haptics from 'expo-haptics';
+import { VIBE_LABELS, normalizeVibe } from '../types/shytext';
 import { cardShadow, radius, space, Theme, type } from '../theme';
 import { remainingCompact } from '../utils/dates';
 import { Avatar } from './Avatar';
+import { PressScale } from './PressScale';
+import { CheckIn } from '../types/venue';
 
 export function ApproachableUserCard({
-  post,
+  person,
   theme,
-  onBreakIce,
+  onSend,
   onReport,
 }: {
-  post: ShyTextPost;
+  person: CheckIn;
   theme: Theme;
-  onBreakIce: () => void;
+  onSend: () => void;
   onReport: () => void;
 }) {
-  const name = post.authorAge ? `${post.authorName}, ${post.authorAge}` : post.authorName;
+  const name = person.age ? `${person.displayName ?? 'Someone'}, ${person.age}` : person.displayName ?? 'Someone';
+  const swipe = useRef<Swipeable>(null);
+  const vibe = person.vibe ? normalizeVibe(person.vibe) : undefined;
+
+  const sayHi = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    swipe.current?.close();
+    onSend();
+  };
+
   return (
-    <View style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}>
-      <View style={styles.top}>
-        <Avatar name={post.authorName} uri={post.authorAvatarUrl} theme={theme} size={56} />
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[type.headline, { color: theme.text }]}>{name}</Text>
-          {post.authorBio ? <Text style={[type.caption, { color: theme.muted }]}>{post.authorBio}</Text> : null}
+    <Swipeable
+      ref={swipe}
+      friction={1.6}
+      overshootFriction={8}
+      overshootRight
+      overshootLeft={false}
+      renderRightActions={() => (
+        <View style={[styles.swipe, { backgroundColor: theme.accent }]}>
+          <Text style={[type.headline, { color: theme.onAccent }]}>Send</Text>
+        </View>
+      )}
+      onSwipeableOpen={(direction) => {
+        if (direction === 'right') sayHi();
+      }}
+    >
+      <View style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}>
+        <View style={styles.top}>
+          <Avatar name={person.displayName} uri={person.avatarUrl} theme={theme} size={56} />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[type.headline, { color: theme.text }]}>{name}</Text>
+            <Text style={[type.caption, { color: theme.accent, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
+              {person.status || (vibe ? VIBE_LABELS[vibe] : '')}
+              {person.status || vibe ? ' · ' : ''}
+              {remainingCompact(person.expiresAt)}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.actions}>
+          <PressScale
+            accessibilityLabel={`Send a ShyText to ${person.displayName ?? 'them'}`}
+            onPress={sayHi}
+            style={[styles.hi, { backgroundColor: theme.accent }]}
+          >
+            <Text style={[type.headline, { color: theme.onAccent }]}>Send a ShyText</Text>
+          </PressScale>
+          <Pressable onPress={onReport} accessibilityLabel="Report or more" hitSlop={8} style={styles.more}>
+            <Ionicons name="ellipsis-horizontal" size={22} color={theme.quiet} />
+          </Pressable>
         </View>
       </View>
-      <Text style={[type.caption, { color: theme.accent, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
-        {VIBE_LABELS[post.vibe]} · {remainingCompact(post.expiresAt)}
-      </Text>
-      {post.message ? <Text style={[type.body, { color: theme.muted }]}>“{post.message}”</Text> : null}
-      <View style={styles.actions}>
-        <Pressable
-          accessibilityLabel={`Break the ice with ${post.authorName}`}
-          onPress={onBreakIce}
-          style={({ pressed }) => [
-            styles.hi,
-            { backgroundColor: theme.accent, transform: [{ scale: pressed ? 0.96 : 1 }] },
-          ]}
-        >
-          <Text style={[type.headline, { color: theme.onAccent }]}>Break the ice</Text>
-        </Pressable>
-        <Pressable onPress={onReport} accessibilityLabel="Report or more" hitSlop={8} style={styles.more}>
-          <Ionicons name="ellipsis-horizontal" size={22} color={theme.quiet} />
-        </Pressable>
-      </View>
-    </View>
+    </Swipeable>
   );
 }
 
@@ -56,6 +83,14 @@ const styles = StyleSheet.create({
     borderCurve: 'continuous',
     marginBottom: space[12],
     gap: space[12],
+  },
+  swipe: {
+    width: 96,
+    marginBottom: space[12],
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   top: { flexDirection: 'row', alignItems: 'center', gap: space[12] },
   actions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

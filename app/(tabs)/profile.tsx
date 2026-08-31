@@ -4,9 +4,8 @@ import { Screen } from '../../components/Screen';
 import { Avatar } from '../../components/Avatar';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { Group, ListRow } from '../../components/ListRow';
-import { type, useTheme } from '../../theme';
+import { cardShadow, type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
-import { memberSince } from '../../utils/dates';
 import { signOut } from '../../services/auth';
 import { maskPhone } from '../../utils/phone';
 
@@ -17,16 +16,13 @@ export default function ProfileScreen() {
   return (
     <Screen theme={theme} inset={false}>
       <ScrollView contentContainerStyle={styles.wrap} contentInsetAdjustmentBehavior="automatic">
-        <View style={[styles.card, { backgroundColor: theme.card }]}>
+        <View style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}>
           <Avatar name={profile?.displayName} uri={profile?.avatarUrl} theme={theme} size={72} />
           <Text style={[type.title, { color: theme.text }]}>
             {profile?.displayName || 'You'}
             {profile?.age ? `, ${profile.age}` : ''}
           </Text>
           {profile?.bio ? <Text style={[type.body, { color: theme.muted, textAlign: 'center' }]}>{profile.bio}</Text> : null}
-          <Text style={[type.caption, { color: theme.quiet }]}>
-            Member since {profile?.createdAt ? memberSince(profile.createdAt) : 'now'}
-          </Text>
           {user?.phoneNumber ? (
             <Text style={[type.caption, { color: theme.quiet }]}>{maskPhone(user.phoneNumber)}</Text>
           ) : null}

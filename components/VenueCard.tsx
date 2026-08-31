@@ -1,70 +1,96 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { Venue } from '../types/venue';
 import { cardShadow, radius, space, Theme, type } from '../theme';
 import { formatDistance } from '../utils/geo';
-
-export function activityLabel(count = 0) {
-  if (count >= 1) {
-    return { label: `${count} ${count === 1 ? 'ShyText' : 'ShyTexts'}`, live: true };
-  }
-  return { label: 'Quiet', live: false };
-}
+import { springLayout } from '../hooks/usePressScale';
+import { useReduceMotion } from '../hooks/useReduceMotion';
+import { VenueStamp } from './VenueStamp';
+import { LiveDots } from './LiveDots';
+import { PressScale } from './PressScale';
 
 export function VenueCard({
   venue,
   distance,
   theme,
   onPress,
+  onCheckIn,
 }: {
   venue: Venue;
   distance?: number;
   theme: Theme;
+  index?: number;
   onPress: () => void;
+  onCheckIn?: () => void;
 }) {
-  const activity = activityLabel(venue.activeCount);
+  const reduce = useReduceMotion();
+  const live = (venue.activeCount ?? 0) >= 1;
+  const meters = distance ?? venue.distanceMeters;
+  const howFar = formatDistance(meters);
+
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${venue.name}`}
-      style={({ pressed }) => [
-        styles.card,
-        cardShadow(theme),
-        {
-          backgroundColor: theme.card,
-          transform: [{ scale: pressed ? 0.96 : 1 }],
-        },
-      ]}
-    >
-      <View style={{ flex: 1, gap: 4 }}>
-        <Text style={[type.headline, { color: theme.text }]}>{venue.name}</Text>
-        <Text style={[type.caption, { color: theme.muted }]}>
-          {distance != null ? formatDistance(distance) : venue.address || venue.category}
-        </Text>
-      </View>
-      <View style={[styles.badge, { backgroundColor: activity.live ? theme.accentSoft : theme.bg }]}>
-        <Text
-          style={[
-            type.caption,
-            { color: activity.live ? theme.accent : theme.quiet, fontWeight: '600', fontVariant: ['tabular-nums'] },
-          ]}
-        >
-          {activity.label}
-        </Text>
-      </View>
-    </Pressable>
+    <Animated.View layout={reduce ? undefined : springLayout()}>
+      <PressScale
+        onPress={onPress}
+        onLongPress={
+          onCheckIn
+            ? () => {
+                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                onCheckIn();
+              }
+            : undefined
+        }
+        delayLongPress={380}
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${venue.name}${howFar ? `, ${howFar}` : ''}${live ? `, ${venue.activeCount} live` : ''}${onCheckIn ? '. Hold to check in' : ''}`}
+        style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}
+      >
+        <VenueStamp category={venue.category} height={152}>
+          {howFar ? (
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>{howFar}</Text>
+            </View>
+          ) : null}
+        </VenueStamp>
+        <View style={styles.caption}>
+          <Text style={[type.title, { color: theme.text, flex: 1 }]} numberOfLines={2}>
+            {venue.name}
+          </Text>
+          {live ? <LiveDots count={venue.activeCount ?? 0} color={theme.accent} /> : null}
+        </View>
+      </PressScale>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    padding: space[16],
     borderRadius: radius.lg,
     borderCurve: 'continuous',
-    marginBottom: space[12],
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: space[12],
+    overflow: 'hidden',
   },
-  badge: { borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
+  chip: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  chipText: {
+    color: '#FFF4EA',
+    fontSize: 13,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  caption: {
+    paddingHorizontal: space[16],
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[12],
+    minHeight: 56,
+  },
 });

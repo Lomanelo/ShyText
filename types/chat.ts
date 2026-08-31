@@ -2,7 +2,8 @@ export type ChatRequestStatus = 'pending' | 'accepted' | 'declined' | 'cancelled
 
 export interface ChatRequest {
   id: string;
-  shytextId: string;
+  shytextId?: string;
+  checkInId?: string;
   shytextMessage?: string;
   shytextIntent?: string;
   senderId: string;

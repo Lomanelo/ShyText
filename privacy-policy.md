@@ -2,7 +2,7 @@
 
 Last Updated: August 29, 2026
 
-ShyText is a venue icebreaker app. It is not a dating app. Hosted copy: https://shytext.com/privacy
+ShyText is a venue check-in app. It is not a dating app. Hosted copy: https://shytext.com/privacy
 
 See the full text in `src/lib/legal.ts` and `public/privacy.html`.
 

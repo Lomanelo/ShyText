@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { radius, space, Theme, type } from '../theme';
+import { space, Theme, type } from '../theme';
 import { PrimaryButton } from './PrimaryButton';
 
 export function EmptyState({
@@ -8,34 +8,24 @@ export function EmptyState({
   body,
   action,
   theme,
-  icon = 'leaf-outline',
+  icon,
 }: {
   title: string;
-  body: string;
+  body?: string;
   action?: { label: string; onPress: () => void };
   theme: Theme;
   icon?: keyof typeof Ionicons.glyphMap;
 }) {
   return (
-    <View style={[styles.wrap, { backgroundColor: theme.card }]}>
-      <View style={[styles.iconWell, { backgroundColor: theme.accentSoft }]}>
-        <Ionicons name={icon} size={28} color={theme.accent} />
-      </View>
+    <View style={styles.wrap}>
+      {icon ? <Ionicons name={icon} size={28} color={theme.quiet} /> : null}
       <Text style={[type.title, { color: theme.text }]}>{title}</Text>
-      <Text style={[type.body, { color: theme.muted }]}>{body}</Text>
+      {body ? <Text style={[type.body, { color: theme.muted }]}>{body}</Text> : null}
       {action ? <PrimaryButton title={action.label} onPress={action.onPress} theme={theme} /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { padding: space[24], gap: space[12], borderRadius: radius.lg, borderCurve: 'continuous' },
-  iconWell: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.sm,
-    borderCurve: 'continuous',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  wrap: { paddingVertical: space[24], gap: space[8], alignItems: 'flex-start' },
 });

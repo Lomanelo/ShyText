@@ -1,149 +1,54 @@
 import { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Text } from 'react-native';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import * as Haptics from 'expo-haptics';
 import { Screen } from '../../components/Screen';
-import { PrimaryButton } from '../../components/PrimaryButton';
 import { type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useCurrentVenue } from '../../hooks/useCurrentVenue';
 import { useLocation } from '../../hooks/useLocation';
-import { activateShyText } from '../../services/shytexts';
 import { getVenue } from '../../services/venues';
-import { Venue } from '../../types/venue';
-import { normalizeVibe, SHYTEXT_VIBES, ShyTextVibe, VIBE_LABELS } from '../../types/shytext';
-import { DEFAULT_SHYTEXT_MINUTES, MAX_SHYTEXT_MESSAGE_LENGTH } from '../../utils/config';
 
-export default function DropShyTextScreen() {
+export default function CheckInScreen() {
   const theme = useTheme();
-  const params = useLocalSearchParams<{ venueId?: string; vibe?: string; message?: string }>();
+  const { venueId } = useLocalSearchParams<{ venueId?: string }>();
   const { profile } = useAuth();
   const current = useCurrentVenue();
   const { refresh } = useLocation();
-  const [vibe, setVibe] = useState<ShyTextVibe>(normalizeVibe(params.vibe));
-  const [message, setMessage] = useState(params.message ?? '');
-  const [ttl, setTtl] = useState(DEFAULT_SHYTEXT_MINUTES);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [venue, setVenue] = useState<Venue | null>(current.venue);
-
-  const venueId = params.venueId || venue?.id;
 
   useEffect(() => {
-    if (!params.venueId) return;
-    if (current.venue?.id === params.venueId) {
-      setVenue(current.venue);
-      return;
-    }
-    getVenue(params.venueId).then((found) => {
-      if (found) setVenue(found);
-    });
-  }, [params.venueId, current.venue]);
+    if (!venueId || !profile) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const venue = current.venue?.id === venueId ? current.venue : await getVenue(venueId);
+        if (!venue || cancelled) return;
+        if (current.checkIn && !current.expired && current.checkIn.venueId === venue.id) {
+          router.replace(`/venue/${venue.id}`);
+          return;
+        }
+        const coords = await refresh();
+        await current.checkInHere(venue, coords?.latitude, coords?.longitude, {
+          displayName: profile.displayName,
+          avatarUrl: profile.avatarUrl,
+          age: profile.age,
+        });
+        if (!cancelled) router.replace(`/venue/${venue.id}`);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not check in.');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [venueId, profile]);
 
   return (
     <Screen theme={theme} inset={false}>
-      <Stack.Screen options={{ title: 'Drop a ShyText' }} />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.wrap} contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled">
-        <Text style={[type.body, { color: theme.muted }]}>
-          You’re here, you’re open to being approached, and this is what you’re up for.
-        </Text>
-
-        <Text style={{ color: theme.text, fontWeight: '700' }}>Vibe</Text>
-        <View style={styles.chips}>
-          {SHYTEXT_VIBES.map((item) => (
-            <Pressable
-              key={item}
-              onPress={() => setVibe(item)}
-              style={[styles.chip, { backgroundColor: item === vibe ? theme.accent : theme.card }]}
-            >
-              <Text style={{ color: item === vibe ? '#fff' : theme.text, fontWeight: '700' }}>
-                {VIBE_LABELS[item]}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={{ color: theme.text, fontWeight: '700' }}>Message · optional</Text>
-        <TextInput
-          value={message}
-          onChangeText={setMessage}
-          maxLength={MAX_SHYTEXT_MESSAGE_LENGTH}
-          multiline
-          placeholder="Waiting for a friend, happy to chat."
-          placeholderTextColor={theme.quiet}
-          style={[styles.area, { backgroundColor: theme.card, color: theme.text }]}
-        />
-        <Text style={{ color: theme.quiet, alignSelf: 'flex-end' }}>
-          {message.length}/{MAX_SHYTEXT_MESSAGE_LENGTH}
-        </Text>
-
-        <View style={styles.row}>
-          {[15, 30, 60].map((mins) => (
-            <Pressable
-              key={mins}
-              onPress={() => setTtl(mins)}
-              style={[styles.ttl, { backgroundColor: ttl === mins ? theme.accentSoft : theme.card }]}
-            >
-              <Text style={{ color: theme.text, fontWeight: '700' }}>
-                {mins === 60 ? '1h' : `${mins}m`}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Text style={{ color: theme.muted }}>
-          Visible at{'\n'}
-          <Text style={{ color: theme.text, fontWeight: '800' }}>{venue?.name ?? 'this venue'}</Text>
-        </Text>
-        {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}
-
-        <PrimaryButton
-          title="Drop a ShyText"
-          theme={theme}
-          loading={busy}
-          onPress={async () => {
-            if (!venueId || !profile) return;
-            setBusy(true);
-            setError(null);
-            try {
-              const coords =
-                current.checkIn?.venueId === venueId && !current.expired
-                  ? null
-                  : await refresh();
-              await activateShyText({
-                venueId,
-                vibe,
-                message: message.trim() || undefined,
-                ttlMinutes: ttl,
-                authorName: profile.displayName,
-                authorAvatarUrl: profile.avatarUrl,
-                authorAge: profile.age,
-                authorBio: profile.bio,
-                venue: venue ?? undefined,
-                userLat: coords?.latitude,
-                userLon: coords?.longitude,
-              });
-              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              router.back();
-            } catch (err) {
-              setError(err instanceof Error ? err.message : 'Could not drop a ShyText.');
-            } finally {
-              setBusy(false);
-            }
-          }}
-        />
-        </ScrollView>
-      </KeyboardAvoidingView>
+      <Stack.Screen options={{ title: 'Check in' }} />
+      <Text style={[type.body, { padding: 20, color: error ? theme.danger : theme.muted }]}>
+        {error ?? 'Checking in…'}
+      </Text>
     </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  wrap: { padding: 20, gap: 12, paddingBottom: 40 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  area: { minHeight: 88, borderRadius: 16, borderCurve: 'continuous', padding: 16, textAlignVertical: 'top', fontSize: 17 },
-  row: { flexDirection: 'row', gap: 8 },
-  ttl: { flex: 1, borderRadius: 14, borderCurve: 'continuous', padding: 12, alignItems: 'center' },
-});

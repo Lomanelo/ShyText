@@ -28,6 +28,11 @@ export interface CheckIn {
   venueId: string;
   createdAt: number;
   expiresAt: number;
+  displayName?: string;
+  avatarUrl?: string;
+  age?: number;
+  vibe?: string;
+  status?: string;
 }
 
 export interface PlacesProvider {

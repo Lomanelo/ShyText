@@ -4,7 +4,7 @@ Use this when submitting via EAS / App Store Connect.
 
 ## What this app is
 
-ShyText is a **Social Networking** venue icebreaker. People check into a place, leave a 140-character note that expires in 60 minutes, and reply in private chat. It is **not** a dating app and has **no** public social feed.
+ShyText is a **Social Networking** venue check-in. People check into a place, send a short ShyText to someone else checked in there, and chat only if they accept. It is **not** a dating app and has **no** public social feed.
 
 ## Age rating answers (September 2026 questionnaire)
 
@@ -24,11 +24,11 @@ ShyText is a **Social Networking** venue icebreaker. People check into a place, 
 
 ## Demo for reviewers
 
-1. Create or use the demo account below.
-2. On **Here**, tap **Open App Review Café** (or enter code `app-review-cafe`).
-3. Sample notes appear if the café is empty. Leave your own note.
-4. Ghost Mode is in the Here header and on You.
-5. Account deletion is You → Account Settings → Delete Account.
+1. Sign in with a test phone number.
+2. On **Nearby**, open a venue (tap) then **Check in** (or long-press the place).
+3. Sample people appear at the demo venue if DEV tools are on. Send a ShyText to a real second test account.
+4. Accept from **Chats → Requests**.
+5. Account deletion is Profile → Settings.
 
 ### Demo account
 

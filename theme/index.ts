@@ -40,10 +40,16 @@ export const type = {
 export const motion = {
   press: 0.96,
   duration: 150,
+  hold: 720,
+  enter: 380,
+  stagger: 50,
+  spring: { damping: 18, stiffness: 280, mass: 0.75 },
+  layout: { damping: 22, stiffness: 220 },
 } as const;
 
 export const shadows = {
-  card: '0 8px 24px rgba(28, 18, 14, 0.08)',
+  card: '0 10px 28px rgba(28, 18, 14, 0.10)',
+  cardDark: '0 12px 32px rgba(0, 0, 0, 0.42)',
 } as const;
 
 export type Theme = {
@@ -59,19 +65,21 @@ export type Theme = {
   success: ColorValue;
   onAccent: string;
   imageOutline: string;
+  elevated: string;
 };
 
-function semanticTheme(): Theme {
+function semanticTheme(scheme: 'light' | 'dark' | null | undefined): Theme {
+  const dark = scheme === 'dark';
   return {
     bg: Platform.select({
       ios: Color.ios.systemGroupedBackground,
       android: Color.android.dynamic.background,
-      default: '#F2EDE6',
+      default: dark ? '#12100E' : '#F2EDE6',
     })!,
     card: Platform.select({
       ios: Color.ios.secondarySystemGroupedBackground,
       android: Color.android.dynamic.surfaceContainer,
-      default: '#FFFFFF',
+      default: dark ? '#1C1916' : '#FFFFFF',
     })!,
     text: Platform.select({
       ios: Color.ios.label,
@@ -94,7 +102,7 @@ function semanticTheme(): Theme {
       default: '#E4D6C8',
     })!,
     accent: brand.accent,
-    accentSoft: 'rgba(208, 89, 39, 0.14)',
+    accentSoft: dark ? 'rgba(224, 106, 53, 0.22)' : 'rgba(208, 89, 39, 0.14)',
     danger: Platform.select({
       ios: Color.ios.systemRed,
       android: Color.android.dynamic.error,
@@ -106,15 +114,16 @@ function semanticTheme(): Theme {
       default: '#2F7A4A',
     })!,
     onAccent: brand.onAccent,
-    imageOutline: 'rgba(0,0,0,0.10)',
+    imageOutline: dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)',
+    elevated: dark ? shadows.cardDark : shadows.card,
   };
 }
 
-export function cardShadow(_theme?: Theme) {
-  return { boxShadow: shadows.card };
+export function cardShadow(theme?: Theme) {
+  return { boxShadow: theme?.elevated ?? shadows.card };
 }
 
 export function useTheme(): Theme {
-  useColorScheme();
-  return semanticTheme();
+  const scheme = useColorScheme();
+  return semanticTheme(scheme === 'dark' ? 'dark' : scheme === 'light' ? 'light' : null);
 }

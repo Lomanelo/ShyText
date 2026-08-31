@@ -1,11 +1,22 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
-import { PRECISE_ACCURACY_METERS } from '../utils/geo';
+import { distanceBetween } from '../utils/geo';
 
 export type UserCoords = { latitude: number; longitude: number };
 
-const FIX_WAIT_MS = 8_000;
-const FRESH_MS = 20_000;
+/** CoreLocation Balanced is ~100 m — same scale as Nearby. */
+const WATCH_ACCURACY = Location.Accuracy.Balanced;
+const LAST_KNOWN_MAX_AGE_MS = 90_000;
+const LAST_KNOWN_MAX_ACC_M = 150;
+const REUSE_MS = 15_000;
+const FIRST_FIX_WAIT_MS = 2_000;
+
+type Listener = (position: Location.LocationObject) => void;
+
+const listeners = new Set<Listener>();
+let watch: Location.LocationSubscription | null = null;
+let watchStart: Promise<void> | null = null;
+let latest: Location.LocationObject | null = null;
 
 function asCoords(position: Location.LocationObject): UserCoords {
   return {
@@ -14,44 +25,57 @@ function asCoords(position: Location.LocationObject): UserCoords {
   };
 }
 
-async function getPrecisePosition(): Promise<Location.LocationObject> {
-  const first = await Location.getCurrentPositionAsync({
-    accuracy: Location.Accuracy.BestForNavigation,
-  });
-  if ((first.coords.accuracy ?? 999) <= PRECISE_ACCURACY_METERS) {
-    return first;
-  }
+function accuracyOf(position: Location.LocationObject | null) {
+  return position?.coords.accuracy ?? 999;
+}
 
+function ensureWatch() {
+  if (watch || watchStart) return watchStart;
+  watchStart = Location.watchPositionAsync(
+    {
+      accuracy: WATCH_ACCURACY,
+      distanceInterval: 5,
+      timeInterval: 1000,
+    },
+    (position) => {
+      latest = position;
+      listeners.forEach((listener) => listener(position));
+    }
+  )
+    .then((sub) => {
+      watch = sub;
+    })
+    .catch(() => {
+      watchStart = null;
+    });
+  return watchStart;
+}
+
+function subscribe(listener: Listener) {
+  listeners.add(listener);
+  void ensureWatch();
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0) {
+      watch?.remove();
+      watch = null;
+      watchStart = null;
+    }
+  };
+}
+
+function waitForFix(maxMs: number): Promise<Location.LocationObject | null> {
+  if (latest) return Promise.resolve(latest);
   return new Promise((resolve) => {
-    let best = first;
-    let settled = false;
-    const finish = (value: Location.LocationObject) => {
-      if (settled) return;
-      settled = true;
-      resolve(value);
-    };
-
-    const watch = Location.watchPositionAsync(
-      {
-        accuracy: Location.Accuracy.BestForNavigation,
-        distanceInterval: 1,
-        timeInterval: 400,
-      },
-      (position) => {
-        const nextAcc = position.coords.accuracy ?? 999;
-        const bestAcc = best.coords.accuracy ?? 999;
-        if (nextAcc <= bestAcc) best = position;
-        if (nextAcc <= PRECISE_ACCURACY_METERS) {
-          void watch.then((sub) => sub.remove());
-          finish(best);
-        }
-      }
-    );
-
-    setTimeout(() => {
-      void watch.then((sub) => sub.remove());
-      finish(best);
-    }, FIX_WAIT_MS);
+    const timer = setTimeout(() => {
+      unsubscribe();
+      resolve(latest);
+    }, maxMs);
+    const unsubscribe = subscribe((position) => {
+      clearTimeout(timer);
+      unsubscribe();
+      resolve(position);
+    });
   });
 }
 
@@ -65,39 +89,78 @@ export function useLocation() {
   const accuracyRef = useRef<number | null>(null);
   const atRef = useRef(0);
 
-  const refresh = useCallback(async (force = false) => {
-    const freshPrecise =
-      !force &&
-      coordsRef.current &&
-      Date.now() - atRef.current < FRESH_MS &&
-      (accuracyRef.current ?? 999) <= PRECISE_ACCURACY_METERS;
-    if (freshPrecise) return coordsRef.current;
-
-    setBusy(true);
-    setError(null);
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      setStatus(permission.status);
-      if (permission.status !== 'granted') {
-        setError('Location is needed to verify which venue you\'re at.');
-        return null;
-      }
-      const position = await getPrecisePosition();
+  const apply = useCallback((position: Location.LocationObject) => {
+    const next = asCoords(position);
+    const prev = coordsRef.current;
+    if (prev && distanceBetween(prev.latitude, prev.longitude, next.latitude, next.longitude) < 2) {
       const nextAcc = position.coords.accuracy ?? null;
-      setAccuracy(nextAcc);
-      accuracyRef.current = nextAcc;
-      const next = asCoords(position);
-      coordsRef.current = next;
-      atRef.current = Date.now();
-      setCoords(next);
+      if (nextAcc != null) {
+        accuracyRef.current = nextAcc;
+        setAccuracy(nextAcc);
+      }
       return next;
-    } catch {
-      setError('Location unavailable right now.');
-      return null;
-    } finally {
-      setBusy(false);
     }
+    coordsRef.current = next;
+    atRef.current = Date.now();
+    accuracyRef.current = position.coords.accuracy ?? null;
+    setCoords(next);
+    setAccuracy(position.coords.accuracy ?? null);
+    return next;
   }, []);
+
+  useEffect(() => subscribe(apply), [apply]);
+
+  const refresh = useCallback(
+    async (force = false) => {
+      const reusable =
+        !force &&
+        coordsRef.current &&
+        Date.now() - atRef.current < REUSE_MS;
+      if (reusable) return coordsRef.current;
+
+      setBusy(true);
+      setError(null);
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        setStatus(permission.status);
+        if (permission.status !== 'granted') {
+          setError('Location is needed to verify which venue you\'re at.');
+          return null;
+        }
+
+        void ensureWatch();
+
+        let last = await Location.getLastKnownPositionAsync({
+          maxAge: LAST_KNOWN_MAX_AGE_MS,
+          requiredAccuracy: LAST_KNOWN_MAX_ACC_M,
+        });
+        last =
+          last ??
+          (await Location.getLastKnownPositionAsync({
+            maxAge: LAST_KNOWN_MAX_AGE_MS * 2,
+          }));
+        if (last && (!latest || accuracyOf(last) <= accuracyOf(latest))) {
+          latest = last;
+        }
+        if (latest && !force) {
+          return apply(latest);
+        }
+
+        const next = (await waitForFix(FIRST_FIX_WAIT_MS)) ?? last ?? latest;
+        if (!next) {
+          setError('Location unavailable right now.');
+          return null;
+        }
+        return apply(next);
+      } catch {
+        setError('Location unavailable right now.');
+        return null;
+      } finally {
+        setBusy(false);
+      }
+    },
+    [apply]
+  );
 
   return { coords, status, error, busy, accuracy, refresh };
 }

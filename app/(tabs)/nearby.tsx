@@ -1,23 +1,36 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import Animated from 'react-native-reanimated';
+import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
 import { LocationPermission } from '../../components/LocationPermission';
 import { VenueCard } from '../../components/VenueCard';
 import { Skeleton } from '../../components/Skeleton';
 import { EmptyState } from '../../components/EmptyState';
-import { PrimaryButton } from '../../components/PrimaryButton';
-import { radius, space, type, useTheme } from '../../theme';
+import { HintBanner } from '../../components/HintBanner';
+import { CountdownBadge } from '../../components/CountdownBadge';
+import { VenueStamp } from '../../components/VenueStamp';
+import { cardShadow, radius, space, type, useTheme } from '../../theme';
+import { springLayout } from '../../hooks/usePressScale';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
+import { PressScale } from '../../components/PressScale';
 import { useLocation } from '../../hooks/useLocation';
+import { useAuth } from '../../hooks/useAuth';
 import { useCurrentVenue } from '../../hooks/useCurrentVenue';
 import { candidateListKey, getPlacesProvider, isPlacesConfigured } from '../../services/places';
-import { countActiveShyTexts, listMyActiveShyTexts } from '../../services/shytexts';
-import { ensureInternalVenue, findVenuesByProviderPlaceIds, getVenue, toVenue } from '../../services/venues';
-import { PlacesRequestError, Venue, VenueCandidate } from '../../types/venue';
-import { ShyTextPost } from '../../types/shytext';
-import { distanceBetween, NEARBY_RADIUS_METERS, pickClosest, PRECISE_ACCURACY_METERS } from '../../utils/geo';
-import { remainingCompact } from '../../utils/dates';
-import { auth } from '../../services/firebase';
+import {
+  countActiveCheckIns,
+  ensureInternalVenue,
+  findVenuesByProviderPlaceIds,
+  getVenue,
+  toVenue,
+} from '../../services/venues';
+import { CheckIn, PlacesRequestError, Venue, VenueCandidate } from '../../types/venue';
+import { distanceBetween, pickClosest } from '../../utils/geo';
+
+const HOLD_HINT_KEY = 'shytext.hint.holdCheckIn';
 
 async function hydrate(candidates: VenueCandidate[]): Promise<Venue[]> {
   const existing = await findVenuesByProviderPlaceIds(candidates.map((item) => item.providerPlaceId));
@@ -30,23 +43,39 @@ async function attachCounts(venues: Venue[]): Promise<Venue[]> {
       const countable = !venue.id.startsWith('apple:') && !venue.id.startsWith('pending:');
       return {
         ...venue,
-        activeCount: countable ? await countActiveShyTexts(venue.id) : 0,
+        activeCount: countable ? await countActiveCheckIns(venue.id) : 0,
       };
     })
   );
 }
 
+function rankVenues(venues: Venue[], latitude: number, longitude: number) {
+  return pickClosest(
+    venues.map((venue) => ({
+      ...venue,
+      distanceMeters:
+        venue.latitude != null && venue.longitude != null
+          ? distanceBetween(latitude, longitude, venue.latitude, venue.longitude)
+          : venue.distanceMeters ?? 9999,
+    }))
+  );
+}
+
 export default function NearbyScreen() {
   const theme = useTheme();
-  const { coords, status, error: locationError, busy, accuracy, refresh } = useLocation();
+  const reduce = useReduceMotion();
+  const { coords, status, error: locationError, busy, refresh } = useLocation();
+  const { profile } = useAuth();
   const current = useCurrentVenue();
   const [venues, setVenues] = useState<Venue[]>([]);
+  const [pool, setPool] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rateLimited, setRateLimited] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const [visibleAt, setVisibleAt] = useState<{ post: ShyTextPost; name: string } | null>(null);
+  const [visibleAt, setVisibleAt] = useState<{ checkIn: CheckIn; venue: Venue } | null>(null);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [holdHint, setHoldHint] = useState(false);
 
   const load = useCallback(
     async (search?: string, relock = false) => {
@@ -73,18 +102,16 @@ export default function NearbyScreen() {
             throw err;
           }
         }
-        const listed = pickClosest(
-          (await hydrate(candidates)).map((venue) => ({
-            ...venue,
-            distanceMeters:
-              venue.latitude != null && venue.longitude != null
-                ? distanceBetween(next.latitude, next.longitude, venue.latitude, venue.longitude)
-                : venue.distanceMeters ?? 9999,
-          }))
-        );
+        const listed = rankVenues(await hydrate(candidates), next.latitude, next.longitude);
+        setPool(listed);
         setVenues(listed);
         setLoading(false);
-        void attachCounts(listed).then(setVenues);
+        void attachCounts(listed)
+          .then((withCounts) => {
+            setPool(withCounts);
+            setVenues(rankVenues(withCounts, next.latitude, next.longitude));
+          })
+          .catch(() => undefined);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Could not load venues.');
         setLoading(false);
@@ -97,50 +124,86 @@ export default function NearbyScreen() {
     load();
   }, [load]);
 
-  useFocusEffect(
-    useCallback(() => {
-      const uid = auth.currentUser?.uid;
-      if (!uid) {
-        setVisibleAt(null);
-        return;
+  useEffect(() => {
+    AsyncStorage.getItem(HOLD_HINT_KEY).then((seen) => {
+      if (!seen) setHoldHint(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!coords || pool.length === 0) return;
+    const next = rankVenues(pool, coords.latitude, coords.longitude);
+    setVenues((prev) => {
+      if (
+        prev.length === next.length &&
+        prev.every((venue, index) => venue.id === next[index]?.id && venue.distanceMeters === next[index]?.distanceMeters)
+      ) {
+        return prev;
       }
-      let cancelled = false;
-      (async () => {
-        const live = await listMyActiveShyTexts(uid);
-        const post = live[0];
-        if (!post) {
-          if (!cancelled) setVisibleAt(null);
-          return;
-        }
-        const found = await getVenue(post.venueId);
-        if (!cancelled) setVisibleAt({ post, name: found?.name ?? 'a venue' });
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }, [])
-  );
+      return next;
+    });
+  }, [coords, pool]);
+
+  useEffect(() => {
+    const live = current.checkIn && !current.expired ? current.checkIn : null;
+    if (!live) {
+      setVisibleAt(null);
+      return;
+    }
+    let cancelled = false;
+    getVenue(live.venueId).then((found) => {
+      if (cancelled) return;
+      setVisibleAt({
+        checkIn: live,
+        venue: found ?? {
+          id: live.venueId,
+          provider: 'apple',
+          providerPlaceId: live.venueId,
+          name: 'a venue',
+        },
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [current.checkIn, current.expired]);
 
   const openVenue = async (venue: Venue) => {
     try {
-      const next = await refresh();
       const internal = await ensureInternalVenue(venue);
-      try {
-        await current.checkInHere(internal, next?.latitude, next?.longitude);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : '';
-        if (
-          !message.includes('Move closer') &&
-          !message.includes('pick another') &&
-          !message.includes('Location is needed')
-        ) {
-          throw err;
-        }
-        await current.rememberVenue(internal);
-      }
+      await current.rememberVenue(internal);
       router.push(`/venue/${internal.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not open this venue.');
+    }
+  };
+
+  const checkInAtVenue = async (venue: Venue) => {
+    if (checkingIn) return;
+    try {
+      setCheckingIn(true);
+      setError(null);
+      const internal = await ensureInternalVenue(venue);
+      if (current.checkIn && !current.expired && current.checkIn.venueId === internal.id) {
+        await current.rememberVenue(internal);
+        router.push(`/venue/${internal.id}`);
+        return;
+      }
+      if (!profile) {
+        setError('Finish your profile first.');
+        return;
+      }
+      const next = await refresh();
+      await current.checkInHere(internal, next?.latitude, next?.longitude, {
+        displayName: profile.displayName,
+        avatarUrl: profile.avatarUrl,
+        age: profile.age,
+      });
+      router.push(`/venue/${internal.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not check in.');
+    } finally {
+      setCheckingIn(false);
     }
   };
 
@@ -152,7 +215,6 @@ export default function NearbyScreen() {
     );
   }
 
-  const fuzzy = accuracy != null && accuracy > PRECISE_ACCURACY_METERS;
   const placesReady = isPlacesConfigured();
 
   return (
@@ -163,22 +225,62 @@ export default function NearbyScreen() {
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load(query || undefined, true)} tintColor={theme.accent} />}
       >
-        <Text style={[type.body, { color: theme.muted, marginBottom: space[16] }]}>
-          The five closest places within {NEARBY_RADIUS_METERS} m. You stay private until you drop a ShyText.
-        </Text>
+        <View style={[styles.searchWrap, { backgroundColor: theme.card }]}>
+          <Ionicons name="search" size={18} color={theme.quiet} />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Café, bar, park…"
+            placeholderTextColor={theme.quiet}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="search"
+            keyboardAppearance="default"
+            onSubmitEditing={() => load(query)}
+            style={[styles.search, { color: theme.text }]}
+          />
+          {query.trim() ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Search"
+              onPress={() => load(query)}
+              hitSlop={8}
+              style={styles.searchGo}
+            >
+              <Ionicons name="arrow-forward-circle" size={24} color={theme.accent} />
+            </Pressable>
+          ) : null}
+        </View>
 
-        {visibleAt ? (
-          <Pressable
-            onPress={() => router.push(`/venue/${visibleAt.post.venueId}`)}
-            style={[styles.here, { backgroundColor: theme.accentSoft }]}
-          >
-            <Text style={[type.caption, { color: theme.muted }]}>You’re visible at</Text>
-            <Text style={[type.headline, { color: theme.text }]}>{visibleAt.name}</Text>
-            <Text style={[type.caption, { color: theme.accent, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
-              ShyText · {remainingCompact(visibleAt.post.expiresAt)}
-            </Text>
-          </Pressable>
+        {holdHint && venues.length > 0 ? (
+          <Animated.View layout={reduce ? undefined : springLayout()}>
+            <HintBanner
+              theme={theme}
+              title="Hold a place to check in"
+              onDismiss={() => {
+                setHoldHint(false);
+                void AsyncStorage.setItem(HOLD_HINT_KEY, '1');
+              }}
+            />
+          </Animated.View>
         ) : null}
+
+        <Animated.View layout={reduce ? undefined : springLayout()}>
+          {visibleAt ? (
+            <PressScale
+              onPress={() => router.push(`/venue/${visibleAt.venue.id}`)}
+              style={[styles.here, { backgroundColor: theme.card }, cardShadow(theme)]}
+            >
+              <View style={styles.hereMap}>
+                <VenueStamp category={visibleAt.venue.category} height={72} />
+              </View>
+              <Text style={[type.title, { color: theme.text, flex: 1 }]} numberOfLines={2}>
+                {visibleAt.venue.name}
+              </Text>
+              <CountdownBadge expiresAt={visibleAt.checkIn.expiresAt} theme={theme} />
+            </PressScale>
+          ) : null}
+        </Animated.View>
 
         {error ? (
           <Text selectable style={[type.body, { color: theme.danger }]}>
@@ -190,11 +292,6 @@ export default function NearbyScreen() {
             {locationError}
           </Text>
         ) : null}
-        {fuzzy ? (
-          <Text style={[type.caption, { color: theme.muted, marginBottom: space[12] }]}>
-            GPS is about ±{Math.round(accuracy ?? 0)} m. Distances update as the fix tightens.
-          </Text>
-        ) : null}
 
         {loading && !venues.length ? <Skeleton theme={theme} /> : null}
 
@@ -202,18 +299,19 @@ export default function NearbyScreen() {
           <EmptyState
             theme={theme}
             icon="location-outline"
-            title={rateLimited ? 'Try again in a moment' : placesReady ? 'Nothing within 100 m' : 'Venue search isn’t connected'}
+            title={rateLimited ? 'Try again shortly' : placesReady ? 'Nothing within 100 m' : 'Search isn’t connected'}
             body={
               rateLimited
-                ? 'Apple Maps asked us to slow down. Pull to refresh shortly.'
+                ? 'Apple Maps asked us to slow down.'
                 : placesReady
-                  ? 'No social place is within 100 meters. Move closer to a café, bar, or park, then pull to refresh.'
-                  : 'Add EXPO_PUBLIC_PLACES_PROXY_URL to your .env (your Netlify /api/places URL) and reload.'
+                  ? 'Move closer to a café, bar, or park.'
+                  : undefined
             }
-            action={{
-              label: rateLimited ? 'Retry' : placesReady ? 'Search places' : 'Retry',
-              onPress: rateLimited || !placesReady ? () => load() : () => setSearchOpen(true),
-            }}
+            action={
+              rateLimited || !placesReady
+                ? { label: 'Retry', onPress: () => load(query || undefined, true) }
+                : undefined
+            }
           />
         ) : (
           venues.map((venue) => (
@@ -227,29 +325,9 @@ export default function NearbyScreen() {
                   : venue.distanceMeters
               }
               onPress={() => openVenue(venue)}
+              onCheckIn={() => checkInAtVenue(venue)}
             />
           ))
-        )}
-
-        <View style={{ height: space[16] }} />
-        {searchOpen ? (
-          <View style={{ gap: space[8] }}>
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Café, bar, park…"
-              placeholderTextColor={theme.quiet}
-              autoCapitalize="none"
-              returnKeyType="search"
-              onSubmitEditing={() => load(query)}
-              style={[styles.search, { color: theme.text, backgroundColor: theme.card }]}
-            />
-            <PrimaryButton title="Search places" theme={theme} loading={loading} onPress={() => load(query)} />
-          </View>
-        ) : (
-          <Pressable onPress={() => setSearchOpen(true)} style={styles.searchLink}>
-            <Text style={[type.headline, { color: theme.accent }]}>Can’t find where you are? Search places</Text>
-          </Pressable>
         )}
       </ScrollView>
     </Screen>
@@ -257,8 +335,28 @@ export default function NearbyScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: space[16], paddingBottom: space[32] },
-  here: { borderRadius: radius.lg, borderCurve: 'continuous', padding: space[16], marginBottom: space[16], gap: 4 },
-  search: { borderRadius: radius.md, borderCurve: 'continuous', padding: space[16], minHeight: 52, fontSize: 17 },
-  searchLink: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  content: { paddingHorizontal: space[16], paddingBottom: space[32], gap: space[12] },
+  here: {
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    overflow: 'hidden',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[12],
+    paddingRight: space[12],
+    minHeight: 72,
+  },
+  hereMap: { width: 72, height: 72, overflow: 'hidden' },
+  searchWrap: {
+    borderRadius: radius.pill,
+    borderCurve: 'continuous',
+    minHeight: 48,
+    paddingLeft: space[16],
+    paddingRight: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  search: { flex: 1, minHeight: 48, fontSize: 17 },
+  searchGo: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
 });

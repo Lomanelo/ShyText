@@ -1,18 +1,21 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Screen } from '../../components/Screen';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { EmptyState } from '../../components/EmptyState';
 import { radius, type, useTheme } from '../../theme';
+import { springLayout, springSlideOutRight } from '../../hooks/usePressScale';
+import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useAuth } from '../../hooks/useAuth';
 import { useChatRequests } from '../../hooks/useChatRequests';
 import { respondToRequest } from '../../services/chat';
-import { VIBE_LABELS, normalizeVibe } from '../../types/shytext';
 import { useState } from 'react';
 
 export default function RequestsScreen() {
   const theme = useTheme();
+  const reduce = useReduceMotion();
   const { user } = useAuth();
   const { incoming } = useChatRequests(user?.uid);
   const [error, setError] = useState<string | null>(null);
@@ -28,23 +31,20 @@ export default function RequestsScreen() {
         {incoming.length === 0 ? (
           <EmptyState
             theme={theme}
-            title="No icebreakers yet"
-            body="When someone wants to break the ice, it shows up here."
+            title="No ShyTexts"
+            body="When someone at your venue sends you one, it shows up here."
           />
         ) : (
           incoming.map((request) => (
-            <View key={request.id} style={[styles.card, { backgroundColor: theme.card }]}>
-              <Text style={[type.title, { color: theme.text }]}>{request.senderName} wants to break the ice</Text>
-              <Text style={[type.caption, { color: theme.muted }]}>Responding to your:</Text>
-              <Text style={[type.body, { color: theme.text }]}>
-                {request.shytextIntent ? VIBE_LABELS[normalizeVibe(request.shytextIntent)] : ''}
-                {request.shytextMessage ? `\n“${request.shytextMessage}”` : ''}
-              </Text>
+            <Animated.View
+              key={request.id}
+              layout={reduce ? undefined : springLayout()}
+              exiting={reduce ? undefined : springSlideOutRight()}
+              style={[styles.card, { backgroundColor: theme.card }]}
+            >
+              <Text style={[type.title, { color: theme.text }]}>{request.senderName}</Text>
               {request.introMessage ? (
-                <>
-                  <Text style={[type.caption, { color: theme.muted, marginTop: 8 }]}>Message:</Text>
-                  <Text style={[type.body, { color: theme.text }]}>“{request.introMessage}”</Text>
-                </>
+                <Text style={[type.body, { color: theme.text }]}>“{request.introMessage}”</Text>
               ) : null}
               <View style={styles.row}>
                 <View style={{ flex: 1 }}>
@@ -73,7 +73,7 @@ export default function RequestsScreen() {
                   />
                 </View>
               </View>
-            </View>
+            </Animated.View>
           ))
         )}
       </ScrollView>

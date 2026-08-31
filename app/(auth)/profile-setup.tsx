@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,6 +18,8 @@ export default function ProfileSetupScreen() {
   const [photoUri, setPhotoUri] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const ageRef = useRef<TextInput>(null);
+  const bioRef = useRef<TextInput>(null);
 
   const pickPhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -40,9 +42,6 @@ export default function ProfileSetupScreen() {
     <Screen theme={theme}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrap}>
         <Text style={[type.display, { color: theme.text }]}>What should people call you?</Text>
-        <Text style={[type.body, { color: theme.muted }]}>
-          A name and photo help people break the ice. Keep it light.
-        </Text>
         <Pressable onPress={pickPhoto} style={{ alignSelf: 'center' }} accessibilityLabel="Add profile photo">
           <Avatar name={name} uri={photoUri} theme={theme} size={88} />
           <Text style={{ color: theme.accent, fontWeight: '700', marginTop: 8, textAlign: 'center' }}>
@@ -54,22 +53,33 @@ export default function ProfileSetupScreen() {
           onChangeText={setName}
           placeholder="First name"
           placeholderTextColor={theme.quiet}
+          autoFocus
+          autoComplete="name"
+          textContentType="givenName"
+          autoCapitalize="words"
+          returnKeyType="next"
+          onSubmitEditing={() => ageRef.current?.focus()}
           style={[styles.input, { color: theme.text, backgroundColor: theme.card }]}
         />
         <TextInput
+          ref={ageRef}
           value={ageText}
           onChangeText={setAgeText}
           keyboardType="number-pad"
           placeholder="Age (optional)"
           placeholderTextColor={theme.quiet}
+          returnKeyType="next"
+          onSubmitEditing={() => bioRef.current?.focus()}
           style={[styles.input, { color: theme.text, backgroundColor: theme.card }]}
         />
         <TextInput
+          ref={bioRef}
           value={bio}
           onChangeText={setBio}
           placeholder="Optional one-liner"
           placeholderTextColor={theme.quiet}
           maxLength={80}
+          returnKeyType="done"
           style={[styles.input, { color: theme.text, backgroundColor: theme.card }]}
         />
         {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}

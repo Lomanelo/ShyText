@@ -4,17 +4,24 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
   where,
 } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 import { auth, db } from './firebase';
 import { CheckIn, Venue, VenueCandidate } from '../types/venue';
-import { CHECK_IN_MS, isDevToolsEnabled } from '../utils/config';
+import { DEFAULT_SHYTEXT_MINUTES, MAX_STATUS_LENGTH, isDevToolsEnabled } from '../utils/config';
 import { isWithinCheckInRadius } from '../utils/geo';
 import { PADDYS_CORNER_ID } from './places';
-import { DEMO_VENUES } from './mockData';
+import { DEMO_VENUES, seedCheckIns } from './mockData';
+import { ShyTextVibe } from '../types/shytext';
+import { isBlockedEitherWay } from './blocks';
+import { recordVenueShyText } from './venueHeat';
+import { moderateText } from './moderation';
 
 function isInternalVenueId(id: string) {
   return Boolean(id) && !id.startsWith('apple:') && !id.startsWith('pending:');
@@ -135,10 +142,48 @@ export async function saveVenue(venue: Venue) {
   return internal;
 }
 
+function isDenied(err: unknown) {
+  return err instanceof FirebaseError && err.code === 'permission-denied';
+}
+
+function checkInRef(userId: string) {
+  return doc(db, 'checkins', userId);
+}
+
+export async function expireMyCheckIns(userId: string) {
+  const now = Date.now();
+  const canonical = checkInRef(userId);
+  const mine = await getDoc(canonical).catch((err) => {
+    if (isDenied(err)) return null;
+    throw err;
+  });
+  if (mine?.exists() && Number(mine.data().expiresAt) > now) {
+    await updateDoc(canonical, { expiresAt: now });
+  }
+  try {
+    const snap = await getDocs(query(collection(db, 'checkins'), where('userId', '==', userId)));
+    await Promise.all(
+      snap.docs
+        .filter((item) => item.id !== userId && Number(item.data().expiresAt) > now)
+        .map((item) => updateDoc(item.ref, { expiresAt: now }))
+    );
+  } catch (err) {
+    if (!isDenied(err)) throw err;
+  }
+}
+
 export async function checkInToVenue(
   venue: Venue,
   userLat?: number,
-  userLon?: number
+  userLon?: number,
+  extras?: {
+    ttlMinutes?: number;
+    displayName?: string;
+    avatarUrl?: string;
+    age?: number;
+    vibe?: ShyTextVibe;
+    status?: string;
+  }
 ): Promise<{ checkIn: CheckIn; venue: Venue }> {
   const user = auth.currentUser;
   if (!user) throw new Error('Sign in first.');
@@ -156,28 +201,153 @@ export async function checkInToVenue(
   }
 
   const internal = await ensureInternalVenue(venue);
+  await expireMyCheckIns(user.uid);
   const now = Date.now();
+  const ttlMs = (extras?.ttlMinutes ?? DEFAULT_SHYTEXT_MINUTES) * 60 * 1000;
   const payload = {
     userId: user.uid,
     venueId: internal.id,
     createdAt: now,
-    expiresAt: now + CHECK_IN_MS,
+    expiresAt: now + ttlMs,
+    displayName: extras?.displayName ?? null,
+    avatarUrl: extras?.avatarUrl ?? null,
+    age: extras?.age ?? null,
+    vibe: extras?.vibe ?? 'chat',
+    status: extras?.vibe === 'other' && extras.status ? extras.status : null,
     serverCreatedAt: serverTimestamp(),
   };
-  const ref = await addDoc(collection(db, 'checkins'), payload);
-  return { checkIn: { id: ref.id, ...payload }, venue: internal };
+  const ref = checkInRef(user.uid);
+  await setDoc(ref, payload);
+  await recordVenueShyText({
+    venueId: internal.id,
+    name: internal.name,
+    latitude: internal.latitude,
+    longitude: internal.longitude,
+  }).catch(() => undefined);
+  return {
+    checkIn: {
+      id: ref.id,
+      userId: user.uid,
+      venueId: internal.id,
+      createdAt: now,
+      expiresAt: now + ttlMs,
+      displayName: extras?.displayName,
+      avatarUrl: extras?.avatarUrl,
+      age: extras?.age,
+      vibe: extras?.vibe ?? 'chat',
+      status: extras?.vibe === 'other' ? extras.status : undefined,
+    },
+    venue: internal,
+  };
+}
+
+export async function updateCheckInVibe(vibe: ShyTextVibe, status?: string | null) {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Sign in first.');
+  const live = await getActiveCheckIn(user.uid);
+  if (!live) throw new Error('Check in first.');
+  const payload: { vibe: ShyTextVibe; status?: string | null } = { vibe };
+  if (vibe !== 'other') {
+    payload.status = null;
+  } else if (status !== undefined) {
+    const trimmed = status?.trim() ?? '';
+    if (trimmed) {
+      const moderated = moderateText(trimmed, { maxLength: MAX_STATUS_LENGTH });
+      if (!moderated.ok) throw new Error(moderated.reason);
+    }
+    payload.status = trimmed || null;
+  }
+  await updateDoc(checkInRef(user.uid), payload);
+}
+
+function isLiveCheckIn(item: CheckIn, now = Date.now()) {
+  return item.expiresAt > now;
+}
+
+export function mapCheckIn(id: string, data: Record<string, unknown>): CheckIn {
+  return {
+    id,
+    userId: String(data.userId),
+    venueId: String(data.venueId),
+    createdAt: Number(data.createdAt),
+    expiresAt: Number(data.expiresAt),
+    displayName: data.displayName ? String(data.displayName) : undefined,
+    avatarUrl: data.avatarUrl ? String(data.avatarUrl) : undefined,
+    age: typeof data.age === 'number' ? data.age : undefined,
+    vibe: data.vibe ? String(data.vibe) : undefined,
+    status: data.status ? String(data.status) : undefined,
+  };
+}
+
+export function listenCheckIns(venueId: string, onChange: (people: CheckIn[]) => void) {
+  const q = query(collection(db, 'checkins'), where('venueId', '==', venueId));
+  return onSnapshot(
+    q,
+    async (snap) => {
+      const now = Date.now();
+      const user = auth.currentUser;
+      let people = snap.docs.map((item) => mapCheckIn(item.id, item.data())).filter((item) => isLiveCheckIn(item, now));
+      if (user) {
+        const visible: CheckIn[] = [];
+        for (const person of people) {
+          if (person.userId !== user.uid && (await isBlockedEitherWay(user.uid, person.userId))) continue;
+          visible.push(person);
+        }
+        people = visible;
+      }
+      if (isDevToolsEnabled() && isDemoVenue(venueId)) {
+        const real = people.filter((item) => !item.userId.startsWith('seed-'));
+        const seeds = seedCheckIns(venueId).filter((seed) => !real.some((item) => item.userId === seed.userId));
+        people = [...real, ...seeds];
+      }
+      onChange(people.sort((a, b) => b.createdAt - a.createdAt));
+    },
+    () => onChange([])
+  );
+}
+
+export async function countActiveCheckIns(venueId: string): Promise<number> {
+  try {
+    const snap = await getDocs(query(collection(db, 'checkins'), where('venueId', '==', venueId)));
+    const now = Date.now();
+    const count = snap.docs.filter((item) => Number(item.data().expiresAt) > now).length;
+    if (count === 0 && isDevToolsEnabled() && isDemoVenue(venueId)) {
+      return seedCheckIns(venueId).length;
+    }
+    return count;
+  } catch (err) {
+    if (isDenied(err)) {
+      return isDevToolsEnabled() && isDemoVenue(venueId) ? seedCheckIns(venueId).length : 0;
+    }
+    throw err;
+  }
 }
 
 export async function getActiveCheckIn(userId: string): Promise<CheckIn | null> {
-  const snap = await getDocs(
-    query(collection(db, 'checkins'), where('userId', '==', userId))
+  try {
+    const snap = await getDoc(checkInRef(userId));
+    if (!snap.exists()) return null;
+    const mapped = mapCheckIn(snap.id, snap.data());
+    return mapped.expiresAt > Date.now() ? mapped : null;
+  } catch (err) {
+    if (isDenied(err)) return null;
+    throw err;
+  }
+}
+
+export function listenOwnCheckIn(userId: string, onChange: (checkIn: CheckIn | null) => void) {
+  return onSnapshot(
+    checkInRef(userId),
+    (snap) => {
+      if (!snap.exists()) {
+        onChange(null);
+        return;
+      }
+      const mapped = mapCheckIn(snap.id, snap.data());
+      onChange(mapped.expiresAt > Date.now() ? mapped : null);
+    },
+    () => onChange(null)
   );
-  const now = Date.now();
-  const live = snap.docs
-    .map((item) => ({ id: item.id, ...item.data() } as CheckIn))
-    .filter((item) => item.expiresAt > now)
-    .sort((a, b) => b.createdAt - a.createdAt);
-  return live[0] ?? null;
 }
 
 export function isDemoVenue(venueId: string) {

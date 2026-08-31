@@ -1,4 +1,4 @@
-/** How close you must be to appear on Nearby and to drop a ShyText. */
+/** How close you must be to check in at a venue. */
 export const NEARBY_RADIUS_METERS = 100;
 export const NEARBY_MAX_VENUES = 5;
 export const CHECK_IN_RADIUS_METERS = NEARBY_RADIUS_METERS;

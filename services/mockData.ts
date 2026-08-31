@@ -1,4 +1,4 @@
-import { Venue } from '../types/venue';
+import { Venue, CheckIn } from '../types/venue';
 import { ShyTextPost } from '../types/shytext';
 
 export const DEMO_VENUES: Venue[] = [
@@ -36,6 +36,42 @@ export const DEMO_VENUES: Venue[] = [
     activeCount: 0,
   },
 ];
+
+export function seedCheckIns(venueId: string): CheckIn[] {
+  const now = Date.now();
+  return [
+    {
+      id: 'seed-sarah',
+      userId: 'seed-sarah',
+      venueId,
+      displayName: 'Sarah',
+      age: 23,
+      vibe: 'coffee',
+      createdAt: now - 12 * 60000,
+      expiresAt: now + 18 * 60000,
+    },
+    {
+      id: 'seed-adam',
+      userId: 'seed-adam',
+      venueId,
+      displayName: 'Adam',
+      age: 24,
+      vibe: 'play',
+      createdAt: now - 5 * 60000,
+      expiresAt: now + 25 * 60000,
+    },
+    {
+      id: 'seed-marie',
+      userId: 'seed-marie',
+      venueId,
+      displayName: 'Marie',
+      age: 21,
+      vibe: 'chat',
+      createdAt: now - 18 * 60000,
+      expiresAt: now + 12 * 60000,
+    },
+  ];
+}
 
 export function seedShyTexts(venueId: string): ShyTextPost[] {
   const now = Date.now();
