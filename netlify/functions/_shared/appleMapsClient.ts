@@ -1,5 +1,4 @@
 import { getAppleMapsAccessToken } from './appleMapsAuth';
-import { searchRegionBox } from './geo';
 import {
   ApplePlace,
   SOCIAL_POI_CATEGORIES,
@@ -9,7 +8,6 @@ import {
 } from './normalizeApplePlace';
 
 const SEARCH_URL = 'https://maps-api.apple.com/v1/search';
-const NEARBY_RADIUS_M = 600;
 const MAX_DISTANCE_M = 800;
 
 type SearchResponse = {
@@ -33,7 +31,8 @@ async function appleSearch(params: URLSearchParams) {
     throw asPlacesError('Apple Maps authentication failed.', 401);
   }
   if (!response.ok) {
-    throw asPlacesError('Could not load nearby venues.', 502);
+    const detail = await response.text().catch(() => '');
+    throw asPlacesError(detail.slice(0, 180) || 'Could not load nearby venues.', 502);
   }
   const payload = (await response.json()) as SearchResponse;
   return payload.results ?? payload.places ?? [];
@@ -44,7 +43,6 @@ function baseParams(latitude: number, longitude: number, query: string) {
   params.set('q', query);
   params.set('searchLocation', `${latitude},${longitude}`);
   params.set('userLocation', `${latitude},${longitude}`);
-  params.set('searchRegion', searchRegionBox(latitude, longitude, NEARBY_RADIUS_M));
   params.set('resultTypeFilter', 'Poi');
   params.set('includePoiCategories', SOCIAL_POI_CATEGORIES.join(','));
   params.set('lang', 'en-US');
@@ -57,9 +55,9 @@ export async function searchAppleVenues(
   query?: string
 ): Promise<VenueCandidate[]> {
   const q = query?.trim();
-  const searches = [
-    appleSearch(baseParams(latitude, longitude, q || 'cafe restaurant bar park museum hotel')),
-  ];
+  const searches = (q ? [q] : ['cafe', 'restaurant', 'bar', 'park']).map((term) =>
+    appleSearch(baseParams(latitude, longitude, term))
+  );
 
   const pages = await Promise.all(searches);
   const venues = pages
