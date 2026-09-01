@@ -21,15 +21,22 @@ struct CheckInAtVenueIntent: AppIntent {
     static var description = IntentDescription("Shy In at a named place around you.")
     static var openAppWhenRun = true
 
-    @Parameter(title: "Venue")
+    @Parameter(
+        title: "Venue",
+        requestValueDialog: IntentDialog("Which place are you at?")
+    )
     var venue: String
 
     static var parameterSummary: some ParameterSummary {
-        Summary("Shy In at \(\.$venue)")
+        Summary("Shy In at a place")
     }
 
     func perform() async throws -> some IntentResult {
-        await openShyText(queryItems: [URLQueryItem(name: "name", value: venue)])
+        let place = venue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = place.isEmpty
+            ? try await $venue.requestValue("Which place are you at?")
+            : place
+        await openShyText(queryItems: [URLQueryItem(name: "name", value: name)])
         return .result()
     }
 }
@@ -42,7 +49,7 @@ struct ShyTextShortcuts: AppShortcutsProvider {
             phrases: [
                 "Shy In nearby in \(.applicationName)",
                 "Shy In with \(.applicationName)",
-                "I'm here in \(.applicationName)"
+                "I'm here in \(.applicationName)",
             ],
             shortTitle: "Shy In nearby",
             systemImageName: "mappin.and.ellipse"
@@ -50,8 +57,8 @@ struct ShyTextShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: CheckInAtVenueIntent(),
             phrases: [
-                "Shy In at \(\.$venue) in \(.applicationName)",
-                "I'm at \(\.$venue) in \(.applicationName)"
+                "Shy In at a place in \(.applicationName)",
+                "I'm at a place in \(.applicationName)",
             ],
             shortTitle: "Shy In at a place",
             systemImageName: "mappin"
