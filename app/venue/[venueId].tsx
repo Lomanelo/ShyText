@@ -23,6 +23,7 @@ import { useLocation } from '../../hooks/useLocation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getVenue } from '../../services/venues';
 import { sendChatRequest } from '../../services/chat';
+import { buildVenueImageUrl } from '../../services/venueImage';
 import { isDevToolsEnabled, MAX_STATUS_LENGTH } from '../../utils/config';
 import { CheckIn, Venue } from '../../types/venue';
 import { SHYTEXT_VIBES, normalizeVibe } from '../../types/shytext';
@@ -52,6 +53,9 @@ export default function VenueScreen() {
   }, [venueId]);
 
   const here = !!venueId && current.checkIn?.venueId === venueId && !current.expired;
+  const heroImageUrl = venue
+    ? buildVenueImageUrl(venue, { width: 640, height: Math.min(640, Math.round(640 * (168 / 390))) })
+    : null;
   const others = people.filter((item) => item.userId !== user?.uid);
   const mine = people.find((item) => item.userId === user?.uid) ?? (here ? current.checkIn : null);
   const vibe = normalizeVibe(mine?.vibe);
@@ -99,7 +103,7 @@ export default function VenueScreen() {
       >
         {venue ? (
           <View style={[styles.hero, cardShadow(theme)]}>
-            <VenueStamp category={venue.category} height={168} />
+            <VenueStamp category={venue.category} height={168} imageUrl={heroImageUrl} />
           </View>
         ) : null}
 

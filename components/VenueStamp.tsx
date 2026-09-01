@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Image, ImageSourcePropType, StyleSheet, Text, View } from 'react-native';
 import { placeKind, placeKindLabel, PlaceKind } from '../utils/venueMark';
 
@@ -25,18 +25,36 @@ const STILLS: Record<PlaceKind, ImageSourcePropType> = {
 export function VenueStamp({
   category,
   height,
+  imageUrl,
   children,
 }: {
   category?: string;
   height: number;
+  imageUrl?: string | null;
   children?: ReactNode;
 }) {
   const kind = placeKind(category);
   const compact = height < 100;
+  const [remoteFailed, setRemoteFailed] = useState(false);
+  const remote = Boolean(imageUrl) && !remoteFailed;
+
+  useEffect(() => {
+    setRemoteFailed(false);
+  }, [imageUrl]);
 
   return (
     <View style={[styles.well, { height }]} collapsable={false}>
-      <Image source={STILLS[kind]} style={styles.still} resizeMode="cover" accessibilityIgnoresInvertColors />
+      {remote ? (
+        <Image
+          source={{ uri: imageUrl! }}
+          style={styles.still}
+          resizeMode="cover"
+          accessibilityIgnoresInvertColors
+          onError={() => setRemoteFailed(true)}
+        />
+      ) : (
+        <Image source={STILLS[kind]} style={styles.still} resizeMode="cover" accessibilityIgnoresInvertColors />
+      )}
       {!compact ? (
         <View style={styles.stamp} accessibilityElementsHidden>
           <Text style={styles.stampText}>{placeKindLabel(kind)}</Text>

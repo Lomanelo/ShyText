@@ -5,6 +5,7 @@ import { cardShadow, radius, space, Theme, type } from '../theme';
 import { formatDistance } from '../utils/geo';
 import { springLayout } from '../hooks/usePressScale';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { buildVenueImageUrl } from '../services/venueImage';
 import { VenueStamp } from './VenueStamp';
 import { LiveDots } from './LiveDots';
 import { PressScale } from './PressScale';
@@ -27,6 +28,7 @@ export function VenueCard({
   const live = (venue.activeCount ?? 0) >= 1;
   const meters = distance ?? venue.distanceMeters;
   const howFar = formatDistance(meters);
+  const imageUrl = buildVenueImageUrl(venue, { width: 640, height: 360 });
 
   return (
     <Animated.View layout={reduce ? undefined : springLayout()}>
@@ -40,7 +42,7 @@ export function VenueCard({
         })}
         style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}
       >
-        <VenueStamp category={venue.category} height={152}>
+        <VenueStamp category={venue.category} height={152} imageUrl={imageUrl}>
           {howFar ? (
             <View style={styles.chip}>
               <Text style={styles.chipText}>{howFar}</Text>

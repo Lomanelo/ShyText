@@ -60,6 +60,7 @@ Client (`.env` / EAS env):
 - `EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
 - `EXPO_PUBLIC_FIREBASE_APP_ID`
 - `EXPO_PUBLIC_PLACES_PROXY_URL` (example: `https://your-site.netlify.app/api/places`)
+- `EXPO_PUBLIC_VENUE_IMAGE_PROXY_URL` (optional; defaults to same Netlify host as places)
 - `EXPO_PUBLIC_PHONE_RECAPTCHA_URL` (optional; defaults to Firebase Hosting)
 - `EXPO_PUBLIC_DEV_MODE`
 
@@ -68,6 +69,7 @@ Server / Netlify secrets (never ship in the app):
 - `APPLE_MAPS_TEAM_ID`
 - `APPLE_MAPS_KEY_ID`
 - `APPLE_MAPS_PRIVATE_KEY` (Maps `.p8` key contents; `\n` escaped is fine)
+- `GOOGLE_MAPS_API_KEY` (Street View Static + Metadata; server only)
 
 ## 5. Firestore collections
 
@@ -105,6 +107,21 @@ The app never calls Apple Maps with a private key. Nearby/search go through `net
 Do not put Apple private keys in `EXPO_PUBLIC_*` variables.
 
 If the proxy is missing, the app uses demo venues (Paddy's Corner, Campus Library, Riverside Park). There is no map UI — only a list of venue names.
+
+## 8b. Google Street View venue photos
+
+Venue cards and the venue hero try a Street View exterior photo before falling back to category stamps.
+
+Flow: `VenueStamp` → `/api/venue-image` → free metadata check → Static API image streamed to the app (not stored on Netlify).
+
+1. In Google Cloud, enable **Street View Static API** and **Street View Metadata API** on the same project/key.
+2. Set Netlify env: `GOOGLE_MAPS_API_KEY`.
+3. Deploy Netlify functions (`venue-image.ts` at `/api/venue-image`).
+4. If `EXPO_PUBLIC_PLACES_PROXY_URL` is already set, images use the same host automatically. Or set `EXPO_PUBLIC_VENUE_IMAGE_PROXY_URL` explicitly.
+
+Query tuning (optional, for testing): `heading`, `fov`, `pitch`, `radius`, `address`. Metadata-only: `?meta=1`.
+
+Google policy: do not persistently cache or rehost Street View imagery. The proxy uses `Cache-Control: no-store` and streams on demand.
 
 ## 9. iOS development build
 
