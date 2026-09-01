@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { radius, space, Theme, type } from '../theme';
 import { PressScale } from './PressScale';
+import { useTranslation } from 'react-i18next';
 
 export function HintBanner({
   title,
@@ -12,12 +13,13 @@ export function HintBanner({
   theme: Theme;
   onDismiss: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <View style={[styles.wrap, { backgroundColor: theme.accentSoft }]}>
       <Text style={[type.headline, { color: theme.text, flex: 1 }]}>{title}</Text>
       <PressScale
         accessibilityRole="button"
-        accessibilityLabel="Dismiss hint"
+        accessibilityLabel={t('a11y.dismissHint')}
         onPress={onDismiss}
         hitSlop={8}
         style={styles.close}

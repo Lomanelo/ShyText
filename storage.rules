@@ -7,6 +7,7 @@ service firebase.storage {
         && imageId == request.auth.uid + '.jpg'
         && request.resource.size < 2 * 1024 * 1024
         && request.resource.contentType.matches('image/.*');
+      allow delete: if request.auth != null && imageId == request.auth.uid + '.jpg';
     }
   }
 }

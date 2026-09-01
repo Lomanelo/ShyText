@@ -10,6 +10,7 @@ import {
   updateCheckInVibe,
 } from '../services/venues';
 import { auth } from '../services/firebase';
+import { syncCheckInEndingNotice } from '../services/notifications';
 import { ShyTextVibe } from '../types/shytext';
 
 const KEY = 'currentVenue';
@@ -33,6 +34,7 @@ export function useCurrentVenue() {
       unsubCheckIn = listenOwnCheckIn(user.uid, (next) => {
         setCheckIn(next);
         setLoading(false);
+        void syncCheckInEndingNotice(next?.expiresAt ?? null);
         if (next) {
           void getVenue(next.venueId).then((found) => {
             if (found) {
@@ -95,6 +97,7 @@ export function useCurrentVenue() {
   const leave = useCallback(async () => {
     const uid = auth.currentUser?.uid;
     if (uid) await expireMyCheckIns(uid);
+    await syncCheckInEndingNotice(null);
     setCheckIn(null);
   }, []);
 

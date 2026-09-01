@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTranslation } from 'react-i18next';
 import { brand, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useChatRequests } from '../../hooks/useChatRequests';
@@ -8,6 +9,7 @@ import { HapticTab } from '../../components/HapticTab';
 
 export default function TabsLayout() {
   const theme = useTheme();
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { incoming } = useChatRequests(user?.uid);
 
@@ -33,7 +35,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="nearby"
         options={{
-          title: 'Nearby',
+          title: t('tabs.nearby'),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'location' : 'location-outline'} size={size} color={color} />
           ),
@@ -42,7 +44,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="chats"
         options={{
-          title: 'Chats',
+          title: t('tabs.chats'),
           tabBarBadge: incoming.length || undefined,
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'chatbubble' : 'chatbubble-outline'} size={size} color={color} />
@@ -52,7 +54,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          title: t('tabs.profile'),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
           ),

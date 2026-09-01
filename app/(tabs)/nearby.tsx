@@ -29,6 +29,7 @@ import {
 } from '../../services/venues';
 import { CheckIn, PlacesRequestError, Venue, VenueCandidate } from '../../types/venue';
 import { distanceBetween, pickClosest } from '../../utils/geo';
+import { useTranslation } from 'react-i18next';
 
 const HOLD_HINT_KEY = 'shytext.hint.holdCheckIn';
 
@@ -63,6 +64,7 @@ function rankVenues(venues: Venue[], latitude: number, longitude: number) {
 
 export default function NearbyScreen() {
   const theme = useTheme();
+  const { t } = useTranslation();
   const reduce = useReduceMotion();
   const { coords, status, error: locationError, busy, refresh } = useLocation();
   const { profile } = useAuth();
@@ -113,7 +115,7 @@ export default function NearbyScreen() {
           })
           .catch(() => undefined);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Could not load venues.');
+        setError(err instanceof Error ? err.message : t('errors.couldNotLoadVenues'));
         setLoading(false);
       }
     },
@@ -159,7 +161,7 @@ export default function NearbyScreen() {
           id: live.venueId,
           provider: 'apple',
           providerPlaceId: live.venueId,
-          name: 'a venue',
+          name: t('nearby.aVenue'),
         },
       });
     });
@@ -174,7 +176,7 @@ export default function NearbyScreen() {
       await current.rememberVenue(internal);
       router.push(`/venue/${internal.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not open this venue.');
+      setError(err instanceof Error ? err.message : t('errors.couldNotOpenVenue'));
     }
   };
 
@@ -190,7 +192,7 @@ export default function NearbyScreen() {
         return;
       }
       if (!profile) {
-        setError('Finish your profile first.');
+        setError(t('errors.finishProfile'));
         return;
       }
       const next = await refresh();
@@ -201,7 +203,7 @@ export default function NearbyScreen() {
       });
       router.push(`/venue/${internal.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not check in.');
+      setError(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
     } finally {
       setCheckingIn(false);
     }
@@ -230,7 +232,7 @@ export default function NearbyScreen() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Café, bar, park…"
+            placeholder={t('nearby.searchPlaceholder')}
             placeholderTextColor={theme.quiet}
             autoCapitalize="none"
             autoCorrect={false}
@@ -242,7 +244,7 @@ export default function NearbyScreen() {
           {query.trim() ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Search"
+              accessibilityLabel={t('common.search')}
               onPress={() => load(query)}
               hitSlop={8}
               style={styles.searchGo}
@@ -256,7 +258,7 @@ export default function NearbyScreen() {
           <Animated.View layout={reduce ? undefined : springLayout()}>
             <HintBanner
               theme={theme}
-              title="Hold a place to check in"
+              title={t('nearby.holdHint')}
               onDismiss={() => {
                 setHoldHint(false);
                 void AsyncStorage.setItem(HOLD_HINT_KEY, '1');
@@ -299,17 +301,17 @@ export default function NearbyScreen() {
           <EmptyState
             theme={theme}
             icon="location-outline"
-            title={rateLimited ? 'Try again shortly' : placesReady ? 'Nothing within 100 m' : 'Search isn’t connected'}
+            title={rateLimited ? t('nearby.rateLimitedTitle') : placesReady ? t('nearby.emptyTitle') : t('nearby.searchOffline')}
             body={
               rateLimited
-                ? 'Apple Maps asked us to slow down.'
+                ? t('nearby.rateLimitedBody')
                 : placesReady
-                  ? 'Move closer to a café, bar, or park.'
+                  ? t('nearby.emptyBody')
                   : undefined
             }
             action={
               rateLimited || !placesReady
-                ? { label: 'Retry', onPress: () => load(query || undefined, true) }
+                ? { label: t('common.retry'), onPress: () => load(query || undefined, true) }
                 : undefined
             }
           />

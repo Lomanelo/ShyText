@@ -8,8 +8,7 @@ import { FlameMark } from '../../components/flame-mark';
 import { Wordmark } from '../../components/wordmark';
 import { space, Theme, type, useTheme } from '../../theme';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-
-const BEATS = ['Invisible until you check in.', 'Hold a place. Send a ShyText.'] as const;
+import { useTranslation } from 'react-i18next';
 
 function StoryBar({ state, theme, reduce }: { state: 'done' | 'active' | 'idle'; theme: Theme; reduce: boolean }) {
   const progress = useSharedValue(state === 'done' ? 1 : 0);
@@ -40,16 +39,18 @@ function StoryBar({ state, theme, reduce }: { state: 'done' | 'active' | 'idle';
 
 export default function WelcomeScreen() {
   const theme = useTheme();
+  const { t } = useTranslation();
   const reduce = useReduceMotion();
   const [beat, setBeat] = useState(0);
-  const line = BEATS[beat];
+  const beats = [t('welcome.beat1'), t('welcome.beat2')];
+  const line = beats[beat];
 
   return (
     <Screen theme={theme}>
       <View style={styles.wrap}>
         <View style={styles.top}>
           <View style={styles.bars}>
-            {BEATS.map((_, i) => (
+            {beats.map((_, i) => (
               <StoryBar
                 key={i}
                 theme={theme}
@@ -75,12 +76,12 @@ export default function WelcomeScreen() {
 
         <View style={styles.actions}>
           {beat === 0 ? (
-            <PrimaryButton title="Show me" theme={theme} onPress={() => setBeat(1)} />
+            <PrimaryButton title={t('welcome.showMe')} theme={theme} onPress={() => setBeat(1)} />
           ) : (
-            <PrimaryButton title="Get started" theme={theme} onPress={() => router.push('/(auth)/create-account')} />
+            <PrimaryButton title={t('welcome.getStarted')} theme={theme} onPress={() => router.push('/(auth)/create-account')} />
           )}
           <PrimaryButton
-            title={beat === 0 ? 'Skip' : 'I already have an account'}
+            title={beat === 0 ? t('common.skip') : t('welcome.haveAccount')}
             theme={theme}
             variant="secondary"
             onPress={() => router.push(beat === 0 ? '/(auth)/create-account' : '/(auth)/sign-in')}

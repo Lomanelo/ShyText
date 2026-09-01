@@ -3,32 +3,34 @@ import { router } from 'expo-router';
 import { getUserProfile, sendPhoneVerification, confirmPhoneVerification } from '../services/auth';
 import { createBrowserRecaptchaVerifier } from '../services/phone-recaptcha';
 
+import i18n from '../i18n';
+
 const RESEND_MS = 45_000;
 
 export function authErrorMessage(error: unknown) {
   const raw = error instanceof Error ? error.message : String(error ?? '');
   const message = raw.toLowerCase();
-  if (raw === 'cancelled' || message.includes('cancelled')) return 'Verification cancelled.';
+  if (raw === 'cancelled' || message.includes('cancelled')) return i18n.t('authErrors.cancelled');
   if (message.includes('invalid-phone-number') || message.includes('missing-phone-number')) {
-    return 'Enter a valid mobile number with country code.';
+    return i18n.t('authErrors.invalidPhone');
   }
-  if (message.includes('invalid-verification-code')) return 'That code is not correct.';
+  if (message.includes('invalid-verification-code')) return i18n.t('authErrors.invalidCode');
   if (message.includes('invalid-verification-id') || message.includes('session-expired')) {
-    return 'That code expired. Send a new one.';
+    return i18n.t('authErrors.expiredCode');
   }
   if (message.includes('too-many-requests') || message.includes('quota-exceeded')) {
-    return 'Too many attempts. Try again later.';
+    return i18n.t('authErrors.tooMany');
   }
   if (message.includes('operation-not-allowed')) {
-    return 'Phone sign-in is not enabled yet. Turn on Phone in Firebase Authentication.';
+    return i18n.t('authErrors.notEnabled');
   }
-  if (message.includes('captcha-check-failed')) return 'Device check failed. Try again.';
-  if (message.includes('network-request-failed')) return 'Check your connection and try again.';
-  if (message.includes('user-disabled')) return 'This account is disabled.';
+  if (message.includes('captcha-check-failed')) return i18n.t('authErrors.captcha');
+  if (message.includes('network-request-failed')) return i18n.t('authErrors.network');
+  if (message.includes('user-disabled')) return i18n.t('authErrors.disabled');
   if (message.includes('permission') || message.includes('insufficient')) {
-    return 'Signed in, but the server is still blocking profile access. Try again in a moment.';
+    return i18n.t('authErrors.permission');
   }
-  return 'Unable to continue. Please try again.';
+  return i18n.t('authErrors.generic');
 }
 
 async function afterSignIn() {
@@ -90,7 +92,7 @@ export function usePhoneAuth() {
     },
     confirmCode: async (code: string) => {
       if (!verificationId) {
-        setError('Send a code first.');
+        setError(i18n.t('authErrors.sendCodeFirst'));
         return;
       }
       setLoading(true);

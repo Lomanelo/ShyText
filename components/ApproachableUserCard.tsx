@@ -3,7 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
-import { VIBE_LABELS, normalizeVibe } from '../types/shytext';
+import { vibeLabel } from '../i18n/labels';
+import { normalizeVibe } from '../types/shytext';
+import { useTranslation } from 'react-i18next';
 import { cardShadow, radius, space, Theme, type } from '../theme';
 import { remainingCompact } from '../utils/dates';
 import { Avatar } from './Avatar';
@@ -21,7 +23,10 @@ export function ApproachableUserCard({
   onSend: () => void;
   onReport: () => void;
 }) {
-  const name = person.age ? `${person.displayName ?? 'Someone'}, ${person.age}` : person.displayName ?? 'Someone';
+  const { t } = useTranslation();
+  const name = person.age
+    ? `${person.displayName ?? t('common.someone')}, ${person.age}`
+    : person.displayName ?? t('common.someone');
   const swipe = useRef<Swipeable>(null);
   const vibe = person.vibe ? normalizeVibe(person.vibe) : undefined;
 
@@ -40,7 +45,7 @@ export function ApproachableUserCard({
       overshootLeft={false}
       renderRightActions={() => (
         <View style={[styles.swipe, { backgroundColor: theme.accent }]}>
-          <Text style={[type.headline, { color: theme.onAccent }]}>Send</Text>
+          <Text style={[type.headline, { color: theme.onAccent }]}>{t('common.send')}</Text>
         </View>
       )}
       onSwipeableOpen={(direction) => {
@@ -53,7 +58,7 @@ export function ApproachableUserCard({
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={[type.headline, { color: theme.text }]}>{name}</Text>
             <Text style={[type.caption, { color: theme.accent, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
-              {person.status || (vibe ? VIBE_LABELS[vibe] : '')}
+              {person.status || (vibe ? vibeLabel(vibe) : '')}
               {person.status || vibe ? ' · ' : ''}
               {remainingCompact(person.expiresAt)}
             </Text>
@@ -61,13 +66,13 @@ export function ApproachableUserCard({
         </View>
         <View style={styles.actions}>
           <PressScale
-            accessibilityLabel={`Send a ShyText to ${person.displayName ?? 'them'}`}
+            accessibilityLabel={t('venue.sendToA11y', { name: person.displayName ?? t('common.them') })}
             onPress={sayHi}
             style={[styles.hi, { backgroundColor: theme.accent }]}
           >
-            <Text style={[type.headline, { color: theme.onAccent }]}>Send a ShyText</Text>
+            <Text style={[type.headline, { color: theme.onAccent }]}>{t('venue.sendShyText')}</Text>
           </PressScale>
-          <Pressable onPress={onReport} accessibilityLabel="Report or more" hitSlop={8} style={styles.more}>
+          <Pressable onPress={onReport} accessibilityLabel={t('venue.reportMore')} hitSlop={8} style={styles.more}>
             <Ionicons name="ellipsis-horizontal" size={22} color={theme.quiet} />
           </Pressable>
         </View>

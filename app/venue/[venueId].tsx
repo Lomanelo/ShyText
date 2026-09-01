@@ -25,11 +25,14 @@ import { getVenue } from '../../services/venues';
 import { sendChatRequest } from '../../services/chat';
 import { isDevToolsEnabled, MAX_STATUS_LENGTH } from '../../utils/config';
 import { CheckIn, Venue } from '../../types/venue';
-import { SHYTEXT_VIBES, VIBE_LABELS, normalizeVibe } from '../../types/shytext';
+import { SHYTEXT_VIBES, normalizeVibe } from '../../types/shytext';
+import { vibeLabel } from '../../i18n/labels';
+import { useTranslation } from 'react-i18next';
 
 export default function VenueScreen() {
   const { venueId } = useLocalSearchParams<{ venueId: string }>();
   const theme = useTheme();
+  const { t } = useTranslation();
   const reduce = useReduceMotion();
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
@@ -61,7 +64,7 @@ export default function VenueScreen() {
     if (!here || vibe !== 'other') return;
     const id = setTimeout(() => {
       void current.setVibe('other', statusDraft).catch((err) => {
-        setStatusError(err instanceof Error ? err.message : 'Could not save that.');
+        setStatusError(err instanceof Error ? err.message : t('errors.couldNotSave'));
       });
     }, 420);
     return () => clearTimeout(id);
@@ -80,7 +83,7 @@ export default function VenueScreen() {
       });
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Could not check in.');
+      setNotice(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
     } finally {
       setBusy(false);
     }
@@ -88,7 +91,7 @@ export default function VenueScreen() {
 
   return (
     <Screen theme={theme} inset={false}>
-      <Stack.Screen options={{ title: venue?.name ?? 'Venue' }} />
+      <Stack.Screen options={{ title: venue?.name ?? t('common.venue') }} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         contentInsetAdjustmentBehavior="automatic"
@@ -108,7 +111,7 @@ export default function VenueScreen() {
               style={[styles.own, cardShadow(theme), { backgroundColor: theme.card }]}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <Text style={[styles.ownIntent, { color: theme.text }]}>You’re here</Text>
+                <Text style={[styles.ownIntent, { color: theme.text }]}>{t('venue.youreHere')}</Text>
                 <CountdownBadge expiresAt={mine.expiresAt} theme={theme} />
               </View>
               <View style={styles.chips}>
@@ -126,7 +129,7 @@ export default function VenueScreen() {
                     style={[styles.chip, { backgroundColor: item === vibe ? theme.accent : theme.bg }]}
                   >
                     <Text style={{ color: item === vibe ? theme.onAccent : theme.text, fontWeight: '700' }}>
-                      {VIBE_LABELS[item]}
+                      {vibeLabel(item)}
                     </Text>
                   </PressScale>
                 ))}
@@ -143,7 +146,7 @@ export default function VenueScreen() {
                       setStatusDraft(value);
                     }}
                     maxLength={MAX_STATUS_LENGTH}
-                    placeholder="What are you up to?"
+                    placeholder={t('venue.statusPlaceholder')}
                     placeholderTextColor={theme.quiet}
                     returnKeyType="done"
                     style={[styles.statusInput, { color: theme.text }]}
@@ -155,7 +158,7 @@ export default function VenueScreen() {
               ) : null}
               {statusError ? <Text style={{ color: theme.danger }}>{statusError}</Text> : null}
               <PrimaryButton
-                title="Leave"
+                title={t('common.leave')}
                 theme={theme}
                 variant="ghost"
                 onPress={async () => {
@@ -169,11 +172,11 @@ export default function VenueScreen() {
           {notice ? <Text style={{ color: theme.danger }}>{notice}</Text> : null}
 
           {!here ? (
-            <EmptyState theme={theme} title="Check in to see who’s here" />
+            <EmptyState theme={theme} title={t('venue.checkInToSee')} />
           ) : loading && !people.length ? (
             <Skeleton theme={theme} />
           ) : others.length === 0 ? (
-            <EmptyState theme={theme} title="Just you" />
+            <EmptyState theme={theme} title={t('venue.justYou')} />
           ) : (
             others.map((person) => (
               <Animated.View key={person.id} layout={reduce ? undefined : springLayout()}>
@@ -184,8 +187,8 @@ export default function VenueScreen() {
                     if (person.userId.startsWith('seed-')) {
                       setNotice(
                         isDevToolsEnabled()
-                          ? 'This is a demo person. Check in yourself to send a real ShyText.'
-                          : 'They’re no longer checked in.'
+                          ? t('venue.demoPerson')
+                          : t('errors.noLongerCheckedIn')
                       );
                       return;
                     }
@@ -204,7 +207,7 @@ export default function VenueScreen() {
           layout={reduce ? undefined : springLayout()}
           style={[styles.dock, { backgroundColor: theme.bg, paddingBottom: Math.max(insets.bottom, 16) }]}
         >
-          <PrimaryButton title="Check in" theme={theme} loading={busy} onPress={checkInNow} />
+          <PrimaryButton title={t('common.checkIn')} theme={theme} loading={busy} onPress={checkInNow} />
         </Animated.View>
       ) : null}
 
@@ -216,8 +219,8 @@ export default function VenueScreen() {
         theme={theme}
         onClose={() => setHello(null)}
         onSend={async (intro) => {
-          if (!hello || !profile || !venueId) throw new Error('Sign in first.');
-          if (!here) throw new Error('Check in here first.');
+          if (!hello || !profile || !venueId) throw new Error(t('errors.signInFirst'));
+          if (!here) throw new Error(t('errors.checkInHereFirst'));
           await sendChatRequest({
             checkInId: hello.id,
             shytextIntent: hello.vibe,
@@ -228,7 +231,7 @@ export default function VenueScreen() {
             introMessage: intro,
           });
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setNotice('ShyText sent. They’ll see it in Requests.');
+          setNotice(t('venue.sent'));
         }}
       />
       <ReportModal

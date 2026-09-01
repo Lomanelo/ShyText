@@ -1,0 +1,11 @@
+{
+  "ios": {
+    "CFBundleDisplayName": "ShyText",
+    "NSLocationWhenInUseUsageDescription": "ShyText usa tu ubicación solo para identificar el lugar que estás visitando. Tu ubicación exacta nunca se muestra a otras personas.",
+    "NSPhotoLibraryUsageDescription": "ShyText necesita acceso a tus fotos para que puedas subir una foto de perfil.",
+    "NSCameraUsageDescription": "ShyText necesita acceso a tu cámara para que puedas tomarte una foto de perfil."
+  },
+  "android": {
+    "app_name": "ShyText"
+  }
+}

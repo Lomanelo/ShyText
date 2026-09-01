@@ -13,6 +13,7 @@
       "bundleIdentifier": "com.rahimrady.myshytext",
       "requireFullScreen": true,
       "infoPlist": {
+        "CFBundleAllowMixedLocalizations": true,
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleURLTypes": [
           {
@@ -50,8 +51,24 @@
       "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
+    "locales": {
+      "en": "./locales/native/en.json",
+      "es": "./locales/native/es.json",
+      "pt-BR": "./locales/native/pt-BR.json",
+      "fr": "./locales/native/fr.json",
+      "de": "./locales/native/de.json"
+    },
     "plugins": [
       "expo-router",
+      [
+        "expo-localization",
+        {
+          "supportedLocales": {
+            "ios": ["en", "es", "pt-BR", "fr", "de"],
+            "android": ["en", "es", "pt-BR", "fr", "de"]
+          }
+        }
+      ],
       [
         "expo-location",
         {

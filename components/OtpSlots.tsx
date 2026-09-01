@@ -11,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { motion, radius, space, Theme, type } from '../theme';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { useTranslation } from 'react-i18next';
 
 type Props = {
   value: string;
@@ -75,6 +76,7 @@ function Slot({
 export function OtpSlots({ value, onChange, theme, onComplete, autoFocus = true }: Props) {
   const input = useRef<TextInput>(null);
   const reduce = useReduceMotion();
+  const { t } = useTranslation();
   const digits = value.replace(/\D/g, '').slice(0, 6).split('');
 
   useEffect(() => {
@@ -88,7 +90,7 @@ export function OtpSlots({ value, onChange, theme, onComplete, autoFocus = true 
     <Pressable
       onPress={() => input.current?.focus()}
       accessibilityRole="button"
-      accessibilityLabel="Verification code"
+      accessibilityLabel={t('auth.enterCode')}
       style={{ position: 'relative' }}
     >
       <View style={styles.row} pointerEvents="none">
@@ -112,7 +114,7 @@ export function OtpSlots({ value, onChange, theme, onComplete, autoFocus = true 
         maxLength={6}
         caretHidden
         style={styles.overlay}
-        accessibilityLabel="6-digit code"
+        accessibilityLabel={t('auth.enterCode')}
       />
     </Pressable>
   );

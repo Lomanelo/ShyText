@@ -21,6 +21,7 @@ import { OtpSlots } from './OtpSlots';
 import { PressScale } from './PressScale';
 import { radius, space, type, useTheme } from '../theme';
 import { usePhoneAuth } from '../hooks/usePhoneAuth';
+import { useTranslation } from 'react-i18next';
 import {
   CALLING_CODES,
   defaultCallingCode,
@@ -39,6 +40,7 @@ type Props = {
 
 export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHref }: Props) {
   const theme = useTheme();
+  const { t } = useTranslation();
   const auth = usePhoneAuth();
   const [callingCode, setCallingCode] = useState(defaultCallingCode);
   const [national, setNational] = useState('');
@@ -76,10 +78,10 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
         <View style={styles.hero}>
           <Wordmark theme={theme} />
           <Text style={[type.display, { color: theme.text }]}>
-            {auth.step === 'code' ? 'Enter the code' : title}
+            {auth.step === 'code' ? t('auth.enterCode') : title}
           </Text>
           {auth.step === 'code' ? (
-            <Text style={[type.body, { color: theme.muted }]}>Sent to {phone}</Text>
+            <Text style={[type.body, { color: theme.muted }]}>{t('auth.sentTo', { phone })}</Text>
           ) : (
             <Text style={[type.caption, { color: theme.quiet }]}>{body}</Text>
           )}
@@ -91,7 +93,7 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
           <View style={styles.phoneRow}>
             <PressScale
               accessibilityRole="button"
-              accessibilityLabel="Country code"
+              accessibilityLabel={t('auth.countryCode')}
               onPress={() => setPickerOpen(true)}
               style={[styles.codeBtn, { backgroundColor: theme.card }]}
             >
@@ -114,7 +116,7 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
               textContentType="telephoneNumber"
               autoCorrect={false}
               returnKeyType="done"
-              placeholder="Phone"
+              placeholder={t('auth.phone')}
               placeholderTextColor={theme.quiet}
               style={[styles.national, { color: theme.text }]}
             />
@@ -139,7 +141,7 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
         {auth.step === 'phone' ? (
           <View style={styles.dock}>
             <PrimaryButton
-              title="Send code"
+              title={t('auth.sendCode')}
               theme={theme}
               disabled={!phoneReady}
               loading={auth.loading}
@@ -154,14 +156,14 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
         ) : (
           <View style={styles.dock}>
             <PrimaryButton
-              title="Verify"
+              title={t('auth.verify')}
               theme={theme}
               disabled={!codeReady}
               loading={auth.loading}
               onPress={() => auth.confirmCode(code)}
             />
             <PrimaryButton
-              title={auth.resendIn > 0 ? `Resend in ${auth.resendIn}s` : 'Resend code'}
+              title={auth.resendIn > 0 ? t('auth.resendIn', { seconds: auth.resendIn }) : t('auth.resendCode')}
               theme={theme}
               variant="secondary"
               disabled={auth.resendIn > 0 || auth.loading}
@@ -179,7 +181,7 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
               }}
               style={styles.footer}
             >
-              <Text style={{ color: theme.accent, fontWeight: '700' }}>Use a different number</Text>
+              <Text style={{ color: theme.accent, fontWeight: '700' }}>{t('auth.differentNumber')}</Text>
             </Pressable>
           </View>
         )}
@@ -192,19 +194,19 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
               <Pressable
                 onPress={() => setPickerOpen(false)}
                 accessibilityRole="button"
-                accessibilityLabel="Close"
+                accessibilityLabel={t('common.close')}
                 style={[styles.close, { backgroundColor: theme.card }]}
               >
                 <Ionicons name="close" size={18} color={theme.text} />
               </Pressable>
-              <Text style={[type.headline, { color: theme.text }]}>Country</Text>
+              <Text style={[type.headline, { color: theme.text }]}>{t('auth.country')}</Text>
               <View style={{ width: 36 }} />
             </View>
             <TextInput
               value={query}
               onChangeText={setQuery}
               autoCapitalize="none"
-              placeholder="Search"
+              placeholder={t('common.search')}
               placeholderTextColor={theme.quiet}
               style={[styles.search, { color: theme.text, backgroundColor: theme.card }]}
             />

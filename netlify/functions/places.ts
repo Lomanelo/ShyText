@@ -6,8 +6,8 @@ type CacheEntry = { at: number; body: unknown };
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 90_000;
 
-function cacheKey(lat: number, lng: number, q: string) {
-  return `${lat.toFixed(3)}:${lng.toFixed(3)}:${q}`;
+function cacheKey(lat: number, lng: number, q: string, lang: string) {
+  return `${lat.toFixed(3)}:${lng.toFixed(3)}:${q}:${lang}`;
 }
 
 function json(body: unknown, status = 200, extra?: HeadersInit) {
@@ -26,6 +26,7 @@ export default async (req: Request, _context: Context) => {
   const lat = Number(url.searchParams.get('lat'));
   const lng = Number(url.searchParams.get('lng'));
   const q = (url.searchParams.get('q') || '').trim();
+  const lang = (url.searchParams.get('lang') || 'en-US').trim() || 'en-US';
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return json({ error: 'lat and lng are required', code: 'bad_request' }, 400);
   }
@@ -37,14 +38,14 @@ export default async (req: Request, _context: Context) => {
     return json({ error: 'Apple Maps is not configured.', code: 'not_configured' }, 501);
   }
 
-  const key = cacheKey(lat, lng, q.toLowerCase());
+  const key = cacheKey(lat, lng, q.toLowerCase(), lang);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
     return json(hit.body);
   }
 
   try {
-    const venues = await searchAppleVenues(lat, lng, q || undefined);
+    const venues = await searchAppleVenues(lat, lng, q || undefined, lang);
     cache.set(key, { at: Date.now(), body: venues });
     return json(venues);
   } catch (err) {

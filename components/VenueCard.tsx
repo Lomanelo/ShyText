@@ -9,6 +9,7 @@ import { useReduceMotion } from '../hooks/useReduceMotion';
 import { VenueStamp } from './VenueStamp';
 import { LiveDots } from './LiveDots';
 import { PressScale } from './PressScale';
+import { useTranslation } from 'react-i18next';
 
 export function VenueCard({
   venue,
@@ -25,6 +26,7 @@ export function VenueCard({
   onCheckIn?: () => void;
 }) {
   const reduce = useReduceMotion();
+  const { t } = useTranslation();
   const live = (venue.activeCount ?? 0) >= 1;
   const meters = distance ?? venue.distanceMeters;
   const howFar = formatDistance(meters);
@@ -43,7 +45,12 @@ export function VenueCard({
         }
         delayLongPress={380}
         accessibilityRole="button"
-        accessibilityLabel={`Open ${venue.name}${howFar ? `, ${howFar}` : ''}${live ? `, ${venue.activeCount} live` : ''}${onCheckIn ? '. Hold to check in' : ''}`}
+        accessibilityLabel={t('venue.openA11y', {
+          name: venue.name,
+          distance: howFar ? `, ${howFar}` : '',
+          live: live ? t('venue.liveCount', { count: venue.activeCount }) : '',
+          hold: onCheckIn ? t('venue.holdToCheckIn') : '',
+        })}
         style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}
       >
         <VenueStamp category={venue.category} height={152}>

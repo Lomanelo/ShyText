@@ -1,25 +1,19 @@
 import { ScrollView, StyleSheet, Text } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { Screen } from '../../components/Screen';
 import { type, useTheme } from '../../theme';
 
-const POINTS = [
-  'Your exact location is never shown to other users.',
-  'Location is only used in the foreground to suggest a venue.',
-  'Being at a venue never makes you visible. You check in on purpose.',
-  'Only people checked in at the same venue appear — and only after you check in too.',
-  'We never show how many silent people are nearby.',
-  'Chats stay private after you leave or your check-in expires.',
-  'Lock-screen notifications do not include private message text.',
-];
+const KEYS = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'] as const;
 
 export default function PrivacyScreen() {
   const theme = useTheme();
+  const { t } = useTranslation();
   return (
     <Screen theme={theme} inset={false}>
       <ScrollView contentContainerStyle={styles.wrap} contentInsetAdjustmentBehavior="automatic">
-        {POINTS.map((point) => (
-          <Text key={point} style={[type.body, { color: theme.muted }]}>
-            {point}
+        {KEYS.map((key) => (
+          <Text key={key} style={[type.body, { color: theme.muted }]}>
+            {t(`privacy.${key}`)}
           </Text>
         ))}
       </ScrollView>

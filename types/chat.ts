@@ -26,6 +26,8 @@ export interface Conversation {
   lastMessage?: string;
   lastSenderId?: string;
   status: 'active' | 'closed';
+  /** Epoch ms. After this, the thread stays but sending stops. */
+  sendUntil?: number;
 }
 
 export interface ChatMessage {

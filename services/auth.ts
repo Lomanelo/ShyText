@@ -1,14 +1,28 @@
 import {
   PhoneAuthProvider,
+  deleteUser,
   signInWithCredential,
   signOut as firebaseSignOut,
   updateProfile,
   type ApplicationVerifier,
 } from 'firebase/auth';
-import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { FirebaseError } from 'firebase/app';
+import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db, storage } from './firebase';
-import { UserProfile } from '../types/user';
+import { DEFAULT_NOTIFICATION_PREFS, NotificationPrefs, UserProfile } from '../types/user';
+import { MAX_BIO_LENGTH } from '../utils/config';
+import { expireMyCheckIns } from './venues';
+import { syncCheckInEndingNotice } from './notifications';
+import i18n from '../i18n';
+
+export function notificationPrefsOf(profile?: UserProfile | null): NotificationPrefs {
+  return {
+    ...DEFAULT_NOTIFICATION_PREFS,
+    ...profile?.notificationPrefs,
+  };
+}
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   try {
@@ -52,12 +66,14 @@ export async function upsertUserProfile(input: {
     serverCreatedAt: serverTimestamp(),
     status: 'active',
     stats: { shytextsPosted: 0, chatsStarted: 0 },
+    notificationPrefs: DEFAULT_NOTIFICATION_PREFS,
+    language: i18n.language,
   });
 }
 
 export async function uploadAvatar(localUri: string): Promise<string> {
   const user = auth.currentUser;
-  if (!user) throw new Error('Not signed in.');
+  if (!user) throw new Error(i18n.t('errors.notSignedIn'));
   const blob = await readLocalImage(localUri);
   const file = ref(storage, `avatars/${user.uid}.jpg`);
   await uploadBytes(file, blob, { contentType: 'image/jpeg' });
@@ -70,12 +86,12 @@ function readLocalImage(uri: string): Promise<Blob> {
     xhr.onload = () => {
       const response = xhr.response as Blob;
       if (!response) {
-        reject(new Error('Could not read that photo.'));
+    reject(new Error(i18n.t('errors.photoRead')));
         return;
       }
       resolve(response);
     };
-    xhr.onerror = () => reject(new Error('Could not read that photo.'));
+    xhr.onerror = () => reject(new Error(i18n.t('errors.photoRead')));
     xhr.responseType = 'blob';
     xhr.open('GET', uri, true);
     xhr.send(null);
@@ -99,24 +115,83 @@ export async function completeProfile(
   age?: number
 ) {
   const user = auth.currentUser;
-  if (!user) throw new Error('Not signed in.');
+  if (!user) throw new Error(i18n.t('errors.notSignedIn'));
   await updateProfile(user, { displayName, photoURL: avatarUrl });
   await upsertUserProfile({ id: user.uid, displayName, avatarUrl, age });
   if (bio != null) {
     await updateDoc(doc(db, 'users', user.uid), { bio });
   }
+  await persistUserLanguage();
 }
 
-export async function updateOwnProfile(input: { displayName?: string; bio?: string }) {
+export async function updateOwnProfile(input: {
+  displayName?: string;
+  bio?: string | null;
+  avatarUrl?: string | null;
+  notificationPrefs?: NotificationPrefs;
+}) {
   const user = auth.currentUser;
-  if (!user) throw new Error('Not signed in.');
-  await updateDoc(doc(db, 'users', user.uid), {
-    ...(input.displayName ? { displayName: input.displayName } : {}),
-    ...(input.bio != null ? { bio: input.bio } : {}),
-  });
-  if (input.displayName) {
-    await updateProfile(user, { displayName: input.displayName });
+  if (!user) throw new Error(i18n.t('errors.notSignedIn'));
+  if (input.displayName != null && input.displayName.trim().length < 2) {
+    throw new Error(i18n.t('errors.nameMin'));
   }
+  if (input.bio != null && input.bio.length > MAX_BIO_LENGTH) {
+    throw new Error(i18n.t('errors.bioMax', { count: MAX_BIO_LENGTH }));
+  }
+  const payload: Record<string, unknown> = {};
+  if (input.displayName != null) payload.displayName = input.displayName.trim();
+  if (input.bio !== undefined) payload.bio = input.bio?.trim() || null;
+  if (input.avatarUrl !== undefined) payload.avatarUrl = input.avatarUrl;
+  if (input.notificationPrefs) payload.notificationPrefs = input.notificationPrefs;
+  if (Object.keys(payload).length) {
+    await updateDoc(doc(db, 'users', user.uid), payload);
+  }
+  if (input.displayName != null || input.avatarUrl !== undefined) {
+    await updateProfile(user, {
+      ...(input.displayName != null ? { displayName: input.displayName.trim() } : {}),
+      ...(input.avatarUrl !== undefined ? { photoURL: input.avatarUrl || '' } : {}),
+    });
+  }
+}
+
+export async function removeOwnAvatar() {
+  const user = auth.currentUser;
+  if (!user) throw new Error(i18n.t('errors.notSignedIn'));
+  try {
+    await deleteObject(ref(storage, `avatars/${user.uid}.jpg`));
+  } catch {
+    // Missing file is fine — still clear the profile field.
+  }
+  await updateOwnProfile({ avatarUrl: null });
+}
+
+export async function deleteOwnAccount() {
+  const user = auth.currentUser;
+  if (!user) throw new Error(i18n.t('errors.signInFirst'));
+  const uid = user.uid;
+  await expireMyCheckIns(uid).catch(() => undefined);
+  await syncCheckInEndingNotice(null).catch(() => undefined);
+  try {
+    await deleteObject(ref(storage, `avatars/${uid}.jpg`));
+  } catch {
+    // No photo stored.
+  }
+  await deleteDoc(doc(db, 'users', uid));
+  await AsyncStorage.clear().catch(() => undefined);
+  try {
+    await deleteUser(user);
+  } catch (err) {
+    if (err instanceof FirebaseError && err.code === 'auth/requires-recent-login') {
+      throw new Error(i18n.t('errors.recentLogin'));
+    }
+    throw err;
+  }
+}
+
+export async function persistUserLanguage() {
+  const user = auth.currentUser;
+  if (!user) return;
+  await updateDoc(doc(db, 'users', user.uid), { language: i18n.language }).catch(() => undefined);
 }
 
 export async function signOut() {

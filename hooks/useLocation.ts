@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import { distanceBetween } from '../utils/geo';
+import i18n from '../i18n';
 
 export type UserCoords = { latitude: number; longitude: number };
 
@@ -79,6 +80,33 @@ function waitForFix(maxMs: number): Promise<Location.LocationObject | null> {
   });
 }
 
+/** One-shot GPS for reopen checkout. Does not start the Nearby watch. */
+export async function readForegroundPosition(): Promise<{
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+} | null> {
+  const permission = await Location.getForegroundPermissionsAsync();
+  if (permission.status !== 'granted') return null;
+  try {
+    const timeout = new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), 8_000);
+    });
+    const position = await Promise.race([
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+      timeout,
+    ]);
+    if (!position) return null;
+    return {
+      latitude: position.coords.latitude,
+      longitude: position.coords.longitude,
+      accuracy: position.coords.accuracy ?? null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function useLocation() {
   const [coords, setCoords] = useState<UserCoords | null>(null);
   const [status, setStatus] = useState<Location.PermissionStatus | null>(null);
@@ -124,7 +152,7 @@ export function useLocation() {
         const permission = await Location.requestForegroundPermissionsAsync();
         setStatus(permission.status);
         if (permission.status !== 'granted') {
-          setError('Location is needed to verify which venue you\'re at.');
+          setError(i18n.t('location.needed'));
           return null;
         }
 
@@ -148,12 +176,12 @@ export function useLocation() {
 
         const next = (await waitForFix(FIRST_FIX_WAIT_MS)) ?? last ?? latest;
         if (!next) {
-          setError('Location unavailable right now.');
+          setError(i18n.t('location.unavailable'));
           return null;
         }
         return apply(next);
       } catch {
-        setError('Location unavailable right now.');
+        setError(i18n.t('location.unavailable'));
         return null;
       } finally {
         setBusy(false);

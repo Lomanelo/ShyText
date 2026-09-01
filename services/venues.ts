@@ -22,6 +22,7 @@ import { ShyTextVibe } from '../types/shytext';
 import { isBlockedEitherWay } from './blocks';
 import { recordVenueShyText } from './venueHeat';
 import { moderateText } from './moderation';
+import i18n from '../i18n';
 
 function isInternalVenueId(id: string) {
   return Boolean(id) && !id.startsWith('apple:') && !id.startsWith('pending:');
@@ -186,16 +187,16 @@ export async function checkInToVenue(
   }
 ): Promise<{ checkIn: CheckIn; venue: Venue }> {
   const user = auth.currentUser;
-  if (!user) throw new Error('Sign in first.');
+  if (!user) throw new Error(i18n.t('errors.signInFirst'));
 
   const demoBypass = isDevToolsEnabled() && venue.provider === 'demo';
   if (!demoBypass) {
     if (userLat == null || userLon == null) {
-      throw new Error('Location is needed to confirm you’re at this venue.');
+      throw new Error(i18n.t('errors.locationConfirm'));
     }
     if (venue.latitude != null && venue.longitude != null) {
       if (!isWithinCheckInRadius(userLat, userLon, venue.latitude, venue.longitude)) {
-        throw new Error('Move closer to this venue, or pick another nearby place.');
+        throw new Error(i18n.t('errors.moveCloser'));
       }
     }
   }
@@ -243,9 +244,9 @@ export async function checkInToVenue(
 
 export async function updateCheckInVibe(vibe: ShyTextVibe, status?: string | null) {
   const user = auth.currentUser;
-  if (!user) throw new Error('Sign in first.');
+  if (!user) throw new Error(i18n.t('errors.signInFirst'));
   const live = await getActiveCheckIn(user.uid);
-  if (!live) throw new Error('Check in first.');
+  if (!live) throw new Error(i18n.t('errors.checkInFirst'));
   const payload: { vibe: ShyTextVibe; status?: string | null } = { vibe };
   if (vibe !== 'other') {
     payload.status = null;

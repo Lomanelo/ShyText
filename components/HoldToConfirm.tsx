@@ -11,6 +11,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { motion, radius, Theme, type } from '../theme';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { useTranslation } from 'react-i18next';
 import { PrimaryButton } from './PrimaryButton';
 
 type Props = {
@@ -35,6 +36,7 @@ export function HoldToConfirm({
   variant = 'primary',
 }: Props) {
   const reduce = useReduceMotion();
+  const { t } = useTranslation();
   const progress = useSharedValue(0);
   const scale = useSharedValue(1);
   const armed = useRef(false);
@@ -79,7 +81,7 @@ export function HoldToConfirm({
     <Animated.View style={wrap}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={`${title}. Hold to confirm.`}
+        accessibilityLabel={t('a11y.holdToConfirm', { title })}
         disabled={disabled || loading}
         onPressIn={() => {
           if (disabled || loading || done.current) return;

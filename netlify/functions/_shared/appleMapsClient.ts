@@ -41,7 +41,7 @@ async function appleSearch(params: URLSearchParams, token: string) {
   return payload.results ?? payload.places ?? [];
 }
 
-function nearbyParams(latitude: number, longitude: number, query: string) {
+function nearbyParams(latitude: number, longitude: number, query: string, lang: string) {
   const params = new URLSearchParams();
   params.set('q', query);
   params.set('userLocation', `${latitude},${longitude}`);
@@ -49,20 +49,21 @@ function nearbyParams(latitude: number, longitude: number, query: string) {
   params.set('searchRegionPriority', 'required');
   params.set('resultTypeFilter', 'Poi');
   params.set('includePoiCategories', SOCIAL_POI_CATEGORIES.join(','));
-  params.set('lang', 'en-US');
+  params.set('lang', lang);
   return params;
 }
 
 export async function searchAppleVenues(
   latitude: number,
   longitude: number,
-  query?: string
+  query?: string,
+  lang = 'en-US'
 ): Promise<VenueCandidate[]> {
   const q = query?.trim();
   const terms = q ? [q] : ['cafe', 'restaurant', 'bar', 'park', 'bakery'];
   const token = await getAppleMapsAccessToken();
   const pages = await Promise.all(
-    terms.map((term) => appleSearch(nearbyParams(latitude, longitude, term), token))
+    terms.map((term) => appleSearch(nearbyParams(latitude, longitude, term, lang), token))
   );
   const venues = pages
     .flat()

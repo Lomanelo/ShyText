@@ -1,4 +1,7 @@
-/** How close you must be to check in at a venue. */
+import { languageTagOf } from '../i18n/languages';
+import i18n from '../i18n';
+
+/** How close you must be to check in — and to stay checked in when you reopen. */
 export const NEARBY_RADIUS_METERS = 100;
 export const NEARBY_MAX_VENUES = 5;
 export const CHECK_IN_RADIUS_METERS = NEARBY_RADIUS_METERS;
@@ -33,9 +36,27 @@ export function isWithinCheckInRadius(
 
 export function formatDistance(meters?: number): string {
   if (meters == null || Number.isNaN(meters)) return '';
-  if (meters < 10) return `${meters.toFixed(0)} m`;
-  if (meters < 1000) return `${Math.round(meters)} m`;
-  return `${(meters / 1000).toFixed(1)} km`;
+  const tag = languageTagOf(i18n.language);
+  try {
+    if (meters < 1000) {
+      return new Intl.NumberFormat(tag, {
+        style: 'unit',
+        unit: 'meter',
+        unitDisplay: 'short',
+        maximumFractionDigits: 0,
+      }).format(Math.round(meters));
+    }
+    return new Intl.NumberFormat(tag, {
+      style: 'unit',
+      unit: 'kilometer',
+      unitDisplay: 'short',
+      maximumFractionDigits: 1,
+    }).format(meters / 1000);
+  } catch {
+    if (meters < 10) return `${meters.toFixed(0)} m`;
+    if (meters < 1000) return `${Math.round(meters)} m`;
+    return `${(meters / 1000).toFixed(1)} km`;
+  }
 }
 
 export function pickClosest<T extends { distanceMeters: number }>(

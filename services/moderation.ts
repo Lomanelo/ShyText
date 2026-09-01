@@ -1,4 +1,5 @@
 import { MAX_MESSAGE_LENGTH } from '../utils/config';
+import i18n from '../i18n';
 
 const BLOCKED = [
   /\b(kill\s+yourself|kys)\b/i,
@@ -11,13 +12,13 @@ export function moderateText(text: string, options?: { allowEmpty?: boolean; max
   const value = text.trim();
   const max = options?.maxLength ?? MAX_MESSAGE_LENGTH;
   if (!value) {
-    return options?.allowEmpty ? { ok: true } : { ok: false, reason: 'Write something first.' };
+    return options?.allowEmpty ? { ok: true } : { ok: false, reason: i18n.t('errors.writeFirst') };
   }
   if (value.length > max) {
-    return { ok: false, reason: `Keep it under ${max} characters.` };
+    return { ok: false, reason: i18n.t('errors.keepUnder', { count: max }) };
   }
   if (BLOCKED.some((pattern) => pattern.test(value))) {
-    return { ok: false, reason: 'That text is not allowed.' };
+    return { ok: false, reason: i18n.t('errors.textNotAllowed') };
   }
   return { ok: true };
 }

@@ -2,6 +2,18 @@ import { VisibilityMode } from './shytext';
 
 export type UserStatus = 'active' | 'suspended';
 
+export type NotificationPrefs = {
+  shytexts: boolean;
+  accepted: boolean;
+  checkInEnding: boolean;
+};
+
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  shytexts: true,
+  accepted: true,
+  checkInEnding: true,
+};
+
 export interface UserStats {
   shytextsPosted: number;
   chatsStarted: number;
@@ -19,6 +31,9 @@ export interface UserProfile {
   status: UserStatus;
   stats: UserStats;
   expoPushToken?: string;
+  /** BCP-47 tag used to localize push copy for this person. */
+  language?: string;
+  notificationPrefs?: NotificationPrefs;
   /**
    * Reserved for a future Shy Mode. Visibility is derived from an active
    * ShyText, not this field.

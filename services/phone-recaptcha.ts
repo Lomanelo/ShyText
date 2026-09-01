@@ -1,6 +1,7 @@
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import type { ApplicationVerifier } from 'firebase/auth';
+import i18n from '../i18n';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -36,10 +37,10 @@ export function createBrowserRecaptchaVerifier(): Verifier {
         throw new Error('cancelled');
       }
       if (result.type !== 'success') {
-        throw new Error('Could not verify this device.');
+        throw new Error(i18n.t('authErrors.deviceCheck'));
       }
       const token = tokenFromUrl(result.url);
-      if (!token) throw new Error('Could not verify this device.');
+      if (!token) throw new Error(i18n.t('authErrors.deviceCheck'));
       return token;
     },
     _reset() {},

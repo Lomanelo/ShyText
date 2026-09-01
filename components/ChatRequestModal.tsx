@@ -1,7 +1,9 @@
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useEffect, useState } from 'react';
 import * as Haptics from 'expo-haptics';
-import { ICEBREAKERS, ShyTextVibe } from '../types/shytext';
+import { icebreakersFor } from '../i18n/labels';
+import { ShyTextVibe } from '../types/shytext';
+import { useTranslation } from 'react-i18next';
 import { radius, space, Theme, type } from '../theme';
 import { PrimaryButton } from './PrimaryButton';
 import { PressScale } from './PressScale';
@@ -24,11 +26,12 @@ export function ChatRequestModal({
   onClose: () => void;
   onSend: (intro?: string) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [intro, setIntro] = useState('');
   const [writeOwn, setWriteOwn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const replies = vibe ? ICEBREAKERS[vibe] : ICEBREAKERS.chat;
+  const replies = icebreakersFor(vibe ?? 'chat');
 
   useEffect(() => {
     if (visible) {
@@ -47,7 +50,7 @@ export function ChatRequestModal({
       setIntro('');
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send.');
+      setError(err instanceof Error ? err.message : t('errors.couldNotSend'));
     } finally {
       setBusy(false);
     }
@@ -56,10 +59,10 @@ export function ChatRequestModal({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.frame}>
-        <Pressable style={styles.overlay} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close" />
+        <Pressable style={styles.overlay} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.close')} />
         <View style={[styles.sheet, { backgroundColor: theme.card }]}>
           <View style={[styles.handle, { backgroundColor: theme.border }]} />
-          <Text style={[type.title, { color: theme.text }]}>Send a ShyText to {name}?</Text>
+          <Text style={[type.title, { color: theme.text }]}>{t('venue.sendTo', { name })}</Text>
           {message ? <Text style={[type.body, { color: theme.muted }]}>“{message}”</Text> : null}
 
           {!writeOwn ? (
@@ -82,7 +85,7 @@ export function ChatRequestModal({
                 onPress={() => setWriteOwn(true)}
                 style={[styles.chip, { backgroundColor: theme.accentSoft }]}
               >
-                <Text style={[type.headline, { color: theme.accent }]}>Write my own…</Text>
+                <Text style={[type.headline, { color: theme.accent }]}>{t('venue.writeOwn')}</Text>
               </PressScale>
             </View>
           ) : (
@@ -91,19 +94,19 @@ export function ChatRequestModal({
                 value={intro}
                 onChangeText={setIntro}
                 maxLength={MAX_MESSAGE_LENGTH}
-                placeholder="Write a short hello…"
+                placeholder={t('venue.helloPlaceholder')}
                 placeholderTextColor={theme.quiet}
                 autoFocus
                 returnKeyType="send"
                 onSubmitEditing={() => send(intro)}
                 style={[styles.input, { color: theme.text, backgroundColor: theme.bg }]}
               />
-              <PrimaryButton title="Send" theme={theme} loading={busy} onPress={() => send(intro)} />
+              <PrimaryButton title={t('common.send')} theme={theme} loading={busy} onPress={() => send(intro)} />
             </>
           )}
           {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}
           <Pressable onPress={onClose} style={styles.cancel} accessibilityRole="button">
-            <Text style={[type.headline, { color: theme.muted }]}>Not now</Text>
+            <Text style={[type.headline, { color: theme.muted }]}>{t('venue.notNow')}</Text>
           </Pressable>
         </View>
       </KeyboardAvoidingView>

@@ -1,3 +1,5 @@
+import i18n from '../i18n';
+
 export type PlaceKind =
   | 'bar'
   | 'cafe'
@@ -47,8 +49,5 @@ export function placeKind(category?: string): PlaceKind {
 }
 
 export function placeKindLabel(kind: PlaceKind): string {
-  if (kind === 'cafe') return 'café';
-  if (kind === 'nightlife') return 'night';
-  if (kind === 'place') return 'place';
-  return kind;
+  return i18n.t(`placeKind.${kind}`);
 }

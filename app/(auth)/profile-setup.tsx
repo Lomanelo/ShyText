@@ -8,9 +8,12 @@ import { Avatar } from '../../components/Avatar';
 import { radius, space, type, useTheme } from '../../theme';
 import { completeProfile, sanitizeAge, uploadAvatar } from '../../services/auth';
 import { useAuth } from '../../hooks/useAuth';
+import { MAX_BIO_LENGTH } from '../../utils/config';
+import { useTranslation } from 'react-i18next';
 
 export default function ProfileSetupScreen() {
   const theme = useTheme();
+  const { t } = useTranslation();
   const { refreshProfile } = useAuth();
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
@@ -24,7 +27,7 @@ export default function ProfileSetupScreen() {
   const pickPhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      setError('Photo access is needed to add a picture.');
+      setError(t('errors.photoPermissionAdd'));
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -41,17 +44,17 @@ export default function ProfileSetupScreen() {
   return (
     <Screen theme={theme}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.wrap}>
-        <Text style={[type.display, { color: theme.text }]}>What should people call you?</Text>
-        <Pressable onPress={pickPhoto} style={{ alignSelf: 'center' }} accessibilityLabel="Add profile photo">
+        <Text style={[type.display, { color: theme.text }]}>{t('auth.setupTitle')}</Text>
+        <Pressable onPress={pickPhoto} style={{ alignSelf: 'center' }} accessibilityLabel={t('auth.addPhotoA11y')}>
           <Avatar name={name} uri={photoUri} theme={theme} size={88} />
           <Text style={{ color: theme.accent, fontWeight: '700', marginTop: 8, textAlign: 'center' }}>
-            Add photo
+            {t('auth.addPhoto')}
           </Text>
         </Pressable>
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="First name"
+          placeholder={t('auth.firstName')}
           placeholderTextColor={theme.quiet}
           autoFocus
           autoComplete="name"
@@ -66,7 +69,7 @@ export default function ProfileSetupScreen() {
           value={ageText}
           onChangeText={setAgeText}
           keyboardType="number-pad"
-          placeholder="Age (optional)"
+          placeholder={t('auth.ageOptional')}
           placeholderTextColor={theme.quiet}
           returnKeyType="next"
           onSubmitEditing={() => bioRef.current?.focus()}
@@ -76,15 +79,15 @@ export default function ProfileSetupScreen() {
           ref={bioRef}
           value={bio}
           onChangeText={setBio}
-          placeholder="Optional one-liner"
+          placeholder={t('auth.oneLinerOptional')}
           placeholderTextColor={theme.quiet}
-          maxLength={80}
+          maxLength={MAX_BIO_LENGTH}
           returnKeyType="done"
           style={[styles.input, { color: theme.text, backgroundColor: theme.card }]}
         />
         {error ? <Text style={{ color: theme.danger }}>{error}</Text> : null}
         <PrimaryButton
-          title="Continue"
+          title={t('common.continue')}
           theme={theme}
           disabled={name.trim().length < 2}
           loading={busy}
@@ -108,10 +111,10 @@ export default function ProfileSetupScreen() {
               const message = err instanceof Error ? err.message : '';
               setError(
                 message.includes('storage/')
-                  ? 'Could not upload that photo. Try another image, or continue without one.'
+                  ? t('errors.photoUploadOrSkip')
                   : message.includes('permission') || message.includes('insufficient')
-                    ? 'Could not save your profile yet. Sign out and try again in a moment.'
-                    : message || 'Could not save profile.'
+                    ? t('errors.profilePermission')
+                    : message || t('errors.saveProfile')
               );
             } finally {
               setBusy(false);

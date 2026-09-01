@@ -15,60 +15,67 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import * as Haptics from 'expo-haptics';
-import { doc, getDoc } from 'firebase/firestore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/Screen';
 import { ReportModal } from '../../components/ReportModal';
 import { PressScale } from '../../components/PressScale';
-import { type, useTheme } from '../../theme';
+import { CountdownBadge } from '../../components/CountdownBadge';
+import { radius, type, useTheme } from '../../theme';
 import { springLayout } from '../../hooks/usePressScale';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useAuth } from '../../hooks/useAuth';
-import { db } from '../../services/firebase';
 import { ChatMessage, Conversation } from '../../types/chat';
-import { closeConversation, listenMessages, sendMessage } from '../../services/chat';
+import { closeConversation, listenConversation, listenMessages, sendMessage } from '../../services/chat';
 import { getUserProfile } from '../../services/auth';
 import { blockUser } from '../../services/blocks';
 import { MAX_MESSAGE_LENGTH } from '../../utils/config';
+import { chatSendUntil, isChatSendingOpen } from '../../utils/chatTime';
+import { useTranslation } from 'react-i18next';
 
 export default function ChatScreen() {
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
   const theme = useTheme();
+  const { t } = useTranslation();
   const reduce = useReduceMotion();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [otherName, setOtherName] = useState('Chat');
+  const [convo, setConvo] = useState<Conversation | null>(null);
+  const [otherName, setOtherName] = useState(t('common.chat'));
   const [otherId, setOtherId] = useState<string>();
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState(false);
+  const sendingOpen = convo ? isChatSendingOpen(convo) : false;
 
   useEffect(() => {
     if (!chatId) return;
-    getDoc(doc(db, 'conversations', chatId)).then(async (snap) => {
-      if (!snap.exists()) return;
-      const data = { id: snap.id, ...snap.data() } as Conversation;
-      const other = data.participantIds.find((id) => id !== user?.uid);
+    const unsubConvo = listenConversation(chatId, async (next) => {
+      setConvo(next);
+      const other = next?.participantIds.find((id) => id !== user?.uid);
       setOtherId(other);
       if (other) {
         const profile = await getUserProfile(other);
-        setOtherName(profile?.displayName ?? 'Someone');
+        setOtherName(profile?.displayName ?? t('common.someone'));
       }
     });
-    return listenMessages(chatId, setMessages);
+    const unsubMessages = listenMessages(chatId, setMessages);
+    return () => {
+      unsubConvo();
+      unsubMessages();
+    };
   }, [chatId, user?.uid]);
 
   const post = async () => {
-    if (!chatId || !text.trim()) return;
+    if (!chatId || !text.trim() || !sendingOpen) return;
     try {
       await sendMessage(chatId, text);
       setText('');
       setError(null);
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send.');
+      setError(err instanceof Error ? err.message : t('errors.couldNotSend'));
     }
   };
 
@@ -79,12 +86,12 @@ export default function ChatScreen() {
           title: otherName,
           headerRight: () => (
             <Pressable
-              accessibilityLabel="More"
+              accessibilityLabel={t('common.more')}
               onPress={() => {
                 Alert.alert(otherName, undefined, [
-                  { text: 'Report', onPress: () => setReport(true) },
+                  { text: t('common.report'), onPress: () => setReport(true) },
                   {
-                    text: 'Leave',
+                    text: t('common.leave'),
                     style: 'destructive',
                     onPress: async () => {
                       if (chatId) await closeConversation(chatId);
@@ -94,7 +101,7 @@ export default function ChatScreen() {
                   ...(otherId && user
                     ? [
                         {
-                          text: 'Block',
+                          text: t('common.block'),
                           style: 'destructive' as const,
                           onPress: async () => {
                             await blockUser(user.uid, otherId);
@@ -104,7 +111,7 @@ export default function ChatScreen() {
                         },
                       ]
                     : []),
-                  { text: 'Cancel', style: 'cancel' },
+                  { text: t('common.cancel'), style: 'cancel' },
                 ]);
               }}
               hitSlop={8}
@@ -146,36 +153,55 @@ export default function ChatScreen() {
             {error}
           </Text>
         ) : null}
-        <View style={[styles.composer, { backgroundColor: theme.card, marginBottom: Math.max(insets.bottom, 12) }]}>
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            maxLength={MAX_MESSAGE_LENGTH}
-            placeholder="Message"
-            placeholderTextColor={theme.quiet}
-            returnKeyType="send"
-            blurOnSubmit={false}
-            onSubmitEditing={() => {
-              void post();
-            }}
-            style={[styles.input, { color: theme.text }]}
-          />
-          <PressScale
-            accessibilityRole="button"
-            accessibilityLabel="Send"
-            disabled={!text.trim()}
-            hitSlop={4}
+        {convo && sendingOpen ? (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 8, alignItems: 'center' }}>
+            <CountdownBadge expiresAt={chatSendUntil(convo)} theme={theme} />
+          </View>
+        ) : null}
+        {!convo ? null : sendingOpen ? (
+          <View style={[styles.composer, { backgroundColor: theme.card, marginBottom: Math.max(insets.bottom, 12) }]}>
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              maxLength={MAX_MESSAGE_LENGTH}
+              placeholder={t('chats.message')}
+              placeholderTextColor={theme.quiet}
+              returnKeyType="send"
+              blurOnSubmit={false}
+              onSubmitEditing={() => {
+                void post();
+              }}
+              style={[styles.input, { color: theme.text }]}
+            />
+            <PressScale
+              accessibilityRole="button"
+              accessibilityLabel={t('common.send')}
+              disabled={!text.trim()}
+              hitSlop={4}
+              style={[
+                styles.send,
+                { backgroundColor: text.trim() ? theme.accent : theme.border },
+              ]}
+              onPress={() => {
+                void post();
+              }}
+            >
+              <Ionicons name="arrow-up" size={18} color={text.trim() ? theme.onAccent : theme.quiet} />
+            </PressScale>
+          </View>
+        ) : (
+          <View
             style={[
-              styles.send,
-              { backgroundColor: text.trim() ? theme.accent : theme.border },
+              styles.irl,
+              { backgroundColor: theme.card, marginBottom: Math.max(insets.bottom, 12) },
             ]}
-            onPress={() => {
-              void post();
-            }}
           >
-            <Ionicons name="arrow-up" size={18} color={text.trim() ? theme.onAccent : theme.quiet} />
-          </PressScale>
-        </View>
+            <Text style={[type.headline, { color: theme.text, textAlign: 'center' }]}>{t('chats.timeToTalk')}</Text>
+            <Text style={[type.body, { color: theme.muted, textAlign: 'center' }]}>
+              {t('chats.closedBody')}
+            </Text>
+          </View>
+        )}
       </KeyboardAvoidingView>
       <ReportModal
         visible={report}
@@ -206,4 +232,12 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, minHeight: 40, fontSize: 17, paddingVertical: 8 },
   send: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  irl: {
+    marginHorizontal: 12,
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    gap: 6,
+  },
 });

@@ -6,9 +6,11 @@ import { radius, type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { listBlockedIds, unblockUser } from '../../services/blocks';
 import { getUserProfile } from '../../services/auth';
+import { useTranslation } from 'react-i18next';
 
 export default function BlockedUsersScreen() {
   const theme = useTheme();
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [rows, setRows] = useState<{ id: string; name: string }[]>([]);
 
@@ -18,7 +20,7 @@ export default function BlockedUsersScreen() {
     const people = await Promise.all(
       ids.map(async (id) => ({
         id,
-        name: (await getUserProfile(id))?.displayName ?? 'Someone',
+        name: (await getUserProfile(id))?.displayName ?? t('common.someone'),
       }))
     );
     setRows(people);
@@ -32,7 +34,7 @@ export default function BlockedUsersScreen() {
     <Screen theme={theme} inset={false}>
       <ScrollView contentContainerStyle={styles.wrap} contentInsetAdjustmentBehavior="automatic">
         {rows.length === 0 ? (
-          <EmptyState theme={theme} title="Nobody blocked" />
+          <EmptyState theme={theme} title={t('settings.nobodyBlocked')} />
         ) : (
           rows.map((row) => (
             <View key={row.id} style={[styles.row, { backgroundColor: theme.card }]}>
@@ -47,7 +49,7 @@ export default function BlockedUsersScreen() {
                 }}
                 style={{ minHeight: 44, justifyContent: 'center' }}
               >
-                <Text style={[type.headline, { color: theme.accent }]}>Unblock</Text>
+                <Text style={[type.headline, { color: theme.accent }]}>{t('settings.unblock')}</Text>
               </Pressable>
             </View>
           ))

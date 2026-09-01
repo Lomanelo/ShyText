@@ -18,6 +18,7 @@ import { MAX_SHYTEXTS_PER_HOUR, MAX_SHYTEXT_MESSAGE_LENGTH } from '../utils/conf
 import { checkInToVenue, getActiveCheckIn, getVenue, isDemoVenue } from './venues';
 import { Venue } from '../types/venue';
 import { isBlockedEitherWay } from './blocks';
+import i18n from '../i18n';
 import { seedShyTexts } from './mockData';
 import { isDevToolsEnabled } from '../utils/config';
 import { recordVenueShyText } from './venueHeat';
@@ -116,13 +117,13 @@ export async function activateShyText(input: {
   userLon?: number;
 }) {
   const user = auth.currentUser;
-  if (!user) throw new Error('Sign in first.');
+  if (!user) throw new Error(i18n.t('errors.signInFirst'));
   if (input.venue && input.userLat != null && input.userLon != null) {
     await checkInToVenue(input.venue, input.userLat, input.userLon);
   } else {
     const checkIn = await getActiveCheckIn(user.uid);
     if (!checkIn || checkIn.venueId !== input.venueId) {
-      throw new Error('Move closer to this venue to drop a ShyText.');
+      throw new Error(i18n.t('errors.moveCloserShyText'));
     }
   }
   const moderated = moderateText(input.message ?? '', {
@@ -136,7 +137,7 @@ export async function activateShyText(input: {
   const mine = existing.docs.map((item) => mapShyText(item.id, item.data()));
   const lastHour = mine.filter((item) => now - item.createdAt < 60 * 60 * 1000);
   if (lastHour.length >= MAX_SHYTEXTS_PER_HOUR) {
-    throw new Error('Slow down — try again in a bit.');
+    throw new Error(i18n.t('errors.slowDown'));
   }
 
   await stopActiveForUser(user.uid);
@@ -188,13 +189,13 @@ export async function countActiveShyTexts(venueId: string): Promise<number> {
 
 export async function takeDownShyText(id: string) {
   const user = auth.currentUser;
-  if (!user) throw new Error('Not signed in.');
+  if (!user) throw new Error(i18n.t('errors.notSignedIn'));
   await updateDoc(doc(db, 'shytexts', id), { status: 'stopped' });
 }
 
 export async function takeDownMyShyTexts() {
   const user = auth.currentUser;
-  if (!user) throw new Error('Not signed in.');
+  if (!user) throw new Error(i18n.t('errors.notSignedIn'));
   await stopActiveForUser(user.uid);
 }
 

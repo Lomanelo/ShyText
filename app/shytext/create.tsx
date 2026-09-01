@@ -7,9 +7,11 @@ import { useAuth } from '../../hooks/useAuth';
 import { useCurrentVenue } from '../../hooks/useCurrentVenue';
 import { useLocation } from '../../hooks/useLocation';
 import { getVenue } from '../../services/venues';
+import { useTranslation } from 'react-i18next';
 
 export default function CheckInScreen() {
   const theme = useTheme();
+  const { t } = useTranslation();
   const { venueId } = useLocalSearchParams<{ venueId?: string }>();
   const { profile } = useAuth();
   const current = useCurrentVenue();
@@ -35,7 +37,7 @@ export default function CheckInScreen() {
         });
         if (!cancelled) router.replace(`/venue/${venue.id}`);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not check in.');
+        if (!cancelled) setError(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
       }
     })();
     return () => {
@@ -45,9 +47,9 @@ export default function CheckInScreen() {
 
   return (
     <Screen theme={theme} inset={false}>
-      <Stack.Screen options={{ title: 'Check in' }} />
+      <Stack.Screen options={{ title: t('common.checkIn') }} />
       <Text style={[type.body, { padding: 20, color: error ? theme.danger : theme.muted }]}>
-        {error ?? 'Checking in…'}
+        {error ?? t('common.checkingIn')}
       </Text>
     </Screen>
   );

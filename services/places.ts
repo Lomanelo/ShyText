@@ -2,6 +2,8 @@ import { Venue, VenueCandidate, PlacesProvider, PlacesRequestError } from '../ty
 import { distanceBetween, pickClosest } from '../utils/geo';
 import { isDevToolsEnabled } from '../utils/config';
 import { DEMO_VENUES } from './mockData';
+import i18n from '../i18n';
+import { languageTagOf } from '../i18n/languages';
 
 export const PADDYS_CORNER_ID = 'demo-paddys-corner';
 
@@ -68,29 +70,22 @@ class ApplePlacesProvider implements PlacesProvider {
     const url = new URL(this.endpoint);
     url.searchParams.set('lat', String(latitude));
     url.searchParams.set('lng', String(longitude));
+    url.searchParams.set('lang', languageTagOf(i18n.language));
     if (query) url.searchParams.set('q', query);
 
     const response = await fetch(url.toString());
     if (response.status === 429) {
-      throw new PlacesRequestError(
-        'Venue search is busy right now. Try again in a moment.',
-        429,
-        'rate_limited'
-      );
+      throw new PlacesRequestError(i18n.t('errors.placesBusy'), 429, 'rate_limited');
     }
     if (response.status === 401 || response.status === 501) {
-      throw new PlacesRequestError(
-        'Venue search is not available yet.',
-        response.status,
-        'apple_auth'
-      );
+      throw new PlacesRequestError(i18n.t('errors.placesUnavailable'), response.status, 'apple_auth');
     }
     if (!response.ok) {
-      throw new PlacesRequestError('Could not load nearby venues.', response.status, 'apple_request');
+      throw new PlacesRequestError(i18n.t('errors.placesLoad'), response.status, 'apple_request');
     }
     const payload = (await response.json()) as VenueCandidate[] | { error?: string };
     if (!Array.isArray(payload)) {
-      throw new PlacesRequestError(payload.error || 'Could not load nearby venues.');
+      throw new PlacesRequestError(payload.error || i18n.t('errors.placesLoad'));
     }
     const venues = pickClosest(
       payload.filter(
