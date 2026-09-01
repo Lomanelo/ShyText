@@ -41,6 +41,7 @@ export const motion = {
   press: 0.96,
   duration: 150,
   hold: 720,
+  flick: 300,
   enter: 380,
   stagger: 50,
   spring: { damping: 18, stiffness: 280, mass: 0.75 },

@@ -6,36 +6,65 @@ import { type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { useCurrentVenue } from '../../hooks/useCurrentVenue';
 import { useLocation } from '../../hooks/useLocation';
-import { getVenue } from '../../services/venues';
+import { resolveCheckInVenue } from '../../services/checkInTarget';
+import { ensureInternalVenue } from '../../services/venues';
 import { useTranslation } from 'react-i18next';
 
 export default function CheckInScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
-  const { venueId } = useLocalSearchParams<{ venueId?: string }>();
-  const { profile } = useAuth();
+  const { venueId, closest, name } = useLocalSearchParams<{
+    venueId?: string;
+    closest?: string;
+    name?: string;
+  }>();
+  const { user, profile, loading: authLoading, hasProfile } = useAuth();
   const current = useCurrentVenue();
   const { refresh } = useLocation();
   const [error, setError] = useState<string | null>(null);
+  const named = typeof name === 'string' ? name : Array.isArray(name) ? name[0] : undefined;
+  const targetId = typeof venueId === 'string' ? venueId : Array.isArray(venueId) ? venueId[0] : undefined;
+  const wantClosest = closest === '1' || closest === 'true';
 
   useEffect(() => {
-    if (!venueId || !profile) return;
+    if (authLoading) return;
+    if (!user) {
+      router.replace('/(auth)/welcome');
+      return;
+    }
+    if (!hasProfile) {
+      router.replace('/(auth)/profile-setup');
+      return;
+    }
+    if (!profile) return;
+    if (!targetId && !wantClosest && !named?.trim()) {
+      setError(t('errors.siriNoNearby'));
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       try {
-        const venue = current.venue?.id === venueId ? current.venue : await getVenue(venueId);
-        if (!venue || cancelled) return;
-        if (current.checkIn && !current.expired && current.checkIn.venueId === venue.id) {
-          router.replace(`/venue/${venue.id}`);
+        const coords = await refresh();
+        if (!coords) throw new Error(t('location.needed'));
+        const venue = await resolveCheckInVenue({
+          venueId: targetId,
+          name: named,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+        });
+        if (cancelled) return;
+        const internal = await ensureInternalVenue(venue);
+        if (current.checkIn && !current.expired && current.checkIn.venueId === internal.id) {
+          router.replace(`/venue/${internal.id}`);
           return;
         }
-        const coords = await refresh();
-        await current.checkInHere(venue, coords?.latitude, coords?.longitude, {
+        await current.checkInHere(internal, coords.latitude, coords.longitude, {
           displayName: profile.displayName,
           avatarUrl: profile.avatarUrl,
           age: profile.age,
         });
-        if (!cancelled) router.replace(`/venue/${venue.id}`);
+        if (!cancelled) router.replace(`/venue/${internal.id}`);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
       }
@@ -43,7 +72,7 @@ export default function CheckInScreen() {
     return () => {
       cancelled = true;
     };
-  }, [venueId, profile]);
+  }, [authLoading, user, hasProfile, profile, targetId, wantClosest, named]);
 
   return (
     <Screen theme={theme} inset={false}>

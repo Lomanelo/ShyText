@@ -4,6 +4,7 @@ import Animated from 'react-native-reanimated';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/Screen';
 import { LocationPermission } from '../../components/LocationPermission';
 import { VenueCard } from '../../components/VenueCard';
@@ -11,11 +12,10 @@ import { Skeleton } from '../../components/Skeleton';
 import { EmptyState } from '../../components/EmptyState';
 import { HintBanner } from '../../components/HintBanner';
 import { CountdownBadge } from '../../components/CountdownBadge';
-import { VenueStamp } from '../../components/VenueStamp';
+import { ShyInFlame } from '../../components/shy-in-flame';
 import { cardShadow, radius, space, type, useTheme } from '../../theme';
 import { springLayout } from '../../hooks/usePressScale';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-import { PressScale } from '../../components/PressScale';
 import { useLocation } from '../../hooks/useLocation';
 import { useAuth } from '../../hooks/useAuth';
 import { useCurrentVenue } from '../../hooks/useCurrentVenue';
@@ -31,7 +31,7 @@ import { CheckIn, PlacesRequestError, Venue, VenueCandidate } from '../../types/
 import { distanceBetween, pickClosest } from '../../utils/geo';
 import { useTranslation } from 'react-i18next';
 
-const HOLD_HINT_KEY = 'shytext.hint.holdCheckIn';
+const SHY_IN_HINT_KEY = 'shytext.hint.shyIn';
 
 async function hydrate(candidates: VenueCandidate[]): Promise<Venue[]> {
   const existing = await findVenuesByProviderPlaceIds(candidates.map((item) => item.providerPlaceId));
@@ -66,6 +66,7 @@ export default function NearbyScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
   const reduce = useReduceMotion();
+  const insets = useSafeAreaInsets();
   const { coords, status, error: locationError, busy, refresh } = useLocation();
   const { profile } = useAuth();
   const current = useCurrentVenue();
@@ -77,7 +78,7 @@ export default function NearbyScreen() {
   const [query, setQuery] = useState('');
   const [visibleAt, setVisibleAt] = useState<{ checkIn: CheckIn; venue: Venue } | null>(null);
   const [checkingIn, setCheckingIn] = useState(false);
-  const [holdHint, setHoldHint] = useState(false);
+  const [shyInHint, setShyInHint] = useState(false);
 
   const load = useCallback(
     async (search?: string, relock = false) => {
@@ -127,8 +128,8 @@ export default function NearbyScreen() {
   }, [load]);
 
   useEffect(() => {
-    AsyncStorage.getItem(HOLD_HINT_KEY).then((seen) => {
-      if (!seen) setHoldHint(true);
+    AsyncStorage.getItem(SHY_IN_HINT_KEY).then((seen) => {
+      if (!seen) setShyInHint(true);
     });
   }, []);
 
@@ -201,7 +202,6 @@ export default function NearbyScreen() {
         avatarUrl: profile.avatarUrl,
         age: profile.age,
       });
-      router.push(`/venue/${internal.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
     } finally {
@@ -218,11 +218,12 @@ export default function NearbyScreen() {
   }
 
   const placesReady = isPlacesConfigured();
+  const closest = !query.trim() && !visibleAt ? venues[0] : undefined;
 
   return (
       <Screen theme={theme} inset={false}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, closest ? styles.contentWithDock : null]}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load(query || undefined, true)} tintColor={theme.accent} />}
@@ -254,14 +255,14 @@ export default function NearbyScreen() {
           ) : null}
         </View>
 
-        {holdHint && venues.length > 0 ? (
+        {shyInHint && venues.length > 0 ? (
           <Animated.View layout={reduce ? undefined : springLayout()}>
             <HintBanner
               theme={theme}
-              title={t('nearby.holdHint')}
+              title={t('nearby.flickHint')}
               onDismiss={() => {
-                setHoldHint(false);
-                void AsyncStorage.setItem(HOLD_HINT_KEY, '1');
+                setShyInHint(false);
+                void AsyncStorage.setItem(SHY_IN_HINT_KEY, '1');
               }}
             />
           </Animated.View>
@@ -269,18 +270,17 @@ export default function NearbyScreen() {
 
         <Animated.View layout={reduce ? undefined : springLayout()}>
           {visibleAt ? (
-            <PressScale
-              onPress={() => router.push(`/venue/${visibleAt.venue.id}`)}
-              style={[styles.here, { backgroundColor: theme.card }, cardShadow(theme)]}
-            >
-              <View style={styles.hereMap}>
-                <VenueStamp category={visibleAt.venue.category} height={72} />
-              </View>
-              <Text style={[type.title, { color: theme.text, flex: 1 }]} numberOfLines={2}>
-                {visibleAt.venue.name}
-              </Text>
-              <CountdownBadge expiresAt={visibleAt.checkIn.expiresAt} theme={theme} />
-            </PressScale>
+            <View style={[styles.here, { backgroundColor: theme.card }, cardShadow(theme)]}>
+              <ShyInFlame
+                lit
+                size={64}
+                venueName={visibleAt.venue.name}
+                theme={theme}
+                onPress={() => router.push(`/venue/${visibleAt.venue.id}`)}
+                onShyOut={() => void current.leave()}
+                accessory={<CountdownBadge expiresAt={visibleAt.checkIn.expiresAt} theme={theme} />}
+              />
+            </View>
           ) : null}
         </Animated.View>
 
@@ -327,28 +327,36 @@ export default function NearbyScreen() {
                   : venue.distanceMeters
               }
               onPress={() => openVenue(venue)}
-              onCheckIn={() => checkInAtVenue(venue)}
             />
           ))
         )}
       </ScrollView>
+      {closest ? (
+        <View style={[styles.dock, { backgroundColor: theme.bg, paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <ShyInFlame
+            venueName={closest.name}
+            theme={theme}
+            loading={checkingIn}
+            onShyIn={() => checkInAtVenue(closest)}
+          />
+        </View>
+      ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: space[16], paddingBottom: space[32], gap: space[12] },
+  contentWithDock: { paddingBottom: 180 },
   here: {
     borderRadius: radius.lg,
     borderCurve: 'continuous',
     overflow: 'hidden',
-    flexDirection: 'row',
+    paddingVertical: space[16],
+    paddingHorizontal: space[12],
     alignItems: 'center',
-    gap: space[12],
-    paddingRight: space[12],
-    minHeight: 72,
   },
-  hereMap: { width: 72, height: 72, overflow: 'hidden' },
+  dock: { paddingHorizontal: space[16], paddingTop: space[8] },
   searchWrap: {
     borderRadius: radius.pill,
     borderCurve: 'continuous',

@@ -92,7 +92,8 @@
         }
       ],
       "expo-secure-store",
-      "expo-dev-client"
+      "expo-dev-client",
+      "./plugins/with-siri-check-in"
     ],
     "experiments": {
       "typedRoutes": false

@@ -1,6 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
 import { Venue } from '../types/venue';
 import { cardShadow, radius, space, Theme, type } from '../theme';
 import { formatDistance } from '../utils/geo';
@@ -16,14 +15,12 @@ export function VenueCard({
   distance,
   theme,
   onPress,
-  onCheckIn,
 }: {
   venue: Venue;
   distance?: number;
   theme: Theme;
   index?: number;
   onPress: () => void;
-  onCheckIn?: () => void;
 }) {
   const reduce = useReduceMotion();
   const { t } = useTranslation();
@@ -35,21 +32,11 @@ export function VenueCard({
     <Animated.View layout={reduce ? undefined : springLayout()}>
       <PressScale
         onPress={onPress}
-        onLongPress={
-          onCheckIn
-            ? () => {
-                void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                onCheckIn();
-              }
-            : undefined
-        }
-        delayLongPress={380}
         accessibilityRole="button"
         accessibilityLabel={t('venue.openA11y', {
           name: venue.name,
           distance: howFar ? `, ${howFar}` : '',
           live: live ? t('venue.liveCount', { count: venue.activeCount }) : '',
-          hold: onCheckIn ? t('venue.holdToCheckIn') : '',
         })}
         style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}
       >

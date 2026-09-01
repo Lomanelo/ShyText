@@ -9,7 +9,7 @@ import { EmptyState } from '../../components/EmptyState';
 import { Skeleton } from '../../components/Skeleton';
 import { ChatRequestModal } from '../../components/ChatRequestModal';
 import { ReportModal } from '../../components/ReportModal';
-import { PrimaryButton } from '../../components/PrimaryButton';
+import { ShyInFlame } from '../../components/shy-in-flame';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import { VenueStamp } from '../../components/VenueStamp';
 import { PressScale } from '../../components/PressScale';
@@ -81,7 +81,6 @@ export default function VenueScreen() {
         avatarUrl: profile.avatarUrl,
         age: profile.age,
       });
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
       setNotice(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
     } finally {
@@ -111,7 +110,6 @@ export default function VenueScreen() {
               style={[styles.own, cardShadow(theme), { backgroundColor: theme.card }]}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <Text style={[styles.ownIntent, { color: theme.text }]}>{t('venue.youreHere')}</Text>
                 <CountdownBadge expiresAt={mine.expiresAt} theme={theme} />
               </View>
               <View style={styles.chips}>
@@ -157,22 +155,13 @@ export default function VenueScreen() {
                 </Animated.View>
               ) : null}
               {statusError ? <Text style={{ color: theme.danger }}>{statusError}</Text> : null}
-              <PrimaryButton
-                title={t('common.leave')}
-                theme={theme}
-                variant="ghost"
-                onPress={async () => {
-                  await current.leave();
-                  await Haptics.selectionAsync();
-                }}
-              />
             </Animated.View>
           ) : null}
 
           {notice ? <Text style={{ color: theme.danger }}>{notice}</Text> : null}
 
           {!here ? (
-            <EmptyState theme={theme} title={t('venue.checkInToSee')} />
+            <EmptyState theme={theme} title={t('venue.shyInToSee')} />
           ) : loading && !people.length ? (
             <Skeleton theme={theme} />
           ) : others.length === 0 ? (
@@ -202,12 +191,26 @@ export default function VenueScreen() {
         </View>
       </ScrollView>
 
-      {!here ? (
+      {venue ? (
         <Animated.View
           layout={reduce ? undefined : springLayout()}
           style={[styles.dock, { backgroundColor: theme.bg, paddingBottom: Math.max(insets.bottom, 16) }]}
         >
-          <PrimaryButton title={t('common.checkIn')} theme={theme} loading={busy} onPress={checkInNow} />
+          <ShyInFlame
+            venueName={venue.name}
+            theme={theme}
+            lit={here}
+            loading={busy}
+            onShyIn={here ? undefined : checkInNow}
+            onShyOut={
+              here
+                ? async () => {
+                    await current.leave();
+                    await Haptics.selectionAsync();
+                  }
+                : undefined
+            }
+          />
         </Animated.View>
       ) : null}
 
@@ -246,7 +249,7 @@ export default function VenueScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingBottom: 120, gap: space[12] },
+  scroll: { paddingBottom: 200, gap: space[12] },
   hero: {
     marginHorizontal: space[16],
     marginTop: space[8],
@@ -256,7 +259,6 @@ const styles = StyleSheet.create({
   },
   content: { paddingHorizontal: space[16], gap: space[12] },
   own: { borderRadius: radius.lg, borderCurve: 'continuous', padding: space[16], gap: space[12] },
-  ownIntent: { ...type.title, flex: 1 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10, minHeight: 44, justifyContent: 'center' },
   statusBox: {
