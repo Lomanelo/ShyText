@@ -1,32 +1,30 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
+import { AccessibilityInfo, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolation,
   interpolate,
-  interpolateColor,
   runOnJS,
-  type SharedValue,
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
   withSequence,
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { brand, motion, Theme, type } from '../theme';
+import { Ionicons } from '@expo/vector-icons';
+import { brand, cardShadow, motion, radius, Theme, type } from '../theme';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useTranslation } from 'react-i18next';
-import { PrimaryButton } from './PrimaryButton';
 import { PressScale } from './PressScale';
 
-const UNLIT = '#2A120C';
-const FLICK_MIN = 40;
-const FLICK_MAX = 70;
-const CATCH_AT = (FLICK_MIN + FLICK_MAX) / 2;
-const ARC_START = 205;
-const ARC_SPAN = 130;
-const TICKS = 9;
+const THUMB = 52;
+const TRACK_H = 56;
+const COMMIT_RATIO = 0.82;
+const CATCH_RATIO = 0.5;
+const PAD = 4;
+const MARK = 34;
 
 function hapticCatch() {
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
@@ -40,68 +38,6 @@ function hapticDown() {
   void Haptics.selectionAsync();
 }
 
-function LighterWheel({
-  size,
-  color,
-  pressed,
-  flick,
-  lit,
-}: {
-  size: number;
-  color: string;
-  pressed: SharedValue<number>;
-  flick: SharedValue<number>;
-  lit: SharedValue<number>;
-}) {
-  const spin = useAnimatedStyle(() => ({
-    opacity:
-      interpolate(pressed.value, [0, 1], [0, 1], Extrapolation.CLAMP) *
-      interpolate(lit.value, [0, 0.35], [1, 0], Extrapolation.CLAMP),
-    transform: [
-      {
-        rotate: `${interpolate(flick.value, [0, FLICK_MAX], [0, 52], Extrapolation.CLAMP)}deg`,
-      },
-    ],
-  }));
-
-  const diameter = size * 0.72;
-
-  return (
-    <View pointerEvents="none" style={[styles.wheelClip, { width: size * 0.8, height: size * 0.3, bottom: -6 }]}>
-      <Animated.View
-        style={[
-          {
-            width: diameter,
-            height: diameter,
-            position: 'absolute',
-            bottom: -diameter * 0.38,
-            alignSelf: 'center',
-          },
-          spin,
-        ]}
-      >
-        {Array.from({ length: TICKS }, (_, index) => {
-          const angle = ARC_START + (index / Math.max(1, TICKS - 1)) * ARC_SPAN;
-          return (
-            <View
-              key={index}
-              style={[
-                styles.tick,
-                {
-                  backgroundColor: color,
-                  left: diameter / 2 - 1.25,
-                  top: diameter / 2 - 5.5,
-                  transform: [{ rotate: `${angle}deg` }, { translateY: -diameter * 0.42 }],
-                },
-              ]}
-            />
-          );
-        })}
-      </Animated.View>
-    </View>
-  );
-}
-
 export function ShyInFlame({
   venueName,
   theme,
@@ -112,7 +48,7 @@ export function ShyInFlame({
   onShyOut,
   onPress,
   accessory,
-  size = 88,
+  variant = 'dock',
 }: {
   venueName: string;
   theme: Theme;
@@ -123,19 +59,22 @@ export function ShyInFlame({
   onShyOut?: () => void;
   onPress?: () => void;
   accessory?: ReactNode;
-  size?: number;
+  variant?: 'dock' | 'card';
 }) {
   const { t } = useTranslation();
   const reduce = useReduceMotion();
   const [reader, setReader] = useState(false);
   const [ignited, setIgnited] = useState(lit);
 
-  const pressed = useSharedValue(0);
-  const flick = useSharedValue(0);
-  const litSv = useSharedValue(lit ? 1 : 0);
+  const trackW = useSharedValue(0);
+  const slide = useSharedValue(0);
+  const dragStart = useSharedValue(0);
+  const progress = useSharedValue(lit ? 1 : 0);
   const grow = useSharedValue(1);
+  const flicker = useSharedValue(0);
   const caught = useSharedValue(0);
   const committed = useSharedValue(lit ? 1 : 0);
+  const active = useSharedValue(0);
 
   useEffect(() => {
     AccessibilityInfo.isScreenReaderEnabled().then(setReader);
@@ -143,55 +82,87 @@ export function ShyInFlame({
     return () => sub.remove();
   }, []);
 
+  const simple = reduce || reader;
+  const showLit = lit || ignited;
+  const locked = disabled || loading || !onShyIn;
+
   useEffect(() => {
     if (lit) {
       setIgnited(true);
-      litSv.value = 1;
+      progress.value = 1;
       committed.value = 1;
       grow.value = 1;
+      flicker.value = simple
+        ? 0
+        : withRepeat(
+            withSequence(withTiming(1, { duration: 420 }), withTiming(0, { duration: 520 })),
+            -1,
+            true
+          );
       return;
     }
     if (!loading) {
       setIgnited(false);
       committed.value = 0;
       caught.value = 0;
-      flick.value = withSpring(0, motion.spring);
-      pressed.value = withSpring(0, motion.spring);
-      litSv.value = withTiming(0, { duration: motion.duration });
+      slide.value = withSpring(0, motion.spring);
+      active.value = 0;
+      progress.value = withTiming(0, { duration: motion.duration });
       grow.value = 1;
+      flicker.value = 0;
     }
-  }, [lit, loading, caught, committed, flick, grow, litSv, pressed]);
+  }, [lit, loading, active, caught, committed, flicker, grow, progress, simple, slide]);
 
-  const simple = reduce || reader;
-  const showLit = lit || ignited;
-  const locked = disabled || loading || !onShyIn;
+  const onTrackLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      trackW.value = event.nativeEvent.layout.width;
+    },
+    [trackW]
+  );
 
   const playIgnite = useCallback(() => {
     hapticIgnite();
     setIgnited(true);
-    litSv.value = withTiming(1, { duration: simple ? 160 : motion.flick });
+    progress.value = withTiming(1, { duration: simple ? 160 : motion.flick });
     grow.value = simple
       ? 1
       : withSequence(
-          withTiming(1.14, { duration: motion.flick * 0.45 }),
-          withTiming(1, { duration: motion.flick * 0.55 })
+          withTiming(1.12, { duration: motion.flick * 0.4 }),
+          withTiming(1, { duration: motion.flick * 0.6 })
         );
-    flick.value = withTiming(0, { duration: 180 });
-    pressed.value = withSpring(0, motion.spring);
+    if (!simple) {
+      flicker.value = withRepeat(
+        withSequence(withTiming(1, { duration: 420 }), withTiming(0, { duration: 520 })),
+        -1,
+        true
+      );
+    }
     void onShyIn?.();
-  }, [flick, grow, litSv, onShyIn, pressed, simple]);
+  }, [flicker, grow, onShyIn, progress, simple]);
+
+  const snapBack = useCallback(() => {
+    slide.value = withSpring(0, motion.spring);
+    progress.value = withSpring(0, motion.spring);
+    active.value = 0;
+    caught.value = 0;
+    committed.value = 0;
+  }, [active, caught, committed, progress, slide]);
 
   const tryCommit = useCallback(
-    (up: number) => {
-      if (up >= FLICK_MIN) playIgnite();
-      else {
-        flick.value = withSpring(0, motion.spring);
-        pressed.value = withSpring(0, motion.spring);
-        caught.value = 0;
-        committed.value = 0;
+    (offset: number, maxTravel: number) => {
+      if (maxTravel <= 0) {
+        snapBack();
+        return;
       }
+      if (offset >= maxTravel * COMMIT_RATIO) {
+        committed.value = 1;
+        slide.value = withTiming(maxTravel, { duration: 120 });
+        playIgnite();
+        return;
+      }
+      snapBack();
     },
-    [caught, committed, flick, playIgnite, pressed]
+    [committed, playIgnite, slide, snapBack]
   );
 
   const pan = Gesture.Pan()
@@ -200,28 +171,30 @@ export function ShyInFlame({
     .maxPointers(1)
     .onBegin(() => {
       if (committed.value === 1) return;
-      pressed.value = withSpring(1, motion.spring);
+      dragStart.value = slide.value;
+      active.value = 1;
       runOnJS(hapticDown)();
     })
     .onUpdate((event) => {
       if (committed.value === 1) return;
-      const up = Math.min(FLICK_MAX, Math.max(0, -event.translationY));
-      flick.value = up;
-      if (up >= CATCH_AT && caught.value === 0) {
+      const maxTravel = Math.max(0, trackW.value - THUMB - PAD * 2);
+      const next = Math.min(maxTravel, Math.max(0, dragStart.value + event.translationX));
+      slide.value = next;
+      progress.value = maxTravel > 0 ? next / maxTravel : 0;
+      const catchAt = maxTravel * CATCH_RATIO;
+      if (next >= catchAt && caught.value === 0) {
         caught.value = 1;
         runOnJS(hapticCatch)();
       }
     })
-    .onEnd((event) => {
+    .onEnd(() => {
       if (committed.value === 1) return;
-      const up = Math.min(FLICK_MAX, Math.max(0, -event.translationY));
-      if (up >= FLICK_MIN) committed.value = 1;
-      runOnJS(tryCommit)(up);
+      const maxTravel = Math.max(0, trackW.value - THUMB - PAD * 2);
+      runOnJS(tryCommit)(slide.value, maxTravel);
     })
     .onFinalize(() => {
       if (committed.value === 1) return;
-      pressed.value = withSpring(0, motion.spring);
-      flick.value = withSpring(0, motion.spring);
+      active.value = 0;
     });
 
   const tap = Gesture.Tap()
@@ -233,94 +206,264 @@ export function ShyInFlame({
       runOnJS(playIgnite)();
     });
 
-  const flameStyle = useAnimatedStyle(() => ({
-    tintColor: interpolateColor(litSv.value, [0, 1], [UNLIT, brand.accent]),
+  const fillStyle = useAnimatedStyle(() => {
+    const maxTravel = Math.max(0, trackW.value - THUMB - PAD * 2);
+    const width = PAD + slide.value + THUMB * 0.55;
+    return {
+      width: Math.min(trackW.value, width),
+      opacity: interpolate(slide.value, [0, maxTravel * 0.25], [0, 0.22], Extrapolation.CLAMP),
+    };
+  });
+
+  const hintStyle = useAnimatedStyle(() => {
+    const maxTravel = Math.max(0, trackW.value - THUMB - PAD * 2);
+    return {
+      opacity: interpolate(slide.value, [0, maxTravel * 0.35], [1, 0], Extrapolation.CLAMP),
+      transform: [
+        {
+          translateX: interpolate(slide.value, [0, maxTravel], [0, 12], Extrapolation.CLAMP),
+        },
+      ],
+    };
+  });
+
+  const thumbStyle = useAnimatedStyle(() => ({
     transform: [
+      { translateX: slide.value },
       {
-        scale: interpolate(pressed.value, [0, 1], [1, 0.92], Extrapolation.CLAMP) * grow.value,
+        scale: (active.value ? 0.97 : 1) * grow.value,
       },
     ],
   }));
+
+  const dimMarkStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.55, 1], [0.38, 0.15, 0], Extrapolation.CLAMP),
+  }));
+
+  const litMarkStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.35, 0.75, 1], [0, 0.45, 0.9, 1], Extrapolation.CLAMP),
+    transform: [
+      {
+        scale: interpolate(progress.value, [0, 1], [0.92, 1], Extrapolation.CLAMP),
+      },
+    ],
+  }));
+
+  const glowStyle = useAnimatedStyle(() => {
+    const base = interpolate(progress.value, [0, 0.4, 1], [0, 0.2, 0.55], Extrapolation.CLAMP);
+    const pulse = interpolate(flicker.value, [0, 1], [0, 0.18], Extrapolation.CLAMP);
+    return {
+      opacity: base + pulse,
+      transform: [
+        {
+          scale: interpolate(progress.value, [0, 1], [0.7, 1.15], Extrapolation.CLAMP) + pulse * 0.08,
+        },
+      ],
+    };
+  });
 
   const label = showLit ? t('venue.shydIn') : loading ? t('common.shyingIn') : t('common.shyIn');
   const a11y = showLit
     ? t('venue.shydInA11y', { name: venueName })
     : simple
       ? t('venue.tapA11y', { name: venueName })
-      : t('venue.flickA11y', { name: venueName });
+      : t('venue.slideA11y', { name: venueName });
 
-  const copy = (
-    <View style={styles.copy}>
-      <Text style={[type.title, { color: theme.text, textAlign: 'center' }]}>{label}</Text>
-      <Text style={[type.body, { color: theme.muted, textAlign: 'center' }]} numberOfLines={2}>
-        {venueName}
-      </Text>
-    </View>
-  );
-
-  return (
-    <View style={styles.wrap}>
-      <GestureDetector gesture={simple ? tap : pan}>
-        <Animated.View
-          accessible
-          accessibilityRole="button"
-          accessibilityLabel={a11y}
-          accessibilityState={{ disabled: locked && !showLit, selected: showLit }}
-          accessibilityHint={showLit ? undefined : simple ? undefined : t('nearby.flickHint')}
-          style={[styles.hit, { minWidth: Math.max(44, size), minHeight: Math.max(44, size) }]}
+  if (showLit) {
+    return (
+      <View style={styles.wrap}>
+        <View
+          style={[
+            styles.litBar,
+            variant === 'dock'
+              ? [cardShadow(theme), { backgroundColor: theme.card, borderCurve: 'continuous' as const }]
+              : { backgroundColor: theme.card, borderCurve: 'continuous' as const },
+          ]}
         >
-          <View style={{ width: size, height: size }} accessibilityElementsHidden>
+          <View style={styles.litMarkWrap}>
+            <Animated.View style={[styles.glow, glowStyle]} />
             <Animated.Image
               source={require('../assets/images/icon.png')}
               accessibilityIgnoresInvertColors
-              style={[
-                styles.mark,
-                { width: size, height: size, borderRadius: size * 0.22 },
-                flameStyle,
-              ]}
+              style={styles.litMark}
             />
-            {!simple ? (
-              <LighterWheel size={size} color={theme.accent} pressed={pressed} flick={flick} lit={litSv} />
+          </View>
+          {onPress ? (
+            <PressScale accessibilityRole="button" accessibilityLabel={a11y} onPress={onPress} style={styles.litCopy}>
+              <Text style={[type.headline, { color: theme.text }]} numberOfLines={1}>
+                {label}
+              </Text>
+              <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
+                {venueName}
+              </Text>
+            </PressScale>
+          ) : (
+            <View style={styles.litCopy}>
+              <Text style={[type.headline, { color: theme.text }]} numberOfLines={1}>
+                {label}
+              </Text>
+              <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
+                {venueName}
+              </Text>
+            </View>
+          )}
+          <View style={styles.trailing}>
+            {accessory}
+            {onShyOut ? (
+              <PressScale
+                accessibilityRole="button"
+                accessibilityLabel={t('common.shyOut')}
+                onPress={onShyOut}
+                hitSlop={8}
+                style={styles.outBtn}
+              >
+                <Text style={[type.caption, { color: theme.accent, fontWeight: '700' }]}>{t('common.shyOut')}</Text>
+              </PressScale>
             ) : null}
           </View>
-        </Animated.View>
-      </GestureDetector>
-      {showLit && onPress ? (
-        <PressScale
-          accessibilityRole="button"
-          accessibilityLabel={a11y}
-          onPress={onPress}
-          style={styles.copyHit}
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.wrap}>
+      <Text style={[type.caption, { color: theme.muted, marginBottom: 6 }]} numberOfLines={1}>
+        {venueName}
+      </Text>
+      <View
+        style={[
+          variant === 'dock' ? cardShadow(theme) : null,
+          { borderRadius: radius.pill, borderCurve: 'continuous' as const, overflow: 'hidden' },
+        ]}
+      >
+        <View
+          onLayout={onTrackLayout}
+          style={[styles.track, { backgroundColor: theme.bg, opacity: variant === 'dock' ? 1 : 0.92 }]}
         >
-          {copy}
-        </PressScale>
-      ) : (
-        copy
-      )}
-      {accessory}
-      {showLit && onShyOut ? (
-        <PrimaryButton title={t('common.shyOut')} theme={theme} variant="ghost" onPress={onShyOut} />
-      ) : null}
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.fill, { backgroundColor: theme.accent }, fillStyle]}
+          />
+          <Animated.View pointerEvents="none" style={[styles.hintWrap, hintStyle]}>
+            <Text style={[styles.hint, { color: theme.quiet }]} numberOfLines={1}>
+              {loading ? t('common.shyingIn') : t('nearby.slideHint')}
+            </Text>
+            <Ionicons name="chevron-forward" size={14} color={theme.quiet} style={{ opacity: 0.6 }} />
+          </Animated.View>
+          <GestureDetector gesture={simple ? tap : pan}>
+            <Animated.View
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel={a11y}
+              accessibilityState={{ disabled: locked, selected: false }}
+              accessibilityHint={simple ? undefined : t('nearby.slideHint')}
+              style={[styles.thumb, { backgroundColor: theme.card }, thumbStyle]}
+            >
+              <Animated.View style={[styles.glow, glowStyle]} />
+              <Animated.Image
+                source={require('../assets/images/icon.png')}
+                accessibilityIgnoresInvertColors
+                style={[styles.thumbMark, dimMarkStyle]}
+              />
+              <Animated.Image
+                source={require('../assets/images/icon.png')}
+                accessibilityIgnoresInvertColors
+                style={[styles.thumbMark, styles.thumbMarkOverlay, litMarkStyle]}
+              />
+            </Animated.View>
+          </GestureDetector>
+        </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { alignItems: 'center', gap: 8 },
-  hit: { alignItems: 'center', justifyContent: 'center' },
-  mark: { resizeMode: 'cover' },
-  copy: { alignItems: 'center', gap: 2, paddingHorizontal: 12 },
-  copyHit: { minHeight: 44, justifyContent: 'center' },
-  wheelClip: {
-    position: 'absolute',
-    alignSelf: 'center',
+  wrap: { width: '100%' },
+  track: {
+    height: TRACK_H,
+    borderRadius: radius.pill,
+    borderCurve: 'continuous',
+    justifyContent: 'center',
     overflow: 'hidden',
-    alignItems: 'center',
   },
-  tick: {
+  fill: {
     position: 'absolute',
-    width: 2.5,
-    height: 11,
-    borderRadius: 1,
+    left: 0,
+    top: 0,
+    bottom: 0,
+    borderRadius: radius.pill,
   },
+  hintWrap: {
+    position: 'absolute',
+    left: THUMB + PAD + 8,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  hint: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  thumb: {
+    position: 'absolute',
+    left: PAD,
+    top: PAD,
+    width: THUMB,
+    height: THUMB,
+    borderRadius: radius.pill,
+    borderCurve: 'continuous',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#1C120E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  thumbMark: {
+    width: MARK,
+    height: MARK,
+    borderRadius: 10,
+    resizeMode: 'cover',
+  },
+  thumbMarkOverlay: {
+    position: 'absolute',
+  },
+  glow: {
+    position: 'absolute',
+    width: MARK + 18,
+    height: MARK + 18,
+    borderRadius: 999,
+    backgroundColor: brand.accent,
+  },
+  litBar: {
+    width: '100%',
+    minHeight: 56,
+    borderRadius: radius.lg,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  litMarkWrap: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  litMark: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    resizeMode: 'cover',
+  },
+  litCopy: { flex: 1, minWidth: 0, gap: 1, justifyContent: 'center' },
+  trailing: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
+  outBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
 });

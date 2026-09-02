@@ -60,7 +60,7 @@ class DemoPlacesProvider implements PlacesProvider {
   }
 }
 
-class ApplePlacesProvider implements PlacesProvider {
+class PlacesProxyProvider implements PlacesProvider {
   constructor(private endpoint: string) {}
 
   private async request(latitude: number, longitude: number, query?: string) {
@@ -78,28 +78,30 @@ class ApplePlacesProvider implements PlacesProvider {
       throw new PlacesRequestError(i18n.t('errors.placesBusy'), 429, 'rate_limited');
     }
     if (response.status === 401 || response.status === 501) {
-      throw new PlacesRequestError(i18n.t('errors.placesUnavailable'), response.status, 'apple_auth');
+      throw new PlacesRequestError(i18n.t('errors.placesUnavailable'), response.status, 'places_auth');
     }
     if (!response.ok) {
-      throw new PlacesRequestError(i18n.t('errors.placesLoad'), response.status, 'apple_request');
+      throw new PlacesRequestError(i18n.t('errors.placesLoad'), response.status, 'places_request');
     }
     const payload = (await response.json()) as VenueCandidate[] | { error?: string };
     if (!Array.isArray(payload)) {
       throw new PlacesRequestError(payload.error || i18n.t('errors.placesLoad'));
     }
     const venues = pickClosest(
-      payload.filter(
-        (item) =>
-          item &&
-          item.provider === 'apple' &&
-          typeof item.providerPlaceId === 'string' &&
-          typeof item.name === 'string' &&
-          Number.isFinite(item.latitude) &&
-          Number.isFinite(item.longitude)
-      ).map((item) => ({
-        ...item,
-        distanceMeters: distanceBetween(latitude, longitude, item.latitude, item.longitude),
-      }))
+      payload
+        .filter(
+          (item) =>
+            item &&
+            (item.provider === 'google' || item.provider === 'apple') &&
+            typeof item.providerPlaceId === 'string' &&
+            typeof item.name === 'string' &&
+            Number.isFinite(item.latitude) &&
+            Number.isFinite(item.longitude)
+        )
+        .map((item) => ({
+          ...item,
+          distanceMeters: distanceBetween(latitude, longitude, item.latitude, item.longitude),
+        }))
     );
     remember(latitude, longitude, query ?? '', venues);
     return venues;
@@ -120,7 +122,7 @@ export function isPlacesConfigured() {
 
 export function getPlacesProvider(): PlacesProvider {
   const endpoint = process.env.EXPO_PUBLIC_PLACES_PROXY_URL?.trim();
-  if (endpoint) return new ApplePlacesProvider(endpoint);
+  if (endpoint) return new PlacesProxyProvider(endpoint);
   if (isDevToolsEnabled()) return new DemoPlacesProvider();
   return {
     getNearbyVenues: async () => [],

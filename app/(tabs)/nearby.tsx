@@ -273,7 +273,7 @@ export default function NearbyScreen() {
             <View style={[styles.here, { backgroundColor: theme.card }, cardShadow(theme)]}>
               <ShyInFlame
                 lit
-                size={64}
+                variant="card"
                 venueName={visibleAt.venue.name}
                 theme={theme}
                 onPress={() => router.push(`/venue/${visibleAt.venue.id}`)}
@@ -347,16 +347,15 @@ export default function NearbyScreen() {
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: space[16], paddingBottom: space[32], gap: space[12] },
-  contentWithDock: { paddingBottom: 180 },
+  contentWithDock: { paddingBottom: 108 },
   here: {
     borderRadius: radius.lg,
     borderCurve: 'continuous',
     overflow: 'hidden',
-    paddingVertical: space[16],
-    paddingHorizontal: space[12],
-    alignItems: 'center',
+    paddingVertical: space[8],
+    paddingHorizontal: space[8],
   },
-  dock: { paddingHorizontal: space[16], paddingTop: space[8] },
+  dock: { paddingHorizontal: space[16], paddingTop: space[4] },
   searchWrap: {
     borderRadius: radius.pill,
     borderCurve: 'continuous',

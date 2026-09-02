@@ -1,5 +1,5 @@
 export interface VenueCandidate {
-  provider: 'apple' | 'demo';
+  provider: 'apple' | 'google' | 'demo';
   providerPlaceId: string;
   name: string;
   address?: string;

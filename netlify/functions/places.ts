@@ -1,13 +1,12 @@
 import type { Config, Context } from '@netlify/functions';
-import { appleMapsConfigured } from './_shared/appleMapsAuth';
-import { searchAppleVenues } from './_shared/appleMapsClient';
+import { googlePlacesConfigured, searchGoogleVenues } from './_shared/googlePlacesClient';
 
 type CacheEntry = { at: number; body: unknown };
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 90_000;
 
 function cacheKey(lat: number, lng: number, q: string, lang: string) {
-  return `${lat.toFixed(3)}:${lng.toFixed(3)}:${q}:${lang}`;
+  return `g:${lat.toFixed(3)}:${lng.toFixed(3)}:${q}:${lang}`;
 }
 
 function json(body: unknown, status = 200, extra?: HeadersInit) {
@@ -34,8 +33,8 @@ export default async (req: Request, _context: Context) => {
     return json({ error: 'Invalid coordinates.', code: 'bad_request' }, 400);
   }
 
-  if (!appleMapsConfigured()) {
-    return json({ error: 'Apple Maps is not configured.', code: 'not_configured' }, 501);
+  if (!googlePlacesConfigured()) {
+    return json({ error: 'Google Places is not configured.', code: 'not_configured' }, 501);
   }
 
   const key = cacheKey(lat, lng, q.toLowerCase(), lang);
@@ -45,13 +44,13 @@ export default async (req: Request, _context: Context) => {
   }
 
   try {
-    const venues = await searchAppleVenues(lat, lng, q || undefined, lang);
+    const venues = await searchGoogleVenues(lat, lng, q || undefined, lang);
     cache.set(key, { at: Date.now(), body: venues });
     return json(venues);
   } catch (err) {
     const status = typeof err === 'object' && err && 'status' in err ? Number((err as { status: number }).status) : 502;
     const message = err instanceof Error ? err.message : 'Could not load nearby venues.';
-    const code = status === 429 ? 'rate_limited' : status === 401 ? 'apple_auth' : 'apple_request';
+    const code = status === 429 ? 'rate_limited' : status === 401 ? 'google_auth' : 'google_request';
     return json({ error: message, code }, status);
   }
 };

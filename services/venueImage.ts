@@ -50,9 +50,6 @@ export function buildVenueImageUrl(target: VenueImageTarget, size: VenueImageSiz
   url.searchParams.set('w', String(clampDimension(size.width)));
   url.searchParams.set('h', String(clampDimension(size.height)));
 
-  const address = target.address?.trim() || target.name?.trim();
-  if (address) url.searchParams.set('address', address);
-
   return url.toString();
 }
 

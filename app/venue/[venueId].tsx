@@ -201,6 +201,7 @@ export default function VenueScreen() {
           style={[styles.dock, { backgroundColor: theme.bg, paddingBottom: Math.max(insets.bottom, 16) }]}
         >
           <ShyInFlame
+            variant="dock"
             venueName={venue.name}
             theme={theme}
             lit={here}
@@ -253,7 +254,7 @@ export default function VenueScreen() {
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingBottom: 200, gap: space[12] },
+  scroll: { paddingBottom: 112, gap: space[12] },
   hero: {
     marginHorizontal: space[16],
     marginTop: space[8],
@@ -276,5 +277,5 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   statusInput: { flex: 1, fontSize: 17, minHeight: 44 },
-  dock: { paddingHorizontal: space[16], paddingTop: space[8] },
+  dock: { paddingHorizontal: space[16], paddingTop: space[4] },
 });

@@ -34,7 +34,6 @@ export function parseStreetViewOptions(url: URL) {
     throw Object.assign(new Error('Invalid coordinates.'), { status: 400 });
   }
 
-  const address = url.searchParams.get('address')?.trim();
   const width = clamp(Number(url.searchParams.get('w') || 640), 1, 640);
   const height = clamp(Number(url.searchParams.get('h') || 360), 1, 640);
   const heading = url.searchParams.has('heading') ? Number(url.searchParams.get('heading')) : undefined;
@@ -42,7 +41,9 @@ export function parseStreetViewOptions(url: URL) {
   const pitch = url.searchParams.has('pitch') ? clamp(Number(url.searchParams.get('pitch')), -90, 90) : undefined;
   const radius = url.searchParams.has('radius') ? clamp(Number(url.searchParams.get('radius')), 1, 500) : 50;
 
-  const location = address || `${lat},${lng}`;
+  // Prefer exact venue coordinates. Address/name geocoding collapses nearby pubs
+  // onto the same street camera and is a poor signal for POI facades.
+  const location = `${lat},${lng}`;
 
   return { lat, lng, location, width, height, heading, fov, pitch, radius };
 }

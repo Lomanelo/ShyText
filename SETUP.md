@@ -66,10 +66,10 @@ Client (`.env` / EAS env):
 
 Server / Netlify secrets (never ship in the app):
 
-- `APPLE_MAPS_TEAM_ID`
+- `GOOGLE_MAPS_API_KEY` (Places API New + Street View Static/Metadata; server only)
+- `APPLE_MAPS_TEAM_ID` (optional legacy; no longer used for discovery)
 - `APPLE_MAPS_KEY_ID`
 - `APPLE_MAPS_PRIVATE_KEY` (Maps `.p8` key contents; `\n` escaped is fine)
-- `GOOGLE_MAPS_API_KEY` (Street View Static + Metadata; server only)
 
 ## 5. Firestore collections
 
@@ -95,16 +95,27 @@ See `firestore.indexes.json`. Important composites:
 - `chatRequests`: `receiverId` + `status` + `createdAt`
 - `conversations`: `participantIds` (array) + `lastMessageAt`
 
-## 8. Apple Maps venue discovery
+## 8. Google Places venue discovery
 
-The app never calls Apple Maps with a private key. Nearby/search go through `netlify/functions/places.ts` (`/api/places`).
+Nearby / search go through `netlify/functions/places.ts` (`/api/places`) using **Places API (New)**.
 
-1. In Apple Developer, create a Maps identifier and a Maps Server API key (`.p8`).
-2. Set Netlify env: `APPLE_MAPS_TEAM_ID`, `APPLE_MAPS_KEY_ID`, `APPLE_MAPS_PRIVATE_KEY`.
-3. Deploy the Netlify function.
-4. Set `EXPO_PUBLIC_PLACES_PROXY_URL` to `https://your-site.netlify.app/api/places`.
+1. In Google Cloud, enable **Places API (New)** on the same project as Street View.
+2. Restrict the key to Places API (New) + Street View Static/Metadata.
+3. Set Netlify env: `GOOGLE_MAPS_API_KEY`.
+4. Deploy Netlify functions.
+5. Keep `EXPO_PUBLIC_PLACES_PROXY_URL` pointing at `https://your-site.netlify.app/api/places`.
 
-Do not put Apple private keys in `EXPO_PUBLIC_*` variables.
+Only places with `businessStatus: OPERATIONAL` (or no status, e.g. some parks) are returned, within 100 m.
+
+### Cost (as of Google’s 2025+ SKUs)
+
+- **Nearby Search Pro**: ~5,000 free calls/month, then about **$32 / 1,000**
+- **Text Search Pro** (typed search): same ballpark as Nearby Pro
+- Street View Static remains separate (~10k free images/month)
+
+At early usage (a few hundred nearby refreshes/month) you should stay inside the free Nearby quota. Cache on the function (90s) and client (45s) reduces billable calls.
+
+Do not put Google keys in `EXPO_PUBLIC_*` variables.
 
 If the proxy is missing, the app uses demo venues (Paddy's Corner, Campus Library, Riverside Park). There is no map UI — only a list of venue names.
 
