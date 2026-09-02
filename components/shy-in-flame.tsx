@@ -7,20 +7,17 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withRepeat,
-  withSequence,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { brand, cardShadow, motion, radius, Theme, type } from '../theme';
+import { brand, cardShadow, radius, Theme, type } from '../theme';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useTranslation } from 'react-i18next';
 import { PressScale } from './PressScale';
 
-const COMMIT_RATIO = 0.82;
-const CATCH_RATIO = 0.5;
+const COMMIT_RATIO = 0.72;
+const CATCH_RATIO = 0.45;
 const PAD = 4;
 
 const SIZES = {
@@ -100,26 +97,20 @@ export function ShyInFlame({
       progress.value = 1;
       committed.value = 1;
       grow.value = 1;
-      flicker.value = simple
-        ? 0
-        : withRepeat(
-            withSequence(withTiming(1, { duration: 420 }), withTiming(0, { duration: 520 })),
-            -1,
-            true
-          );
+      flicker.value = 0;
       return;
     }
     if (!loading) {
       setIgnited(false);
       committed.value = 0;
       caught.value = 0;
-      slide.value = withSpring(0, motion.spring);
+      slide.value = 0;
       active.value = 0;
-      progress.value = withTiming(0, { duration: motion.duration });
+      progress.value = 0;
       grow.value = 1;
       flicker.value = 0;
     }
-  }, [lit, loading, active, caught, committed, flicker, grow, progress, simple, slide]);
+  }, [lit, loading, active, caught, committed, flicker, grow, progress, slide]);
 
   const onTrackLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -131,26 +122,15 @@ export function ShyInFlame({
   const playIgnite = useCallback(() => {
     hapticIgnite();
     setIgnited(true);
-    progress.value = withTiming(1, { duration: simple ? 160 : motion.flick });
-    grow.value = simple
-      ? 1
-      : withSequence(
-          withTiming(1.12, { duration: motion.flick * 0.4 }),
-          withTiming(1, { duration: motion.flick * 0.6 })
-        );
-    if (!simple) {
-      flicker.value = withRepeat(
-        withSequence(withTiming(1, { duration: 420 }), withTiming(0, { duration: 520 })),
-        -1,
-        true
-      );
-    }
+    progress.value = 1;
+    grow.value = 1;
+    flicker.value = 0;
     void onShyIn?.();
-  }, [flicker, grow, onShyIn, progress, simple]);
+  }, [flicker, grow, onShyIn, progress]);
 
   const snapBack = useCallback(() => {
-    slide.value = withSpring(0, motion.spring);
-    progress.value = withSpring(0, motion.spring);
+    slide.value = withTiming(0, { duration: 120 });
+    progress.value = withTiming(0, { duration: 120 });
     active.value = 0;
     caught.value = 0;
     committed.value = 0;
@@ -164,7 +144,7 @@ export function ShyInFlame({
       }
       if (offset >= maxTravel * COMMIT_RATIO) {
         committed.value = 1;
-        slide.value = withTiming(maxTravel, { duration: 120 });
+        slide.value = maxTravel;
         playIgnite();
         return;
       }

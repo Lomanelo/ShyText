@@ -17,7 +17,7 @@ const FIELD_MASK = [
   'places.businessStatus',
 ].join(',');
 
-/** Social venues people might Shy In at. */
+/** Social venues people might Shyne at. */
 const NEARBY_TYPES = [
   'cafe',
   'restaurant',

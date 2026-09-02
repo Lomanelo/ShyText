@@ -1,10 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
 import { Venue } from '../types/venue';
 import { cardShadow, radius, space, Theme, type } from '../theme';
 import { formatDistance } from '../utils/geo';
-import { springLayout } from '../hooks/usePressScale';
-import { useReduceMotion } from '../hooks/useReduceMotion';
 import { buildVenueImageUrl } from '../services/venueImage';
 import { VenueStamp } from './VenueStamp';
 import { LiveDots } from './LiveDots';
@@ -30,7 +27,6 @@ export function VenueCard({
   lit?: boolean;
   shyInLoading?: boolean;
 }) {
-  const reduce = useReduceMotion();
   const { t } = useTranslation();
   const live = (venue.activeCount ?? 0) >= 1;
   const meters = distance ?? venue.distanceMeters;
@@ -39,49 +35,45 @@ export function VenueCard({
   const meta = [howFar, venue.category].filter(Boolean).join(' · ');
 
   return (
-    <Animated.View layout={reduce ? undefined : springLayout()}>
-      <View style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}>
-        <PressScale
-          onPress={onPress}
-          accessibilityRole="button"
-          accessibilityLabel={t('venue.openA11y', {
-            name: venue.name,
-            distance: howFar ? `, ${howFar}` : '',
-            live: live ? t('venue.liveCount', { count: venue.activeCount }) : '',
-          })}
-          style={styles.head}
-        >
-          <View style={styles.thumb}>
-            <VenueStamp category={venue.category} height={88} imageUrl={imageUrl} />
-          </View>
-          <View style={styles.copy}>
-            <Text style={[type.headline, { color: theme.text }]} numberOfLines={2}>
-              {venue.name}
+    <View style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}>
+      <PressScale
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={t('venue.openA11y', {
+          name: venue.name,
+          distance: howFar ? `, ${howFar}` : '',
+          live: live ? t('venue.liveCount', { count: venue.activeCount }) : '',
+        })}
+        style={styles.head}
+      >
+        <View style={styles.thumb}>
+          <VenueStamp category={venue.category} height={88} imageUrl={imageUrl} />
+        </View>
+        <View style={styles.copy}>
+          <Text style={[type.headline, { color: theme.text }]} numberOfLines={2}>
+            {venue.name}
+          </Text>
+          {meta ? (
+            <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
+              {meta}
             </Text>
-            {meta ? (
-              <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
-                {meta}
-              </Text>
-            ) : null}
-            {live ? <LiveDots count={venue.activeCount ?? 0} color={theme.accent} /> : null}
-          </View>
-        </PressScale>
+          ) : null}
+          {live ? <LiveDots count={venue.activeCount ?? 0} color={theme.accent} /> : null}
+        </View>
+      </PressScale>
 
-        {onShyIn || lit ? (
-          <View style={styles.slide}>
-            <ShyInFlame
-              variant="inline"
-              venueName={venue.name}
-              theme={theme}
-              lit={lit}
-              loading={shyInLoading}
-              onShyIn={lit ? undefined : onShyIn}
-              onPress={lit ? onPress : undefined}
-            />
-          </View>
-        ) : null}
+      <View style={styles.slide}>
+        <ShyInFlame
+          variant="inline"
+          venueName={venue.name}
+          theme={theme}
+          lit={lit}
+          loading={shyInLoading}
+          onShyIn={lit ? undefined : onShyIn}
+          onPress={lit ? onPress : undefined}
+        />
       </View>
-    </Animated.View>
+    </View>
   );
 }
 

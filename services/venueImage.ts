@@ -38,18 +38,17 @@ export function isVenueImageConfigured() {
   return Boolean(venueImageProxyBase());
 }
 
+/** Prefer the Serper Maps thumbnail directly — no Netlify re-proxy hop. */
 export function buildVenueImageUrl(target: VenueImageTarget, size: VenueImageSize = DEFAULT_SIZE): string | null {
+  const direct = target.imageUrl?.trim();
+  if (direct) return direct;
+
   const base = venueImageProxyBase();
   if (!base) return null;
 
   const url = new URL(base);
   url.searchParams.set('w', String(clampDimension(size.width)));
   url.searchParams.set('h', String(clampDimension(size.height)));
-
-  if (target.imageUrl?.trim()) {
-    url.searchParams.set('thumb', target.imageUrl.trim());
-    return url.toString();
-  }
 
   const lat = target.latitude;
   const lng = target.longitude;
@@ -68,6 +67,9 @@ export function buildVenueImageUrl(target: VenueImageTarget, size: VenueImageSiz
 }
 
 export function buildVenueImageMetaUrl(target: VenueImageTarget): string | null {
+  if (target.imageUrl?.trim()) {
+    return null;
+  }
   const imageUrl = buildVenueImageUrl(target);
   if (!imageUrl) return null;
   const url = new URL(imageUrl);

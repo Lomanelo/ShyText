@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import Animated from 'react-native-reanimated';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,11 +9,7 @@ import { VenueCard } from '../../components/VenueCard';
 import { Skeleton } from '../../components/Skeleton';
 import { EmptyState } from '../../components/EmptyState';
 import { HintBanner } from '../../components/HintBanner';
-import { CountdownBadge } from '../../components/CountdownBadge';
-import { ShyInFlame } from '../../components/shy-in-flame';
-import { cardShadow, radius, space, type, useTheme } from '../../theme';
-import { springLayout } from '../../hooks/usePressScale';
-import { useReduceMotion } from '../../hooks/useReduceMotion';
+import { radius, space, type, useTheme } from '../../theme';
 import { useLocation } from '../../hooks/useLocation';
 import { useAuth } from '../../hooks/useAuth';
 import { useCurrentVenue } from '../../hooks/useCurrentVenue';
@@ -23,10 +18,9 @@ import {
   countActiveCheckIns,
   ensureInternalVenue,
   findVenuesByProviderPlaceIds,
-  getVenue,
   toVenue,
 } from '../../services/venues';
-import { CheckIn, PlacesRequestError, Venue, VenueCandidate } from '../../types/venue';
+import { PlacesRequestError, Venue, VenueCandidate } from '../../types/venue';
 import { distanceBetween, pickClosest } from '../../utils/geo';
 import { useTranslation } from 'react-i18next';
 
@@ -69,7 +63,6 @@ function rankVenues(venues: Venue[], latitude: number, longitude: number) {
 export default function NearbyScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
-  const reduce = useReduceMotion();
   const { coords, status, error: locationError, busy, refresh } = useLocation();
   const { profile } = useAuth();
   const current = useCurrentVenue();
@@ -78,9 +71,11 @@ export default function NearbyScreen() {
   const [error, setError] = useState<string | null>(null);
   const [rateLimited, setRateLimited] = useState(false);
   const [query, setQuery] = useState('');
-  const [visibleAt, setVisibleAt] = useState<{ checkIn: CheckIn; venue: Venue } | null>(null);
   const [checkingInId, setCheckingInId] = useState<string | null>(null);
   const [shyInHint, setShyInHint] = useState(false);
+
+  const liveCheckIn = current.checkIn && !current.expired ? current.checkIn : null;
+  const liveVenue = liveCheckIn ? current.venue : null;
 
   const load = useCallback(
     async (search?: string, relock = false) => {
@@ -133,30 +128,6 @@ export default function NearbyScreen() {
     });
   }, []);
 
-  useEffect(() => {
-    const live = current.checkIn && !current.expired ? current.checkIn : null;
-    if (!live) {
-      setVisibleAt(null);
-      return;
-    }
-    let cancelled = false;
-    getVenue(live.venueId).then((found) => {
-      if (cancelled) return;
-      setVisibleAt({
-        checkIn: live,
-        venue: found ?? {
-          id: live.venueId,
-          provider: 'apple',
-          providerPlaceId: live.venueId,
-          name: t('nearby.aVenue'),
-        },
-      });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [current.checkIn, current.expired, t]);
-
   const openVenue = async (venue: Venue) => {
     try {
       const internal = await ensureInternalVenue(venue);
@@ -169,12 +140,14 @@ export default function NearbyScreen() {
 
   const checkInAtVenue = async (venue: Venue) => {
     if (checkingInId) return;
+    const key = candidateListKey(venue);
     try {
-      setCheckingInId(candidateListKey(venue));
+      setCheckingInId(key);
       setError(null);
       const internal = await ensureInternalVenue(venue);
+      await current.rememberVenue(internal);
+
       if (current.checkIn && !current.expired && current.checkIn.venueId === internal.id) {
-        await current.rememberVenue(internal);
         router.push(`/venue/${internal.id}`);
         return;
       }
@@ -182,12 +155,18 @@ export default function NearbyScreen() {
         setError(t('errors.finishProfile'));
         return;
       }
-      const next = await refresh();
-      await current.checkInHere(internal, next?.latitude, next?.longitude, {
-        displayName: profile.displayName,
-        avatarUrl: profile.avatarUrl,
-        age: profile.age,
-      });
+
+      // Open the venue immediately; finish Shyne with the last known fix (no GPS wait).
+      router.push(`/venue/${internal.id}`);
+      void current
+        .checkInHere(internal, coords?.latitude, coords?.longitude, {
+          displayName: profile.displayName,
+          avatarUrl: profile.avatarUrl,
+          age: profile.age,
+        })
+        .catch((err) => {
+          setError(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
+        });
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
     } finally {
@@ -241,33 +220,15 @@ export default function NearbyScreen() {
         </View>
 
         {shyInHint && venues.length > 0 ? (
-          <Animated.View layout={reduce ? undefined : springLayout()}>
-            <HintBanner
-              theme={theme}
-              title={t('nearby.flickHint')}
-              onDismiss={() => {
-                setShyInHint(false);
-                void AsyncStorage.setItem(SHY_IN_HINT_KEY, '1');
-              }}
-            />
-          </Animated.View>
+          <HintBanner
+            theme={theme}
+            title={t('nearby.flickHint')}
+            onDismiss={() => {
+              setShyInHint(false);
+              void AsyncStorage.setItem(SHY_IN_HINT_KEY, '1');
+            }}
+          />
         ) : null}
-
-        <Animated.View layout={reduce ? undefined : springLayout()}>
-          {visibleAt ? (
-            <View style={[styles.here, { backgroundColor: theme.card }, cardShadow(theme)]}>
-              <ShyInFlame
-                lit
-                variant="card"
-                venueName={visibleAt.venue.name}
-                theme={theme}
-                onPress={() => router.push(`/venue/${visibleAt.venue.id}`)}
-                onShyOut={() => void current.leave()}
-                accessory={<CountdownBadge expiresAt={visibleAt.checkIn.expiresAt} theme={theme} />}
-              />
-            </View>
-          ) : null}
-        </Animated.View>
 
         {error ? (
           <Text selectable style={[type.body, { color: theme.danger }]}>
@@ -304,16 +265,19 @@ export default function NearbyScreen() {
           venues.map((venue) => {
             const key = candidateListKey(venue);
             const isHere =
-              !!visibleAt &&
-              (visibleAt.venue.id === venue.id ||
-                visibleAt.venue.providerPlaceId === venue.providerPlaceId);
+              checkingInId === key ||
+              (!!liveCheckIn &&
+                (venue.id === liveCheckIn.venueId ||
+                  (!!liveVenue &&
+                    (liveVenue.id === venue.id || liveVenue.providerPlaceId === venue.providerPlaceId))));
             return (
               <VenueCard
                 key={key}
                 venue={venue}
                 theme={theme}
                 distance={venue.distanceMeters}
-                shyInLoading={checkingInId === key}
+                lit={isHere}
+                shyInLoading={checkingInId === key && !isHere}
                 onPress={() => openVenue(venue)}
                 onShyIn={isHere ? undefined : () => checkInAtVenue(venue)}
               />
@@ -327,13 +291,6 @@ export default function NearbyScreen() {
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: space[16], paddingBottom: space[32], gap: space[12] },
-  here: {
-    borderRadius: radius.lg,
-    borderCurve: 'continuous',
-    overflow: 'hidden',
-    paddingVertical: space[8],
-    paddingHorizontal: space[8],
-  },
   searchWrap: {
     borderRadius: radius.pill,
     borderCurve: 'continuous',

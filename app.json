@@ -25,9 +25,13 @@
         "NSLocationWhenInUseUsageDescription": "ShyText uses your location only to identify the place you're currently visiting. Your exact location is never shown to other users.",
         "NSPhotoLibraryUsageDescription": "ShyText needs access to your photos so you can upload a profile picture.",
         "NSCameraUsageDescription": "ShyText needs access to your camera so you can take a profile picture.",
-        "UIBackgroundModes": ["remote-notification"],
+        "UIBackgroundModes": [
+          "remote-notification"
+        ],
         "aps-environment": "production",
-        "UIDeviceFamily": [1]
+        "UIDeviceFamily": [
+          1
+        ]
       }
     },
     "android": {
@@ -64,8 +68,20 @@
         "expo-localization",
         {
           "supportedLocales": {
-            "ios": ["en", "es", "pt-BR", "fr", "de"],
-            "android": ["en", "es", "pt-BR", "fr", "de"]
+            "ios": [
+              "en",
+              "es",
+              "pt-BR",
+              "fr",
+              "de"
+            ],
+            "android": [
+              "en",
+              "es",
+              "pt-BR",
+              "fr",
+              "de"
+            ]
           }
         }
       ],
@@ -87,13 +103,16 @@
         {
           "icon": "./assets/images/notification-icon.png",
           "color": "#D05927",
-          "sounds": ["./assets/sounds/notification.wav"],
+          "sounds": [
+            "./assets/sounds/notification.wav"
+          ],
           "enableBackgroundRemoteNotifications": true
         }
       ],
       "expo-secure-store",
       "expo-dev-client",
-      "./plugins/with-siri-check-in"
+      "./plugins/with-siri-check-in",
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": false

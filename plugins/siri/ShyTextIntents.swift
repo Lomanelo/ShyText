@@ -5,8 +5,8 @@ private let scheme = "com.rahimrady.myshytext"
 
 @available(iOS 16.0, *)
 struct CheckInNearbyIntent: AppIntent {
-    static var title: LocalizedStringResource = "Shy In nearby"
-    static var description = IntentDescription("Shy In at the closest place around you.")
+    static var title: LocalizedStringResource = "Shyne nearby"
+    static var description = IntentDescription("Shyne at the closest place around you.")
     static var openAppWhenRun = true
 
     func perform() async throws -> some IntentResult {
@@ -17,8 +17,8 @@ struct CheckInNearbyIntent: AppIntent {
 
 @available(iOS 16.0, *)
 struct CheckInAtVenueIntent: AppIntent {
-    static var title: LocalizedStringResource = "Shy In at a venue"
-    static var description = IntentDescription("Shy In at a named place around you.")
+    static var title: LocalizedStringResource = "Shyne at a venue"
+    static var description = IntentDescription("Shyne at a named place around you.")
     static var openAppWhenRun = true
 
     @Parameter(
@@ -28,7 +28,7 @@ struct CheckInAtVenueIntent: AppIntent {
     var venue: String
 
     static var parameterSummary: some ParameterSummary {
-        Summary("Shy In at a place")
+        Summary("Shyne at a place")
     }
 
     func perform() async throws -> some IntentResult {
@@ -47,20 +47,20 @@ struct ShyTextShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: CheckInNearbyIntent(),
             phrases: [
-                "Shy In nearby in \(.applicationName)",
-                "Shy In with \(.applicationName)",
+                "Shyne nearby in \(.applicationName)",
+                "Shyne with \(.applicationName)",
                 "I'm here in \(.applicationName)",
             ],
-            shortTitle: "Shy In nearby",
+            shortTitle: "Shyne nearby",
             systemImageName: "mappin.and.ellipse"
         )
         AppShortcut(
             intent: CheckInAtVenueIntent(),
             phrases: [
-                "Shy In at a place in \(.applicationName)",
+                "Shyne at a place in \(.applicationName)",
                 "I'm at a place in \(.applicationName)",
             ],
-            shortTitle: "Shy In at a place",
+            shortTitle: "Shyne at a place",
             systemImageName: "mappin"
         )
     }

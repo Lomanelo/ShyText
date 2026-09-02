@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { Image, ImageSourcePropType, StyleSheet, Text, View } from 'react-native';
+import { ImageSourcePropType, StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { placeKind, placeKindLabel, PlaceKind } from '../utils/venueMark';
 
 const INK = '#8B3A22';
@@ -46,14 +47,16 @@ export function VenueStamp({
     <View style={[styles.well, { height }]} collapsable={false}>
       {remote ? (
         <Image
-          source={{ uri: imageUrl! }}
+          source={imageUrl!}
           style={styles.still}
-          resizeMode="cover"
-          accessibilityIgnoresInvertColors
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={imageUrl!}
+          transition={0}
           onError={() => setRemoteFailed(true)}
         />
       ) : (
-        <Image source={STILLS[kind]} style={styles.still} resizeMode="cover" accessibilityIgnoresInvertColors />
+        <Image source={STILLS[kind]} style={styles.still} contentFit="cover" cachePolicy="memory-disk" transition={0} />
       )}
       {!compact ? (
         <View style={styles.stamp} accessibilityElementsHidden>
