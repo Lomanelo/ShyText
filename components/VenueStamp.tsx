@@ -2,8 +2,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import { ImageSourcePropType, StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { placeKind, placeKindLabel, PlaceKind } from '../utils/venueMark';
-
-const INK = '#8B3A22';
+import { radius } from '../theme';
 
 const STILLS: Record<PlaceKind, ImageSourcePropType> = {
   bar: require('../assets/stamps/bar.jpg'),
@@ -53,6 +52,8 @@ export function VenueStamp({
           cachePolicy="memory-disk"
           recyclingKey={imageUrl!}
           transition={0}
+          priority="high"
+          placeholderContentFit="cover"
           onError={() => setRemoteFailed(true)}
         />
       ) : (
@@ -77,17 +78,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     bottom: 12,
-    borderWidth: 1,
-    borderColor: INK,
-    backgroundColor: 'rgba(252, 243, 232, 0.82)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    borderRadius: radius.pill,
+    borderCurve: 'continuous',
+    backgroundColor: 'rgba(28, 18, 14, 0.55)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
   },
   stampText: {
-    color: INK,
+    color: '#FFF4EA',
     fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1.4,
-    textTransform: 'lowercase',
+    fontWeight: '600',
+    letterSpacing: 0.2,
+    textTransform: 'capitalize',
   },
 });

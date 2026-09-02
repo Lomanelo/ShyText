@@ -1,8 +1,11 @@
+import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { Venue } from '../types/venue';
 import { cardShadow, radius, space, Theme, type } from '../theme';
 import { formatDistance } from '../utils/geo';
 import { buildVenueImageUrl } from '../services/venueImage';
+import { rememberVenueImage } from '../services/venueImageCache';
 import { VenueStamp } from './VenueStamp';
 import { LiveDots } from './LiveDots';
 import { PressScale } from './PressScale';
@@ -31,8 +34,15 @@ export function VenueCard({
   const live = (venue.activeCount ?? 0) >= 1;
   const meters = distance ?? venue.distanceMeters;
   const howFar = formatDistance(meters);
-  const imageUrl = buildVenueImageUrl(venue, { width: 320, height: 320 });
+  // Same size as venue hero proxy fallback so URLs match when imageUrl is absent.
+  const imageUrl = buildVenueImageUrl(venue);
   const meta = [howFar, venue.category].filter(Boolean).join(' · ');
+
+  useEffect(() => {
+    if (!imageUrl) return;
+    rememberVenueImage([venue.id, venue.providerPlaceId], imageUrl);
+    void Image.prefetch(imageUrl);
+  }, [imageUrl, venue.id, venue.providerPlaceId]);
 
   return (
     <View style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}>

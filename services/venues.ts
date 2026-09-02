@@ -22,6 +22,7 @@ import { ShyTextVibe } from '../types/shytext';
 import { isBlockedEitherWay } from './blocks';
 import { recordVenueShyText } from './venueHeat';
 import { moderateText } from './moderation';
+import { rememberVenueImage } from './venueImageCache';
 import i18n from '../i18n';
 
 function isInternalVenueId(id: string) {
@@ -89,6 +90,7 @@ export async function ensureInternalVenue(input: Venue | VenueCandidate): Promis
         latitude: input.latitude ?? 0,
         longitude: input.longitude ?? 0,
         distanceMeters: 'distanceMeters' in input ? input.distanceMeters ?? 0 : 0,
+        imageUrl: input.imageUrl,
       },
       id
     );
@@ -97,7 +99,11 @@ export async function ensureInternalVenue(input: Venue | VenueCandidate): Promis
   const existingId = 'id' in input && isInternalVenueId(input.id) ? input.id : undefined;
   if (existingId) {
     const snap = await getDoc(doc(db, 'venues', existingId));
-    if (snap.exists()) return { id: snap.id, ...snap.data(), imageUrl: input.imageUrl } as Venue;
+    if (snap.exists()) {
+      const merged = { id: snap.id, ...snap.data(), imageUrl: input.imageUrl ?? snap.data().imageUrl } as Venue;
+      rememberVenueImage([merged.id, merged.providerPlaceId], merged.imageUrl);
+      return merged;
+    }
   }
 
   const matches = await getDocs(
@@ -105,7 +111,14 @@ export async function ensureInternalVenue(input: Venue | VenueCandidate): Promis
   );
   const reuse = matches.docs[0];
   if (reuse) {
-    return { id: reuse.id, ...reuse.data(), imageUrl: input.imageUrl } as Venue;
+    const data = reuse.data();
+    const imageUrl = input.imageUrl ?? (typeof data.imageUrl === 'string' ? data.imageUrl : undefined);
+    if (input.imageUrl && data.imageUrl !== input.imageUrl) {
+      void updateDoc(reuse.ref, { imageUrl: input.imageUrl }).catch(() => undefined);
+    }
+    const merged = { id: reuse.id, ...data, imageUrl } as Venue;
+    rememberVenueImage([merged.id, merged.providerPlaceId], imageUrl);
+    return merged;
   }
 
   const payload = {
@@ -116,11 +129,12 @@ export async function ensureInternalVenue(input: Venue | VenueCandidate): Promis
     category: input.category ?? null,
     latitude: input.latitude ?? null,
     longitude: input.longitude ?? null,
+    imageUrl: input.imageUrl ?? null,
     createdAt: Date.now(),
     serverCreatedAt: serverTimestamp(),
   };
   const ref = await addDoc(collection(db, 'venues'), payload);
-  return {
+  const created = {
     id: ref.id,
     provider: input.provider,
     providerPlaceId: input.providerPlaceId,
@@ -131,6 +145,8 @@ export async function ensureInternalVenue(input: Venue | VenueCandidate): Promis
     longitude: input.longitude ?? undefined,
     imageUrl: input.imageUrl,
   };
+  rememberVenueImage([created.id, created.providerPlaceId], created.imageUrl);
+  return created;
 }
 
 export async function saveVenue(venue: Venue) {
@@ -145,6 +161,7 @@ export async function saveVenue(venue: Venue) {
       category: venue.category ?? null,
       latitude: venue.latitude ?? null,
       longitude: venue.longitude ?? null,
+      imageUrl: venue.imageUrl ?? null,
     },
     { merge: true }
   );

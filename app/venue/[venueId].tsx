@@ -24,14 +24,30 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getVenue } from '../../services/venues';
 import { sendChatRequest } from '../../services/chat';
 import { buildVenueImageUrl } from '../../services/venueImage';
+import { lookupVenueImage, rememberVenueImage } from '../../services/venueImageCache';
+import {
+  clearPendingShyne,
+  getPendingShyne,
+  isPendingShyne,
+  subscribePendingShyne,
+  takePendingShyneError,
+} from '../../services/pendingShyne';
 import { isDevToolsEnabled, MAX_STATUS_LENGTH } from '../../utils/config';
 import { CheckIn, Venue } from '../../types/venue';
 import { SHYTEXT_VIBES, normalizeVibe } from '../../types/shytext';
 import { vibeLabel } from '../../i18n/labels';
 import { useTranslation } from 'react-i18next';
 
+function resolveHeroUrl(venueId: string | undefined, seed: Venue | null): string | null {
+  const cached = lookupVenueImage(venueId, seed?.id, seed?.providerPlaceId);
+  if (cached) return cached;
+  const built = seed ? buildVenueImageUrl(seed) : null;
+  if (built) rememberVenueImage([venueId, seed?.providerPlaceId], built);
+  return built;
+}
+
 export default function VenueScreen() {
-  const { venueId } = useLocalSearchParams<{ venueId: string }>();
+  const { venueId, mode } = useLocalSearchParams<{ venueId: string; mode?: string }>();
   const theme = useTheme();
   const { t } = useTranslation();
   const reduce = useReduceMotion();
@@ -40,25 +56,81 @@ export default function VenueScreen() {
   const current = useCurrentVenue();
   const { refresh } = useLocation();
   const { people, loading } = useCheckIns(venueId);
-  const [venue, setVenue] = useState<Venue | null>(null);
+  // Card tap = preview. Slider / dock Shyne sets this so optimistic UI can paint.
+  const [shyneIntent, setShyneIntent] = useState(mode === 'shyne');
+  const pending = shyneIntent ? getPendingShyne(venueId) : null;
+  const remembered =
+    current.venue?.id === venueId ? current.venue : pending?.venue?.id === venueId ? pending.venue : null;
+  const [venue, setVenue] = useState<Venue | null>(remembered);
   const [hello, setHello] = useState<CheckIn | null>(null);
   const [report, setReport] = useState<CheckIn | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [statusDraft, setStatusDraft] = useState('');
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [pendingTick, setPendingTick] = useState(0);
+  // Sync cache first — React context is often still stale on the first paint after push.
+  const [heroImageUrl, setHeroImageUrl] = useState<string | null>(() => resolveHeroUrl(venueId, remembered));
+
+  useEffect(() => subscribePendingShyne(() => setPendingTick((n) => n + 1)), []);
 
   useEffect(() => {
-    if (venueId) getVenue(venueId).then(setVenue);
+    if (!venueId) return;
+    const seed =
+      current.venue?.id === venueId
+        ? current.venue
+        : shyneIntent
+          ? getPendingShyne(venueId)?.venue ?? null
+          : null;
+    const seededUrl = resolveHeroUrl(venueId, seed);
+    if (seed) setVenue((prev) => prev ?? seed);
+    // Fill once if first paint missed the cache; never replace an existing URL.
+    if (seededUrl) setHeroImageUrl((prev) => prev ?? seededUrl);
+
+    let cancelled = false;
+    getVenue(venueId).then((found) => {
+      if (cancelled || !found) return;
+      const mergedUrl = found.imageUrl ?? seed?.imageUrl;
+      setVenue((prev) => ({
+        ...found,
+        imageUrl: prev?.imageUrl ?? mergedUrl,
+      }));
+      const nextUrl = buildVenueImageUrl({ ...found, imageUrl: mergedUrl });
+      if (nextUrl) {
+        rememberVenueImage([venueId, found.providerPlaceId], nextUrl);
+        setHeroImageUrl((prev) => prev ?? nextUrl);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Only when navigating to a venue — ignore later check-in / remember updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueId]);
 
-  const here = !!venueId && current.checkIn?.venueId === venueId && !current.expired;
-  const heroImageUrl = venue
-    ? buildVenueImageUrl(venue, { width: 640, height: Math.min(640, Math.round(640 * (168 / 390))) })
-    : null;
+  const confirmedHere =
+    !!venueId &&
+    !!current.checkIn &&
+    current.checkIn.venueId === venueId &&
+    !current.expired &&
+    !current.checkIn.id.startsWith('pending:');
+  const pendingHere = shyneIntent && isPendingShyne(venueId);
+  const here = confirmedHere || pendingHere;
   const others = people.filter((item) => item.userId !== user?.uid);
-  const mine = people.find((item) => item.userId === user?.uid) ?? (here ? current.checkIn : null);
+  const mine =
+    people.find((item) => item.userId === user?.uid) ??
+    (current.checkIn?.venueId === venueId && !current.expired ? current.checkIn : null) ??
+    (pendingHere ? getPendingShyne(venueId)?.checkIn ?? null : null);
   const vibe = normalizeVibe(mine?.vibe);
+  // Avoid skeleton flash while the Shyne check-in / people query is still catching up.
+  const showPeopleSkeleton = here && loading && others.length === 0 && !pendingHere && !mine;
+
+  useEffect(() => {
+    if (!venueId) return;
+    if (confirmedHere && !current.checkIn?.id.startsWith('pending:')) clearPendingShyne(venueId);
+    const failed = takePendingShyneError(venueId);
+    if (failed) setNotice(failed);
+  }, [venueId, confirmedHere, pendingTick, current.checkIn?.id]);
 
   useEffect(() => {
     if (here && mine?.id) setStatusDraft(mine.status ?? '');
@@ -66,19 +138,26 @@ export default function VenueScreen() {
 
   useEffect(() => {
     if (!here || vibe !== 'other') return;
+    if (mine?.id.startsWith('pending:')) return;
     const id = setTimeout(() => {
       void current.setVibe('other', statusDraft).catch((err) => {
         setStatusError(err instanceof Error ? err.message : t('errors.couldNotSave'));
       });
     }, 420);
     return () => clearTimeout(id);
-  }, [here, vibe, statusDraft]);
+  }, [here, vibe, statusDraft, mine?.id]);
 
   const checkInNow = async () => {
     if (!venue || !profile || busy) return;
     setBusy(true);
     setNotice(null);
+    setShyneIntent(true);
     try {
+      current.beginShyne(venue, {
+        displayName: profile.displayName,
+        avatarUrl: profile.avatarUrl,
+        age: profile.age,
+      });
       const coords = await refresh();
       await current.checkInHere(venue, coords?.latitude, coords?.longitude, {
         displayName: profile.displayName,
@@ -86,6 +165,7 @@ export default function VenueScreen() {
         age: profile.age,
       });
     } catch (err) {
+      setShyneIntent(false);
       setNotice(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
     } finally {
       setBusy(false);
@@ -101,18 +181,15 @@ export default function VenueScreen() {
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => undefined} tintColor={theme.accent} />}
       >
-        {venue ? (
+        {venue || heroImageUrl ? (
           <View style={[styles.hero, cardShadow(theme)]}>
-            <VenueStamp category={venue.category} height={168} imageUrl={heroImageUrl} />
+            <VenueStamp category={venue?.category} height={168} imageUrl={heroImageUrl} />
           </View>
         ) : null}
 
         <View style={styles.content}>
           {here && mine ? (
-            <Animated.View
-              layout={reduce ? undefined : springLayout()}
-              style={[styles.own, cardShadow(theme), { backgroundColor: theme.card }]}
-            >
+            <View style={[styles.own, cardShadow(theme), { backgroundColor: theme.card }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <CountdownBadge expiresAt={mine.expiresAt} theme={theme} />
               </View>
@@ -137,10 +214,7 @@ export default function VenueScreen() {
                 ))}
               </View>
               {vibe === 'other' ? (
-                <Animated.View
-                  layout={reduce ? undefined : springLayout()}
-                  style={[styles.statusBox, { backgroundColor: theme.bg }]}
-                >
+                <View style={[styles.statusBox, { backgroundColor: theme.bg }]}>
                   <TextInput
                     value={statusDraft}
                     onChangeText={(value) => {
@@ -156,17 +230,17 @@ export default function VenueScreen() {
                   <Text style={[type.caption, { color: theme.quiet, fontVariant: ['tabular-nums'] }]}>
                     {MAX_STATUS_LENGTH - statusDraft.length}
                   </Text>
-                </Animated.View>
+                </View>
               ) : null}
               {statusError ? <Text style={{ color: theme.danger }}>{statusError}</Text> : null}
-            </Animated.View>
+            </View>
           ) : null}
 
           {notice ? <Text style={{ color: theme.danger }}>{notice}</Text> : null}
 
           {!here ? (
             <EmptyState theme={theme} title={t('venue.shyInToSee')} />
-          ) : loading && !people.length ? (
+          ) : showPeopleSkeleton ? (
             <Skeleton theme={theme} />
           ) : others.length === 0 ? (
             <EmptyState theme={theme} title={t('venue.justYou')} />
@@ -196,10 +270,7 @@ export default function VenueScreen() {
       </ScrollView>
 
       {venue ? (
-        <Animated.View
-          layout={reduce ? undefined : springLayout()}
-          style={[styles.dock, { backgroundColor: theme.bg, paddingBottom: Math.max(insets.bottom, 16) }]}
-        >
+        <View style={[styles.dock, { backgroundColor: theme.bg, paddingBottom: Math.max(insets.bottom, 16) }]}>
           <ShyInFlame
             variant="dock"
             venueName={venue.name}
@@ -216,7 +287,7 @@ export default function VenueScreen() {
                 : undefined
             }
           />
-        </Animated.View>
+        </View>
       ) : null}
 
       <ChatRequestModal

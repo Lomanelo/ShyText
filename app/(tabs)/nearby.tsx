@@ -20,11 +20,23 @@ import {
   findVenuesByProviderPlaceIds,
   toVenue,
 } from '../../services/venues';
+import { buildVenueImageUrl } from '../../services/venueImage';
+import { rememberVenueImage } from '../../services/venueImageCache';
+import { isPendingShyne, setPendingShyneError } from '../../services/pendingShyne';
 import { PlacesRequestError, Venue, VenueCandidate } from '../../types/venue';
 import { distanceBetween, pickClosest } from '../../utils/geo';
 import { useTranslation } from 'react-i18next';
 
 const SHY_IN_HINT_KEY = 'shytext.hint.shyIn';
+
+function stampVenueThumb(listVenue: Venue, internal: Venue) {
+  const url = buildVenueImageUrl({ ...internal, imageUrl: internal.imageUrl ?? listVenue.imageUrl });
+  rememberVenueImage(
+    [internal.id, internal.providerPlaceId, listVenue.id, listVenue.providerPlaceId],
+    url ?? listVenue.imageUrl
+  );
+  return { ...internal, imageUrl: internal.imageUrl ?? listVenue.imageUrl };
+}
 
 async function hydrate(candidates: VenueCandidate[]): Promise<Venue[]> {
   const existing = await findVenuesByProviderPlaceIds(candidates.map((item) => item.providerPlaceId));
@@ -75,7 +87,6 @@ export default function NearbyScreen() {
   const [shyInHint, setShyInHint] = useState(false);
 
   const liveCheckIn = current.checkIn && !current.expired ? current.checkIn : null;
-  const liveVenue = liveCheckIn ? current.venue : null;
 
   const load = useCallback(
     async (search?: string, relock = false) => {
@@ -131,8 +142,13 @@ export default function NearbyScreen() {
   const openVenue = async (venue: Venue) => {
     try {
       const internal = await ensureInternalVenue(venue);
-      await current.rememberVenue(internal);
-      router.push(`/venue/${internal.id}`);
+      const withImage = stampVenueThumb(venue, internal);
+      // Preview only — never begin a Shyne from a card tap.
+      await current.rememberVenue(withImage);
+      router.push({
+        pathname: '/venue/[venueId]',
+        params: { venueId: withImage.id, mode: 'preview' },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.couldNotOpenVenue'));
     }
@@ -145,10 +161,14 @@ export default function NearbyScreen() {
       setCheckingInId(key);
       setError(null);
       const internal = await ensureInternalVenue(venue);
-      await current.rememberVenue(internal);
+      const withImage = stampVenueThumb(venue, internal);
+      await current.rememberVenue(withImage);
 
-      if (current.checkIn && !current.expired && current.checkIn.venueId === internal.id) {
-        router.push(`/venue/${internal.id}`);
+      if (current.checkIn && !current.expired && current.checkIn.venueId === withImage.id) {
+        router.push({
+          pathname: '/venue/[venueId]',
+          params: { venueId: withImage.id, mode: 'shyne' },
+        });
         return;
       }
       if (!profile) {
@@ -156,16 +176,26 @@ export default function NearbyScreen() {
         return;
       }
 
-      // Open the venue immediately; finish Shyne with the last known fix (no GPS wait).
-      router.push(`/venue/${internal.id}`);
+      // Paint the venue fully Shyned; finish check-in with the last known fix (no GPS wait).
+      current.beginShyne(withImage, {
+        displayName: profile.displayName,
+        avatarUrl: profile.avatarUrl,
+        age: profile.age,
+      });
+      router.push({
+        pathname: '/venue/[venueId]',
+        params: { venueId: withImage.id, mode: 'shyne' },
+      });
       void current
-        .checkInHere(internal, coords?.latitude, coords?.longitude, {
+        .checkInHere(withImage, coords?.latitude, coords?.longitude, {
           displayName: profile.displayName,
           avatarUrl: profile.avatarUrl,
           age: profile.age,
         })
         .catch((err) => {
-          setError(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
+          const message = err instanceof Error ? err.message : t('errors.couldNotCheckIn');
+          setPendingShyneError(withImage.id, message);
+          setError(message);
         });
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
@@ -264,12 +294,15 @@ export default function NearbyScreen() {
         ) : (
           venues.map((venue) => {
             const key = candidateListKey(venue);
+            const pending = isPendingShyne(venue.id);
+            const shynePlaceId = current.shyneVenue?.providerPlaceId;
             const isHere =
               checkingInId === key ||
+              pending ||
               (!!liveCheckIn &&
+                !current.expired &&
                 (venue.id === liveCheckIn.venueId ||
-                  (!!liveVenue &&
-                    (liveVenue.id === venue.id || liveVenue.providerPlaceId === venue.providerPlaceId))));
+                  (!!shynePlaceId && shynePlaceId === venue.providerPlaceId)));
             return (
               <VenueCard
                 key={key}
