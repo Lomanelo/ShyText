@@ -1,9 +1,9 @@
-
 export type VenueImageTarget = {
   latitude?: number | null;
   longitude?: number | null;
   address?: string | null;
   name?: string | null;
+  imageUrl?: string | null;
 };
 
 export type VenueImageSize = {
@@ -40,15 +40,29 @@ export function isVenueImageConfigured() {
 
 export function buildVenueImageUrl(target: VenueImageTarget, size: VenueImageSize = DEFAULT_SIZE): string | null {
   const base = venueImageProxyBase();
-  const lat = target.latitude;
-  const lng = target.longitude;
-  if (!base || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (!base) return null;
 
   const url = new URL(base);
-  url.searchParams.set('lat', String(lat));
-  url.searchParams.set('lng', String(lng));
   url.searchParams.set('w', String(clampDimension(size.width)));
   url.searchParams.set('h', String(clampDimension(size.height)));
+
+  if (target.imageUrl?.trim()) {
+    url.searchParams.set('thumb', target.imageUrl.trim());
+    return url.toString();
+  }
+
+  const lat = target.latitude;
+  const lng = target.longitude;
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    url.searchParams.set('lat', String(lat));
+    url.searchParams.set('lng', String(lng));
+  }
+  if (target.name?.trim()) url.searchParams.set('name', target.name.trim());
+  if (target.address?.trim()) url.searchParams.set('address', target.address.trim());
+
+  if (!url.searchParams.has('lat') && !url.searchParams.has('name') && !url.searchParams.has('address')) {
+    return null;
+  }
 
   return url.toString();
 }

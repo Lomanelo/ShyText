@@ -1,12 +1,12 @@
 import type { Config, Context } from '@netlify/functions';
-import { googlePlacesConfigured, searchGoogleVenues } from './_shared/googlePlacesClient';
+import { searchSerperVenues, serperConfigured } from './_shared/serperClient';
 
 type CacheEntry = { at: number; body: unknown };
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 90_000;
 
 function cacheKey(lat: number, lng: number, q: string, lang: string) {
-  return `g:${lat.toFixed(3)}:${lng.toFixed(3)}:${q}:${lang}`;
+  return `s:${lat.toFixed(3)}:${lng.toFixed(3)}:${q}:${lang}`;
 }
 
 function json(body: unknown, status = 200, extra?: HeadersInit) {
@@ -33,8 +33,8 @@ export default async (req: Request, _context: Context) => {
     return json({ error: 'Invalid coordinates.', code: 'bad_request' }, 400);
   }
 
-  if (!googlePlacesConfigured()) {
-    return json({ error: 'Google Places is not configured.', code: 'not_configured' }, 501);
+  if (!serperConfigured()) {
+    return json({ error: 'Serper is not configured.', code: 'not_configured' }, 501);
   }
 
   const key = cacheKey(lat, lng, q.toLowerCase(), lang);
@@ -44,13 +44,13 @@ export default async (req: Request, _context: Context) => {
   }
 
   try {
-    const venues = await searchGoogleVenues(lat, lng, q || undefined, lang);
+    const venues = await searchSerperVenues(lat, lng, q || undefined, lang);
     cache.set(key, { at: Date.now(), body: venues });
     return json(venues);
   } catch (err) {
     const status = typeof err === 'object' && err && 'status' in err ? Number((err as { status: number }).status) : 502;
     const message = err instanceof Error ? err.message : 'Could not load nearby venues.';
-    const code = status === 429 ? 'rate_limited' : status === 401 ? 'google_auth' : 'google_request';
+    const code = status === 429 ? 'rate_limited' : status === 401 ? 'serper_auth' : 'serper_request';
     return json({ error: message, code }, status);
   }
 };

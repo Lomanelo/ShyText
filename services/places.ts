@@ -92,7 +92,7 @@ class PlacesProxyProvider implements PlacesProvider {
         .filter(
           (item) =>
             item &&
-            (item.provider === 'google' || item.provider === 'apple') &&
+            (item.provider === 'serper' || item.provider === 'google' || item.provider === 'apple') &&
             typeof item.providerPlaceId === 'string' &&
             typeof item.name === 'string' &&
             Number.isFinite(item.latitude) &&
@@ -100,6 +100,7 @@ class PlacesProxyProvider implements PlacesProvider {
         )
         .map((item) => ({
           ...item,
+          imageUrl: typeof item.imageUrl === 'string' ? item.imageUrl : undefined,
           distanceMeters: distanceBetween(latitude, longitude, item.latitude, item.longitude),
         }))
     );

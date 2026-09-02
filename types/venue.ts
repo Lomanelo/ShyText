@@ -1,5 +1,5 @@
 export interface VenueCandidate {
-  provider: 'apple' | 'google' | 'demo';
+  provider: 'apple' | 'google' | 'serper' | 'demo';
   providerPlaceId: string;
   name: string;
   address?: string;
@@ -7,11 +7,12 @@ export interface VenueCandidate {
   latitude: number;
   longitude: number;
   distanceMeters: number;
+  imageUrl?: string;
 }
 
 export interface Venue {
   id: string;
-  provider: 'apple' | 'demo' | 'google';
+  provider: 'apple' | 'demo' | 'google' | 'serper';
   providerPlaceId: string;
   name: string;
   address?: string;
@@ -20,6 +21,7 @@ export interface Venue {
   longitude?: number;
   distanceMeters?: number;
   activeCount?: number;
+  imageUrl?: string;
 }
 
 export interface CheckIn {

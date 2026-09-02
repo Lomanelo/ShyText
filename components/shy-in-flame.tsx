@@ -19,12 +19,15 @@ import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useTranslation } from 'react-i18next';
 import { PressScale } from './PressScale';
 
-const THUMB = 52;
-const TRACK_H = 56;
 const COMMIT_RATIO = 0.82;
 const CATCH_RATIO = 0.5;
 const PAD = 4;
-const MARK = 34;
+
+const SIZES = {
+  dock: { thumb: 52, track: 56, mark: 34 },
+  card: { thumb: 52, track: 56, mark: 34 },
+  inline: { thumb: 44, track: 48, mark: 28 },
+} as const;
 
 function hapticCatch() {
   void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Rigid);
@@ -59,12 +62,17 @@ export function ShyInFlame({
   onShyOut?: () => void;
   onPress?: () => void;
   accessory?: ReactNode;
-  variant?: 'dock' | 'card';
+  variant?: 'dock' | 'card' | 'inline';
 }) {
   const { t } = useTranslation();
   const reduce = useReduceMotion();
   const [reader, setReader] = useState(false);
   const [ignited, setIgnited] = useState(lit);
+  const size = SIZES[variant];
+  const thumb = size.thumb;
+  const mark = size.mark;
+  const trackH = size.track;
+  const hideName = variant === 'inline';
 
   const trackW = useSharedValue(0);
   const slide = useSharedValue(0);
@@ -167,7 +175,8 @@ export function ShyInFlame({
 
   const pan = Gesture.Pan()
     .enabled(!showLit && !locked && !simple)
-    .minDistance(0)
+    .activeOffsetX(12)
+    .failOffsetY([-16, 16])
     .maxPointers(1)
     .onBegin(() => {
       if (committed.value === 1) return;
@@ -177,7 +186,7 @@ export function ShyInFlame({
     })
     .onUpdate((event) => {
       if (committed.value === 1) return;
-      const maxTravel = Math.max(0, trackW.value - THUMB - PAD * 2);
+      const maxTravel = Math.max(0, trackW.value - thumb - PAD * 2);
       const next = Math.min(maxTravel, Math.max(0, dragStart.value + event.translationX));
       slide.value = next;
       progress.value = maxTravel > 0 ? next / maxTravel : 0;
@@ -189,7 +198,7 @@ export function ShyInFlame({
     })
     .onEnd(() => {
       if (committed.value === 1) return;
-      const maxTravel = Math.max(0, trackW.value - THUMB - PAD * 2);
+      const maxTravel = Math.max(0, trackW.value - thumb - PAD * 2);
       runOnJS(tryCommit)(slide.value, maxTravel);
     })
     .onFinalize(() => {
@@ -207,8 +216,8 @@ export function ShyInFlame({
     });
 
   const fillStyle = useAnimatedStyle(() => {
-    const maxTravel = Math.max(0, trackW.value - THUMB - PAD * 2);
-    const width = PAD + slide.value + THUMB * 0.55;
+    const maxTravel = Math.max(0, trackW.value - thumb - PAD * 2);
+    const width = PAD + slide.value + thumb * 0.55;
     return {
       width: Math.min(trackW.value, width),
       opacity: interpolate(slide.value, [0, maxTravel * 0.25], [0, 0.22], Extrapolation.CLAMP),
@@ -216,7 +225,7 @@ export function ShyInFlame({
   });
 
   const hintStyle = useAnimatedStyle(() => {
-    const maxTravel = Math.max(0, trackW.value - THUMB - PAD * 2);
+    const maxTravel = Math.max(0, trackW.value - thumb - PAD * 2);
     return {
       opacity: interpolate(slide.value, [0, maxTravel * 0.35], [1, 0], Extrapolation.CLAMP),
       transform: [
@@ -328,9 +337,11 @@ export function ShyInFlame({
 
   return (
     <View style={styles.wrap}>
-      <Text style={[type.caption, { color: theme.muted, marginBottom: 6 }]} numberOfLines={1}>
-        {venueName}
-      </Text>
+      {hideName ? null : (
+        <Text style={[type.caption, { color: theme.muted, marginBottom: 6 }]} numberOfLines={1}>
+          {venueName}
+        </Text>
+      )}
       <View
         style={[
           variant === 'dock' ? cardShadow(theme) : null,
@@ -339,14 +350,24 @@ export function ShyInFlame({
       >
         <View
           onLayout={onTrackLayout}
-          style={[styles.track, { backgroundColor: theme.bg, opacity: variant === 'dock' ? 1 : 0.92 }]}
+          style={[
+            styles.track,
+            {
+              height: trackH,
+              backgroundColor: variant === 'inline' ? theme.bg : theme.bg,
+              opacity: variant === 'card' ? 0.92 : 1,
+            },
+          ]}
         >
           <Animated.View
             pointerEvents="none"
             style={[styles.fill, { backgroundColor: theme.accent }, fillStyle]}
           />
-          <Animated.View pointerEvents="none" style={[styles.hintWrap, hintStyle]}>
-            <Text style={[styles.hint, { color: theme.quiet }]} numberOfLines={1}>
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.hintWrap, { left: thumb + PAD + 8 }, hintStyle]}
+          >
+            <Text style={[styles.hint, { color: theme.quiet, fontSize: hideName ? 14 : 15 }]} numberOfLines={1}>
               {loading ? t('common.shyingIn') : t('nearby.slideHint')}
             </Text>
             <Ionicons name="chevron-forward" size={14} color={theme.quiet} style={{ opacity: 0.6 }} />
@@ -358,18 +379,32 @@ export function ShyInFlame({
               accessibilityLabel={a11y}
               accessibilityState={{ disabled: locked, selected: false }}
               accessibilityHint={simple ? undefined : t('nearby.slideHint')}
-              style={[styles.thumb, { backgroundColor: theme.card }, thumbStyle]}
+              style={[
+                styles.thumb,
+                {
+                  width: thumb,
+                  height: thumb,
+                  backgroundColor: theme.card,
+                },
+                thumbStyle,
+              ]}
             >
-              <Animated.View style={[styles.glow, glowStyle]} />
-              <Animated.Image
-                source={require('../assets/images/icon.png')}
-                accessibilityIgnoresInvertColors
-                style={[styles.thumbMark, dimMarkStyle]}
+              <Animated.View
+                style={[styles.glow, { width: mark + 18, height: mark + 18 }, glowStyle]}
               />
               <Animated.Image
                 source={require('../assets/images/icon.png')}
                 accessibilityIgnoresInvertColors
-                style={[styles.thumbMark, styles.thumbMarkOverlay, litMarkStyle]}
+                style={[{ width: mark, height: mark, borderRadius: 10, resizeMode: 'cover' }, dimMarkStyle]}
+              />
+              <Animated.Image
+                source={require('../assets/images/icon.png')}
+                accessibilityIgnoresInvertColors
+                style={[
+                  { width: mark, height: mark, borderRadius: 10, resizeMode: 'cover' },
+                  styles.thumbMarkOverlay,
+                  litMarkStyle,
+                ]}
               />
             </Animated.View>
           </GestureDetector>
@@ -382,7 +417,6 @@ export function ShyInFlame({
 const styles = StyleSheet.create({
   wrap: { width: '100%' },
   track: {
-    height: TRACK_H,
     borderRadius: radius.pill,
     borderCurve: 'continuous',
     justifyContent: 'center',
@@ -397,7 +431,6 @@ const styles = StyleSheet.create({
   },
   hintWrap: {
     position: 'absolute',
-    left: THUMB + PAD + 8,
     right: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -405,7 +438,6 @@ const styles = StyleSheet.create({
   },
   hint: {
     flex: 1,
-    fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0.2,
   },
@@ -413,8 +445,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: PAD,
     top: PAD,
-    width: THUMB,
-    height: THUMB,
     borderRadius: radius.pill,
     borderCurve: 'continuous',
     alignItems: 'center',
@@ -425,19 +455,11 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
-  thumbMark: {
-    width: MARK,
-    height: MARK,
-    borderRadius: 10,
-    resizeMode: 'cover',
-  },
   thumbMarkOverlay: {
     position: 'absolute',
   },
   glow: {
     position: 'absolute',
-    width: MARK + 18,
-    height: MARK + 18,
     borderRadius: 999,
     backgroundColor: brand.accent,
   },

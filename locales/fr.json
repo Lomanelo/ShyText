@@ -85,7 +85,7 @@
   "nearby": {
     "searchPlaceholder": "Café, bar, parc…",
     "slideHint": "Glisse pour Shy In",
-    "flickHint": "Glisse la flamme pour Shy In",
+    "flickHint": "Glisse la flamme sur un lieu pour Shy In. Tire vers le bas pour actualiser.",
     "flickMicro": "Glisse la flamme →",
     "holdHint": "Appuie sur la flamme, puis glisse vers le haut",
     "aVenue": "un lieu",

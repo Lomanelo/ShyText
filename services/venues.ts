@@ -25,7 +25,13 @@ import { moderateText } from './moderation';
 import i18n from '../i18n';
 
 function isInternalVenueId(id: string) {
-  return Boolean(id) && !id.startsWith('apple:') && !id.startsWith('pending:');
+  return (
+    Boolean(id) &&
+    !id.startsWith('apple:') &&
+    !id.startsWith('google:') &&
+    !id.startsWith('serper:') &&
+    !id.startsWith('pending:')
+  );
 }
 
 export function toVenue(candidate: VenueCandidate, id?: string): Venue {
@@ -39,6 +45,7 @@ export function toVenue(candidate: VenueCandidate, id?: string): Venue {
     latitude: candidate.latitude,
     longitude: candidate.longitude,
     distanceMeters: candidate.distanceMeters,
+    imageUrl: candidate.imageUrl,
   };
 }
 
@@ -90,7 +97,7 @@ export async function ensureInternalVenue(input: Venue | VenueCandidate): Promis
   const existingId = 'id' in input && isInternalVenueId(input.id) ? input.id : undefined;
   if (existingId) {
     const snap = await getDoc(doc(db, 'venues', existingId));
-    if (snap.exists()) return { id: snap.id, ...snap.data() } as Venue;
+    if (snap.exists()) return { id: snap.id, ...snap.data(), imageUrl: input.imageUrl } as Venue;
   }
 
   const matches = await getDocs(
@@ -98,7 +105,7 @@ export async function ensureInternalVenue(input: Venue | VenueCandidate): Promis
   );
   const reuse = matches.docs[0];
   if (reuse) {
-    return { id: reuse.id, ...reuse.data() } as Venue;
+    return { id: reuse.id, ...reuse.data(), imageUrl: input.imageUrl } as Venue;
   }
 
   const payload = {
@@ -122,6 +129,7 @@ export async function ensureInternalVenue(input: Venue | VenueCandidate): Promis
     category: input.category,
     latitude: input.latitude ?? undefined,
     longitude: input.longitude ?? undefined,
+    imageUrl: input.imageUrl,
   };
 }
 

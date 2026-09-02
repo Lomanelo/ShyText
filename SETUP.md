@@ -66,7 +66,8 @@ Client (`.env` / EAS env):
 
 Server / Netlify secrets (never ship in the app):
 
-- `GOOGLE_MAPS_API_KEY` (Places API New + Street View Static/Metadata; server only)
+- `SERPER_API_KEY` (Serper Maps + Images; server only — https://serper.dev)
+- `GOOGLE_MAPS_API_KEY` (legacy; unused once Serper is set)
 - `APPLE_MAPS_TEAM_ID` (optional legacy; no longer used for discovery)
 - `APPLE_MAPS_KEY_ID`
 - `APPLE_MAPS_PRIVATE_KEY` (Maps `.p8` key contents; `\n` escaped is fine)
@@ -95,44 +96,32 @@ See `firestore.indexes.json`. Important composites:
 - `chatRequests`: `receiverId` + `status` + `createdAt`
 - `conversations`: `participantIds` (array) + `lastMessageAt`
 
-## 8. Google Places venue discovery
+## 8. Serper venue discovery
 
-Nearby / search go through `netlify/functions/places.ts` (`/api/places`) using **Places API (New)**.
+Nearby / search go through `netlify/functions/places.ts` (`/api/places`) using **Serper Maps** (`POST https://google.serper.dev/maps`).
 
-1. In Google Cloud, enable **Places API (New)** on the same project as Street View.
-2. Restrict the key to Places API (New) + Street View Static/Metadata.
-3. Set Netlify env: `GOOGLE_MAPS_API_KEY`.
-4. Deploy Netlify functions.
-5. Keep `EXPO_PUBLIC_PLACES_PROXY_URL` pointing at `https://your-site.netlify.app/api/places`.
+1. Create a key at [serper.dev](https://serper.dev).
+2. Set Netlify env: `SERPER_API_KEY`.
+3. Deploy Netlify functions.
+4. Keep `EXPO_PUBLIC_PLACES_PROXY_URL` pointing at `https://your-site.netlify.app/api/places`.
 
-Only places with `businessStatus: OPERATIONAL` (or no status, e.g. some parks) are returned, within 100 m.
+Nearby runs a small batch of category queries (cafe/bar/restaurant/pub/park/hotel), merges results, dedupes (~22 m), and keeps venues within **100 m**. Typed search uses a single Maps query.
 
-### Cost (as of Google’s 2025+ SKUs)
+### Cost
 
-- **Nearby Search Pro**: ~5,000 free calls/month, then about **$32 / 1,000**
-- **Text Search Pro** (typed search): same ballpark as Nearby Pro
-- Street View Static remains separate (~10k free images/month)
-
-At early usage (a few hundred nearby refreshes/month) you should stay inside the free Nearby quota. Cache on the function (90s) and client (45s) reduces billable calls.
-
-Do not put Google keys in `EXPO_PUBLIC_*` variables.
+Serper bills per request (batch nearby = one HTTP call with several queries / credits). Function cache (90s) and client cache (45s) cut repeat spend. Do not put `SERPER_API_KEY` in `EXPO_PUBLIC_*`.
 
 If the proxy is missing, the app uses demo venues (Paddy's Corner, Campus Library, Riverside Park). There is no map UI — only a list of venue names.
 
-## 8b. Google Street View venue photos
+## 8b. Serper venue photos
 
-Venue cards and the venue hero try a Street View exterior photo before falling back to category stamps.
+Venue cards prefer the Maps `thumbnailUrl` from Serper (proxied via `/api/venue-image?thumb=…`). If missing, `/api/venue-image` falls back to **Serper Images** with the venue name/address.
 
-Flow: `VenueStamp` → `/api/venue-image` → free metadata check → Static API image streamed to the app (not stored on Netlify).
+1. Same `SERPER_API_KEY` as places.
+2. Deploy `venue-image.ts` at `/api/venue-image`.
+3. If `EXPO_PUBLIC_PLACES_PROXY_URL` is set, images use the same host automatically.
 
-1. In Google Cloud, enable **Street View Static API** and **Street View Metadata API** on the same project/key.
-2. Set Netlify env: `GOOGLE_MAPS_API_KEY`.
-3. Deploy Netlify functions (`venue-image.ts` at `/api/venue-image`).
-4. If `EXPO_PUBLIC_PLACES_PROXY_URL` is already set, images use the same host automatically. Or set `EXPO_PUBLIC_VENUE_IMAGE_PROXY_URL` explicitly.
-
-Query tuning (optional, for testing): `heading`, `fov`, `pitch`, `radius`, `address`. Metadata-only: `?meta=1`.
-
-Google policy: do not persistently cache or rehost Street View imagery. The proxy uses `Cache-Control: no-store` and streams on demand.
+The proxy streams remote image bytes (does not permanently rehost). Maps thumbs avoid an extra Images credit when available.
 
 ## 9. iOS development build
 

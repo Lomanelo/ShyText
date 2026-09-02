@@ -4,7 +4,6 @@ import Animated from 'react-native-reanimated';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/Screen';
 import { LocationPermission } from '../../components/LocationPermission';
 import { VenueCard } from '../../components/VenueCard';
@@ -41,7 +40,11 @@ async function hydrate(candidates: VenueCandidate[]): Promise<Venue[]> {
 async function attachCounts(venues: Venue[]): Promise<Venue[]> {
   return Promise.all(
     venues.map(async (venue) => {
-      const countable = !venue.id.startsWith('apple:') && !venue.id.startsWith('pending:');
+      const countable =
+        !venue.id.startsWith('apple:') &&
+        !venue.id.startsWith('google:') &&
+        !venue.id.startsWith('serper:') &&
+        !venue.id.startsWith('pending:');
       return {
         ...venue,
         activeCount: countable ? await countActiveCheckIns(venue.id) : 0,
@@ -55,9 +58,10 @@ function rankVenues(venues: Venue[], latitude: number, longitude: number) {
     venues.map((venue) => ({
       ...venue,
       distanceMeters:
-        venue.latitude != null && venue.longitude != null
+        venue.distanceMeters ??
+        (venue.latitude != null && venue.longitude != null
           ? distanceBetween(latitude, longitude, venue.latitude, venue.longitude)
-          : venue.distanceMeters ?? 9999,
+          : 9999),
     }))
   );
 }
@@ -66,18 +70,16 @@ export default function NearbyScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
   const reduce = useReduceMotion();
-  const insets = useSafeAreaInsets();
   const { coords, status, error: locationError, busy, refresh } = useLocation();
   const { profile } = useAuth();
   const current = useCurrentVenue();
   const [venues, setVenues] = useState<Venue[]>([]);
-  const [pool, setPool] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rateLimited, setRateLimited] = useState(false);
   const [query, setQuery] = useState('');
   const [visibleAt, setVisibleAt] = useState<{ checkIn: CheckIn; venue: Venue } | null>(null);
-  const [checkingIn, setCheckingIn] = useState(false);
+  const [checkingInId, setCheckingInId] = useState<string | null>(null);
   const [shyInHint, setShyInHint] = useState(false);
 
   const load = useCallback(
@@ -106,12 +108,10 @@ export default function NearbyScreen() {
           }
         }
         const listed = rankVenues(await hydrate(candidates), next.latitude, next.longitude);
-        setPool(listed);
         setVenues(listed);
         setLoading(false);
         void attachCounts(listed)
           .then((withCounts) => {
-            setPool(withCounts);
             setVenues(rankVenues(withCounts, next.latitude, next.longitude));
           })
           .catch(() => undefined);
@@ -120,7 +120,7 @@ export default function NearbyScreen() {
         setLoading(false);
       }
     },
-    [refresh]
+    [refresh, t]
   );
 
   useEffect(() => {
@@ -132,20 +132,6 @@ export default function NearbyScreen() {
       if (!seen) setShyInHint(true);
     });
   }, []);
-
-  useEffect(() => {
-    if (!coords || pool.length === 0) return;
-    const next = rankVenues(pool, coords.latitude, coords.longitude);
-    setVenues((prev) => {
-      if (
-        prev.length === next.length &&
-        prev.every((venue, index) => venue.id === next[index]?.id && venue.distanceMeters === next[index]?.distanceMeters)
-      ) {
-        return prev;
-      }
-      return next;
-    });
-  }, [coords, pool]);
 
   useEffect(() => {
     const live = current.checkIn && !current.expired ? current.checkIn : null;
@@ -169,7 +155,7 @@ export default function NearbyScreen() {
     return () => {
       cancelled = true;
     };
-  }, [current.checkIn, current.expired]);
+  }, [current.checkIn, current.expired, t]);
 
   const openVenue = async (venue: Venue) => {
     try {
@@ -182,9 +168,9 @@ export default function NearbyScreen() {
   };
 
   const checkInAtVenue = async (venue: Venue) => {
-    if (checkingIn) return;
+    if (checkingInId) return;
     try {
-      setCheckingIn(true);
+      setCheckingInId(candidateListKey(venue));
       setError(null);
       const internal = await ensureInternalVenue(venue);
       if (current.checkIn && !current.expired && current.checkIn.venueId === internal.id) {
@@ -205,7 +191,7 @@ export default function NearbyScreen() {
     } catch (err) {
       setError(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
     } finally {
-      setCheckingIn(false);
+      setCheckingInId(null);
     }
   };
 
@@ -218,12 +204,11 @@ export default function NearbyScreen() {
   }
 
   const placesReady = isPlacesConfigured();
-  const closest = !query.trim() && !visibleAt ? venues[0] : undefined;
 
   return (
-      <Screen theme={theme} inset={false}>
+    <Screen theme={theme} inset={false}>
       <ScrollView
-        contentContainerStyle={[styles.content, closest ? styles.contentWithDock : null]}
+        contentContainerStyle={styles.content}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load(query || undefined, true)} tintColor={theme.accent} />}
@@ -316,38 +301,32 @@ export default function NearbyScreen() {
             }
           />
         ) : (
-          venues.map((venue) => (
-            <VenueCard
-              key={candidateListKey(venue)}
-              venue={venue}
-              theme={theme}
-              distance={
-                coords && venue.latitude != null && venue.longitude != null
-                  ? distanceBetween(coords.latitude, coords.longitude, venue.latitude, venue.longitude)
-                  : venue.distanceMeters
-              }
-              onPress={() => openVenue(venue)}
-            />
-          ))
+          venues.map((venue) => {
+            const key = candidateListKey(venue);
+            const isHere =
+              !!visibleAt &&
+              (visibleAt.venue.id === venue.id ||
+                visibleAt.venue.providerPlaceId === venue.providerPlaceId);
+            return (
+              <VenueCard
+                key={key}
+                venue={venue}
+                theme={theme}
+                distance={venue.distanceMeters}
+                shyInLoading={checkingInId === key}
+                onPress={() => openVenue(venue)}
+                onShyIn={isHere ? undefined : () => checkInAtVenue(venue)}
+              />
+            );
+          })
         )}
       </ScrollView>
-      {closest ? (
-        <View style={[styles.dock, { backgroundColor: theme.bg, paddingBottom: Math.max(insets.bottom, 12) }]}>
-          <ShyInFlame
-            venueName={closest.name}
-            theme={theme}
-            loading={checkingIn}
-            onShyIn={() => checkInAtVenue(closest)}
-          />
-        </View>
-      ) : null}
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: space[16], paddingBottom: space[32], gap: space[12] },
-  contentWithDock: { paddingBottom: 108 },
   here: {
     borderRadius: radius.lg,
     borderCurve: 'continuous',
@@ -355,7 +334,6 @@ const styles = StyleSheet.create({
     paddingVertical: space[8],
     paddingHorizontal: space[8],
   },
-  dock: { paddingHorizontal: space[16], paddingTop: space[4] },
   searchWrap: {
     borderRadius: radius.pill,
     borderCurve: 'continuous',
