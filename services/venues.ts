@@ -22,6 +22,7 @@ import { ShyTextVibe } from '../types/shytext';
 import { isBlockedEitherWay } from './blocks';
 import { recordVenueShyText } from './venueHeat';
 import { moderateText } from './moderation';
+import { prefetchProfileImage } from './imageCache';
 import { rememberVenueImage } from './venueImageCache';
 import i18n from '../i18n';
 
@@ -310,23 +311,34 @@ export function listenCheckIns(venueId: string, onChange: (people: CheckIn[]) =>
   return onSnapshot(
     q,
     async (snap) => {
-      const now = Date.now();
-      const user = auth.currentUser;
-      let people = snap.docs.map((item) => mapCheckIn(item.id, item.data())).filter((item) => isLiveCheckIn(item, now));
-      if (user) {
-        const visible: CheckIn[] = [];
+      try {
+        const now = Date.now();
+        const user = auth.currentUser;
+        let people = snap.docs.map((item) => mapCheckIn(item.id, item.data())).filter((item) => isLiveCheckIn(item, now));
         for (const person of people) {
-          if (person.userId !== user.uid && (await isBlockedEitherWay(user.uid, person.userId))) continue;
-          visible.push(person);
+          prefetchProfileImage([person.userId, person.avatarUrl], person.avatarUrl);
         }
-        people = visible;
+        if (user) {
+          const visible: CheckIn[] = [];
+          for (const person of people) {
+            try {
+              if (person.userId !== user.uid && (await isBlockedEitherWay(user.uid, person.userId))) continue;
+            } catch {
+              // Keep the person if the block lookup fails — never fail the whole list.
+            }
+            visible.push(person);
+          }
+          people = visible;
+        }
+        if (isDevToolsEnabled() && isDemoVenue(venueId)) {
+          const real = people.filter((item) => !item.userId.startsWith('seed-'));
+          const seeds = seedCheckIns(venueId).filter((seed) => !real.some((item) => item.userId === seed.userId));
+          people = [...real, ...seeds];
+        }
+        onChange(people.sort((a, b) => b.createdAt - a.createdAt));
+      } catch {
+        onChange([]);
       }
-      if (isDevToolsEnabled() && isDemoVenue(venueId)) {
-        const real = people.filter((item) => !item.userId.startsWith('seed-'));
-        const seeds = seedCheckIns(venueId).filter((seed) => !real.some((item) => item.userId === seed.userId));
-        people = [...real, ...seeds];
-      }
-      onChange(people.sort((a, b) => b.createdAt - a.createdAt));
     },
     () => onChange([])
   );

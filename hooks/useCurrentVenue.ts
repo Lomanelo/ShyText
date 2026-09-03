@@ -72,17 +72,19 @@ export function useCurrentVenue() {
         return;
       }
       unsubCheckIn = listenOwnCheckIn(user.uid, (next) => {
+        let clearId: string | undefined;
         setCheckIn((prev) => {
           if (prev?.id.startsWith('pending:')) {
             if (!next) return prev;
             if (next.venueId === prev.venueId) {
-              clearPendingShyne(next.venueId);
+              clearId = next.venueId;
               return next;
             }
             return prev;
           }
           return next;
         });
+        if (clearId) clearPendingShyne(clearId);
         setLoading(false);
         void syncCheckInEndingNotice(next?.expiresAt ?? null);
         if (!next) {

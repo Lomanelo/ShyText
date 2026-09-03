@@ -8,12 +8,14 @@ export interface ChatRequest {
   shytextIntent?: string;
   senderId: string;
   senderName: string;
+  senderAvatarUrl?: string;
   receiverId: string;
   venueId: string;
   venueName?: string;
   introMessage?: string;
   status: ChatRequestStatus;
   createdAt: number;
+  conversationId?: string;
 }
 
 export interface Conversation {
@@ -21,6 +23,9 @@ export interface Conversation {
   participantIds: string[];
   createdFromShytextId?: string;
   venueName?: string;
+  otherName?: string;
+  otherAvatarUrl?: string;
+  introMessage?: string;
   createdAt: number;
   lastMessageAt: number;
   lastMessage?: string;

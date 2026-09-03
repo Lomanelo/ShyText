@@ -20,6 +20,7 @@ export function VenueCard({
   onShyIn,
   lit = false,
   shyInLoading = false,
+  expiresAt,
 }: {
   venue: Venue;
   distance?: number;
@@ -29,6 +30,7 @@ export function VenueCard({
   onShyIn?: () => void | Promise<void>;
   lit?: boolean;
   shyInLoading?: boolean;
+  expiresAt?: number | null;
 }) {
   const { t } = useTranslation();
   const live = (venue.activeCount ?? 0) >= 1;
@@ -79,6 +81,7 @@ export function VenueCard({
           theme={theme}
           lit={lit}
           loading={shyInLoading}
+          expiresAt={lit ? expiresAt : undefined}
           onShyIn={lit ? undefined : onShyIn}
           onPress={lit ? onPress : undefined}
         />

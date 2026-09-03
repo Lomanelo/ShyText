@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { Screen } from '../../components/Screen';
+import { NoticeBanner } from '../../components/NoticeBanner';
 import { ApproachableUserCard } from '../../components/ApproachableUserCard';
 import { EmptyState } from '../../components/EmptyState';
 import { Skeleton } from '../../components/Skeleton';
@@ -19,10 +20,11 @@ import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useAuth } from '../../hooks/useAuth';
 import { useCurrentVenue } from '../../hooks/useCurrentVenue';
 import { useCheckIns } from '../../hooks/useCheckIns';
+import { useVenueContacts } from '../../hooks/useVenueContacts';
 import { useLocation } from '../../hooks/useLocation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getVenue } from '../../services/venues';
-import { sendChatRequest } from '../../services/chat';
+import { respondToRequest, sendChatRequest } from '../../services/chat';
 import { buildVenueImageUrl } from '../../services/venueImage';
 import { lookupVenueImage, rememberVenueImage } from '../../services/venueImageCache';
 import {
@@ -55,7 +57,7 @@ export default function VenueScreen() {
   const { user, profile } = useAuth();
   const current = useCurrentVenue();
   const { refresh } = useLocation();
-  const { people, loading } = useCheckIns(venueId);
+  const { modeFor, markSent, markAccepted } = useVenueContacts(user?.uid, venueId);
   // Card tap = preview. Slider / dock Shyne sets this so optimistic UI can paint.
   const [shyneIntent, setShyneIntent] = useState(mode === 'shyne');
   const pending = shyneIntent ? getPendingShyne(venueId) : null;
@@ -64,7 +66,7 @@ export default function VenueScreen() {
   const [venue, setVenue] = useState<Venue | null>(remembered);
   const [hello, setHello] = useState<CheckIn | null>(null);
   const [report, setReport] = useState<CheckIn | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null);
   const [busy, setBusy] = useState(false);
   const [statusDraft, setStatusDraft] = useState('');
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -116,6 +118,7 @@ export default function VenueScreen() {
     !current.checkIn.id.startsWith('pending:');
   const pendingHere = shyneIntent && isPendingShyne(venueId);
   const here = confirmedHere || pendingHere;
+  const { people, loading } = useCheckIns(here ? venueId : undefined);
   const others = people.filter((item) => item.userId !== user?.uid);
   const mine =
     people.find((item) => item.userId === user?.uid) ??
@@ -129,7 +132,7 @@ export default function VenueScreen() {
     if (!venueId) return;
     if (confirmedHere && !current.checkIn?.id.startsWith('pending:')) clearPendingShyne(venueId);
     const failed = takePendingShyneError(venueId);
-    if (failed) setNotice(failed);
+    if (failed) setNotice({ text: failed, tone: 'error' });
   }, [venueId, confirmedHere, pendingTick, current.checkIn?.id]);
 
   useEffect(() => {
@@ -166,7 +169,7 @@ export default function VenueScreen() {
       });
     } catch (err) {
       setShyneIntent(false);
-      setNotice(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
+      setNotice({ text: err instanceof Error ? err.message : t('errors.couldNotCheckIn'), tone: 'error' });
     } finally {
       setBusy(false);
     }
@@ -179,7 +182,9 @@ export default function VenueScreen() {
         contentContainerStyle={styles.scroll}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => undefined} tintColor={theme.accent} />}
+        refreshControl={
+          <RefreshControl refreshing={here && loading} onRefresh={() => undefined} tintColor={theme.accent} />
+        }
       >
         {venue || heroImageUrl ? (
           <View style={[styles.hero, cardShadow(theme)]}>
@@ -236,7 +241,14 @@ export default function VenueScreen() {
             </View>
           ) : null}
 
-          {notice ? <Text style={{ color: theme.danger }}>{notice}</Text> : null}
+          {notice ? (
+            <NoticeBanner
+              message={notice.text}
+              tone={notice.tone}
+              theme={theme}
+              onDismiss={() => setNotice(null)}
+            />
+          ) : null}
 
           {!here ? (
             <EmptyState theme={theme} title={t('venue.shyInToSee')} />
@@ -245,26 +257,54 @@ export default function VenueScreen() {
           ) : others.length === 0 ? (
             <EmptyState theme={theme} title={t('venue.justYou')} />
           ) : (
-            others.map((person) => (
+            others.map((person) => {
+              const mode = modeFor(person.userId);
+              return (
               <Animated.View key={person.id} layout={reduce ? undefined : springLayout()}>
                 <ApproachableUserCard
                   person={person}
                   theme={theme}
+                  mode={mode}
                   onSend={() => {
+                    if (mode.kind !== 'send') return;
                     if (person.userId.startsWith('seed-')) {
-                      setNotice(
-                        isDevToolsEnabled()
+                      setNotice({
+                        text: isDevToolsEnabled()
                           ? t('venue.demoPerson')
-                          : t('errors.noLongerCheckedIn')
-                      );
+                          : t('errors.noLongerCheckedIn'),
+                        tone: 'error',
+                      });
                       return;
                     }
                     setHello(person);
                   }}
+                  onAccept={async () => {
+                    if (mode.kind !== 'accept') return;
+                    try {
+                      markAccepted(person.userId);
+                      const convoId = await respondToRequest(mode.request, true);
+                      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      if (convoId) router.push(`/chat/${convoId}`);
+                      else router.push('/(tabs)/chats');
+                    } catch (err) {
+                      setNotice({
+                        text: err instanceof Error ? err.message : t('errors.couldNotAccept'),
+                        tone: 'error',
+                      });
+                    }
+                  }}
+                  onOpenChat={() => {
+                    if (mode.kind === 'chat' && mode.conversationId) {
+                      router.push(`/chat/${mode.conversationId}`);
+                      return;
+                    }
+                    router.push('/(tabs)/chats');
+                  }}
                   onReport={() => setReport(person)}
                 />
               </Animated.View>
-            ))
+              );
+            })
           )}
         </View>
       </ScrollView>
@@ -277,6 +317,7 @@ export default function VenueScreen() {
             theme={theme}
             lit={here}
             loading={busy}
+            expiresAt={here ? mine?.expiresAt : undefined}
             onShyIn={here ? undefined : checkInNow}
             onShyOut={
               here
@@ -307,10 +348,12 @@ export default function VenueScreen() {
             venueId,
             venueName: venue?.name,
             senderName: profile.displayName,
+            senderAvatarUrl: profile.avatarUrl,
             introMessage: intro,
           });
+          markSent(hello.userId);
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setNotice(t('venue.sent'));
+          setNotice({ text: t('venue.sent'), tone: 'ok' });
         }}
       />
       <ReportModal

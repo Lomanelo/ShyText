@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  Easing,
   Extrapolation,
   interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withRepeat,
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -14,11 +16,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { brand, cardShadow, radius, Theme, type } from '../theme';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useTranslation } from 'react-i18next';
+import { timeLeft } from '../utils/dates';
 import { PressScale } from './PressScale';
+import { flameSource } from './flame-mark';
 
 const COMMIT_RATIO = 0.72;
 const CATCH_RATIO = 0.45;
-const PAD = 4;
+const PAD_X = 4;
 
 const SIZES = {
   dock: { thumb: 52, track: 56, mark: 34 },
@@ -38,12 +42,130 @@ function hapticDown() {
   void Haptics.selectionAsync();
 }
 
+function LitStrip({
+  theme,
+  venueName,
+  trackH,
+  mark,
+  expiresAt,
+  onPress,
+  onShyOut,
+  accessory,
+  dock,
+}: {
+  theme: Theme;
+  venueName: string;
+  trackH: number;
+  mark: number;
+  expiresAt?: number | null;
+  onPress?: () => void;
+  onShyOut?: () => void;
+  accessory?: ReactNode;
+  dock?: boolean;
+}) {
+  const { t } = useTranslation();
+  const reduce = useReduceMotion();
+  const [, setTick] = useState(0);
+  const breathe = useSharedValue(1);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (reduce) {
+      breathe.value = 1;
+      return;
+    }
+    breathe.value = withRepeat(
+      withTiming(1.06, { duration: 1100, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true
+    );
+  }, [breathe, reduce]);
+
+  const flameStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: breathe.value }],
+  }));
+
+  const remaining = expiresAt ? timeLeft(expiresAt) : null;
+  const status = remaining
+    ? t('venue.timeLeftLabel', { time: remaining })
+    : t('venue.shydIn');
+  const a11y = t('venue.shydInA11y', { name: venueName });
+
+  const body = (
+    <View
+      style={[
+        styles.litStrip,
+        {
+          height: trackH,
+          backgroundColor: theme.accentSoft,
+          borderCurve: 'continuous' as const,
+        },
+        dock ? [cardShadow(theme), { minHeight: 56, height: undefined, paddingVertical: 10 }] : null,
+      ]}
+    >
+      <View
+        style={[
+          styles.litFlameWell,
+          { width: trackH - 8, height: trackH - 8, backgroundColor: theme.card },
+        ]}
+      >
+        <Animated.Image
+          source={flameSource('lit')}
+          accessibilityIgnoresInvertColors
+          style={[{ width: mark, height: mark, resizeMode: 'contain' }, flameStyle]}
+        />
+      </View>
+      <View style={styles.litCopy}>
+        <Text
+          style={[type.headline, { color: theme.text, fontVariant: ['tabular-nums'] }]}
+          numberOfLines={1}
+        >
+          {status}
+        </Text>
+      </View>
+      <View style={styles.trailing}>
+        {accessory}
+        {onShyOut ? (
+          <PressScale
+            accessibilityRole="button"
+            accessibilityLabel={t('common.shyOut')}
+            onPress={onShyOut}
+            hitSlop={8}
+            style={styles.outBtn}
+          >
+            <Text style={[type.caption, { color: theme.accent, fontWeight: '700' }]}>{t('common.shyOut')}</Text>
+          </PressScale>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  if (onPress) {
+    return (
+      <PressScale accessibilityRole="button" accessibilityLabel={a11y} onPress={onPress} style={styles.wrap}>
+        {body}
+      </PressScale>
+    );
+  }
+
+  return (
+    <View style={styles.wrap} accessibilityLabel={a11y}>
+      {body}
+    </View>
+  );
+}
+
 export function ShyInFlame({
   venueName,
   theme,
   lit = false,
   loading = false,
   disabled = false,
+  expiresAt,
   onShyIn,
   onShyOut,
   onPress,
@@ -55,6 +177,7 @@ export function ShyInFlame({
   lit?: boolean;
   loading?: boolean;
   disabled?: boolean;
+  expiresAt?: number | null;
   onShyIn?: () => void | Promise<void>;
   onShyOut?: () => void;
   onPress?: () => void;
@@ -69,6 +192,7 @@ export function ShyInFlame({
   const thumb = size.thumb;
   const mark = size.mark;
   const trackH = size.track;
+  const thumbTop = (trackH - thumb) / 2;
   const hideName = variant === 'inline';
 
   const trackW = useSharedValue(0);
@@ -166,7 +290,7 @@ export function ShyInFlame({
     })
     .onUpdate((event) => {
       if (committed.value === 1) return;
-      const maxTravel = Math.max(0, trackW.value - thumb - PAD * 2);
+      const maxTravel = Math.max(0, trackW.value - thumb - PAD_X * 2);
       const next = Math.min(maxTravel, Math.max(0, dragStart.value + event.translationX));
       slide.value = next;
       progress.value = maxTravel > 0 ? next / maxTravel : 0;
@@ -178,7 +302,7 @@ export function ShyInFlame({
     })
     .onEnd(() => {
       if (committed.value === 1) return;
-      const maxTravel = Math.max(0, trackW.value - thumb - PAD * 2);
+      const maxTravel = Math.max(0, trackW.value - thumb - PAD_X * 2);
       runOnJS(tryCommit)(slide.value, maxTravel);
     })
     .onFinalize(() => {
@@ -196,8 +320,8 @@ export function ShyInFlame({
     });
 
   const fillStyle = useAnimatedStyle(() => {
-    const maxTravel = Math.max(0, trackW.value - thumb - PAD * 2);
-    const width = PAD + slide.value + thumb * 0.55;
+    const maxTravel = Math.max(0, trackW.value - thumb - PAD_X * 2);
+    const width = PAD_X + slide.value + thumb * 0.55;
     return {
       width: Math.min(trackW.value, width),
       opacity: interpolate(slide.value, [0, maxTravel * 0.25], [0, 0.22], Extrapolation.CLAMP),
@@ -205,7 +329,7 @@ export function ShyInFlame({
   });
 
   const hintStyle = useAnimatedStyle(() => {
-    const maxTravel = Math.max(0, trackW.value - thumb - PAD * 2);
+    const maxTravel = Math.max(0, trackW.value - thumb - PAD_X * 2);
     return {
       opacity: interpolate(slide.value, [0, maxTravel * 0.35], [1, 0], Extrapolation.CLAMP),
       transform: [
@@ -226,11 +350,11 @@ export function ShyInFlame({
   }));
 
   const dimMarkStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 0.55, 1], [0.38, 0.15, 0], Extrapolation.CLAMP),
+    opacity: interpolate(progress.value, [0, 0.45, 1], [1, 0.35, 0], Extrapolation.CLAMP),
   }));
 
   const litMarkStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 0.35, 0.75, 1], [0, 0.45, 0.9, 1], Extrapolation.CLAMP),
+    opacity: interpolate(progress.value, [0, 0.25, 0.7, 1], [0, 0.35, 0.92, 1], Extrapolation.CLAMP),
     transform: [
       {
         scale: interpolate(progress.value, [0, 1], [0.92, 1], Extrapolation.CLAMP),
@@ -251,7 +375,6 @@ export function ShyInFlame({
     };
   });
 
-  const label = showLit ? t('venue.shydIn') : loading ? t('common.shyingIn') : t('common.shyIn');
   const a11y = showLit
     ? t('venue.shydInA11y', { name: venueName })
     : simple
@@ -260,58 +383,17 @@ export function ShyInFlame({
 
   if (showLit) {
     return (
-      <View style={styles.wrap}>
-        <View
-          style={[
-            styles.litBar,
-            variant === 'dock'
-              ? [cardShadow(theme), { backgroundColor: theme.card, borderCurve: 'continuous' as const }]
-              : { backgroundColor: theme.card, borderCurve: 'continuous' as const },
-          ]}
-        >
-          <View style={styles.litMarkWrap}>
-            <Animated.View style={[styles.glow, glowStyle]} />
-            <Animated.Image
-              source={require('../assets/images/icon.png')}
-              accessibilityIgnoresInvertColors
-              style={styles.litMark}
-            />
-          </View>
-          {onPress ? (
-            <PressScale accessibilityRole="button" accessibilityLabel={a11y} onPress={onPress} style={styles.litCopy}>
-              <Text style={[type.headline, { color: theme.text }]} numberOfLines={1}>
-                {label}
-              </Text>
-              <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
-                {venueName}
-              </Text>
-            </PressScale>
-          ) : (
-            <View style={styles.litCopy}>
-              <Text style={[type.headline, { color: theme.text }]} numberOfLines={1}>
-                {label}
-              </Text>
-              <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
-                {venueName}
-              </Text>
-            </View>
-          )}
-          <View style={styles.trailing}>
-            {accessory}
-            {onShyOut ? (
-              <PressScale
-                accessibilityRole="button"
-                accessibilityLabel={t('common.shyOut')}
-                onPress={onShyOut}
-                hitSlop={8}
-                style={styles.outBtn}
-              >
-                <Text style={[type.caption, { color: theme.accent, fontWeight: '700' }]}>{t('common.shyOut')}</Text>
-              </PressScale>
-            ) : null}
-          </View>
-        </View>
-      </View>
+      <LitStrip
+        theme={theme}
+        venueName={venueName}
+        trackH={trackH}
+        mark={mark}
+        expiresAt={expiresAt}
+        onPress={onPress}
+        onShyOut={onShyOut}
+        accessory={accessory}
+        dock={variant === 'dock'}
+      />
     );
   }
 
@@ -334,7 +416,7 @@ export function ShyInFlame({
             styles.track,
             {
               height: trackH,
-              backgroundColor: variant === 'inline' ? theme.bg : theme.bg,
+              backgroundColor: theme.bg,
               opacity: variant === 'card' ? 0.92 : 1,
             },
           ]}
@@ -343,10 +425,7 @@ export function ShyInFlame({
             pointerEvents="none"
             style={[styles.fill, { backgroundColor: theme.accent }, fillStyle]}
           />
-          <Animated.View
-            pointerEvents="none"
-            style={[styles.hintWrap, { left: thumb + PAD + 8 }, hintStyle]}
-          >
+          <Animated.View pointerEvents="none" style={[styles.hintWrap, hintStyle]}>
             <Text style={[styles.hint, { color: theme.quiet, fontSize: hideName ? 14 : 15 }]} numberOfLines={1}>
               {loading ? t('common.shyingIn') : t('nearby.slideHint')}
             </Text>
@@ -364,6 +443,8 @@ export function ShyInFlame({
                 {
                   width: thumb,
                   height: thumb,
+                  left: PAD_X,
+                  top: thumbTop,
                   backgroundColor: theme.card,
                 },
                 thumbStyle,
@@ -373,15 +454,15 @@ export function ShyInFlame({
                 style={[styles.glow, { width: mark + 18, height: mark + 18 }, glowStyle]}
               />
               <Animated.Image
-                source={require('../assets/images/icon.png')}
+                source={flameSource('dim')}
                 accessibilityIgnoresInvertColors
-                style={[{ width: mark, height: mark, borderRadius: 10, resizeMode: 'cover' }, dimMarkStyle]}
+                style={[{ width: mark, height: mark, resizeMode: 'contain' }, dimMarkStyle]}
               />
               <Animated.Image
-                source={require('../assets/images/icon.png')}
+                source={flameSource('lit')}
                 accessibilityIgnoresInvertColors
                 style={[
-                  { width: mark, height: mark, borderRadius: 10, resizeMode: 'cover' },
+                  { width: mark, height: mark, resizeMode: 'contain' },
                   styles.thumbMarkOverlay,
                   litMarkStyle,
                 ]}
@@ -411,7 +492,10 @@ const styles = StyleSheet.create({
   },
   hintWrap: {
     position: 'absolute',
+    left: 60,
     right: 16,
+    top: 0,
+    bottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -423,8 +507,6 @@ const styles = StyleSheet.create({
   },
   thumb: {
     position: 'absolute',
-    left: PAD,
-    top: PAD,
     borderRadius: radius.pill,
     borderCurve: 'continuous',
     alignItems: 'center',
@@ -443,29 +525,21 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: brand.accent,
   },
-  litBar: {
+  litStrip: {
     width: '100%',
-    minHeight: 56,
-    borderRadius: radius.lg,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  litMarkWrap: {
-    width: 40,
-    height: 40,
+  litFlameWell: {
+    borderRadius: radius.pill,
+    borderCurve: 'continuous',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  litMark: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    resizeMode: 'cover',
-  },
-  litCopy: { flex: 1, minWidth: 0, gap: 1, justifyContent: 'center' },
+  litCopy: { flex: 1, minWidth: 0, justifyContent: 'center' },
   trailing: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
   outBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
 });

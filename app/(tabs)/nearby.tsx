@@ -311,6 +311,7 @@ export default function NearbyScreen() {
                 distance={venue.distanceMeters}
                 lit={isHere}
                 shyInLoading={checkingInId === key && !isHere}
+                expiresAt={isHere ? liveCheckIn?.expiresAt : undefined}
                 onPress={() => openVenue(venue)}
                 onShyIn={isHere ? undefined : () => checkInAtVenue(venue)}
               />

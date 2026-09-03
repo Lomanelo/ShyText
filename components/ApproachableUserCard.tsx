@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -8,19 +8,27 @@ import { normalizeVibe } from '../types/shytext';
 import { useTranslation } from 'react-i18next';
 import { cardShadow, radius, space, Theme, type } from '../theme';
 import { remainingCompact } from '../utils/dates';
+import { prefetchProfileImage } from '../services/imageCache';
 import { Avatar } from './Avatar';
 import { PressScale } from './PressScale';
 import { CheckIn } from '../types/venue';
+import type { VenueContactMode } from '../hooks/useVenueContacts';
 
 export function ApproachableUserCard({
   person,
   theme,
+  mode,
   onSend,
+  onAccept,
+  onOpenChat,
   onReport,
 }: {
   person: CheckIn;
   theme: Theme;
+  mode: VenueContactMode;
   onSend: () => void;
+  onAccept: () => void | Promise<void>;
+  onOpenChat: () => void;
   onReport: () => void;
 }) {
   const { t } = useTranslation();
@@ -29,12 +37,40 @@ export function ApproachableUserCard({
     : person.displayName ?? t('common.someone');
   const swipe = useRef<Swipeable>(null);
   const vibe = person.vibe ? normalizeVibe(person.vibe) : undefined;
+  const canSwipe = mode.kind === 'send' || mode.kind === 'accept';
 
-  const sayHi = () => {
+  useEffect(() => {
+    prefetchProfileImage([person.userId, person.avatarUrl], person.avatarUrl);
+  }, [person.avatarUrl, person.userId]);
+
+  const primary = () => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     swipe.current?.close();
-    onSend();
+    if (mode.kind === 'accept') onAccept();
+    else if (mode.kind === 'chat') onOpenChat();
+    else if (mode.kind === 'send') onSend();
   };
+
+  const label =
+    mode.kind === 'sent'
+      ? t('venue.alreadySent')
+      : mode.kind === 'accept'
+        ? t('common.accept')
+        : mode.kind === 'chat'
+          ? t('venue.openChat')
+          : t('venue.sendShyText');
+
+  const a11y =
+    mode.kind === 'sent'
+      ? t('venue.alreadySentA11y', { name: person.displayName ?? t('common.them') })
+      : mode.kind === 'accept'
+        ? t('venue.acceptA11y', { name: person.displayName ?? t('common.them') })
+        : mode.kind === 'chat'
+          ? t('venue.openChatA11y', { name: person.displayName ?? t('common.them') })
+          : t('venue.sendToA11y', { name: person.displayName ?? t('common.them') });
+
+  const preview =
+    mode.kind === 'accept' ? mode.request.introMessage || mode.request.shytextMessage : undefined;
 
   return (
     <Swipeable
@@ -43,18 +79,23 @@ export function ApproachableUserCard({
       overshootFriction={8}
       overshootRight
       overshootLeft={false}
-      renderRightActions={() => (
-        <View style={[styles.swipe, { backgroundColor: theme.accent }]}>
-          <Text style={[type.headline, { color: theme.onAccent }]}>{t('common.send')}</Text>
-        </View>
-      )}
+      enabled={canSwipe}
+      renderRightActions={() =>
+        !canSwipe ? null : (
+          <View style={[styles.swipe, { backgroundColor: theme.accent }]}>
+            <Text style={[type.headline, { color: theme.onAccent }]}>
+              {mode.kind === 'accept' ? t('common.accept') : t('common.send')}
+            </Text>
+          </View>
+        )
+      }
       onSwipeableOpen={(direction) => {
-        if (direction === 'right') sayHi();
+        if (direction === 'right') primary();
       }}
     >
       <View style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}>
         <View style={styles.top}>
-          <Avatar name={person.displayName} uri={person.avatarUrl} theme={theme} size={56} />
+          <Avatar name={person.displayName} uri={person.avatarUrl} userId={person.userId} theme={theme} size={56} />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={[type.headline, { color: theme.text }]}>{name}</Text>
             <Text style={[type.caption, { color: theme.accent, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
@@ -64,13 +105,42 @@ export function ApproachableUserCard({
             </Text>
           </View>
         </View>
+        {preview ? (
+          <Text style={[type.body, { color: theme.muted }]} numberOfLines={2}>
+            “{preview}”
+          </Text>
+        ) : null}
+        {mode.kind === 'accept' ? (
+          <Text style={[type.caption, { color: theme.quiet }]}>{t('venue.theySentFirst')}</Text>
+        ) : null}
         <View style={styles.actions}>
           <PressScale
-            accessibilityLabel={t('venue.sendToA11y', { name: person.displayName ?? t('common.them') })}
-            onPress={sayHi}
-            style={[styles.hi, { backgroundColor: theme.accent }]}
+            disabled={mode.kind === 'sent'}
+            accessibilityLabel={a11y}
+            onPress={primary}
+            style={[
+              styles.hi,
+              {
+                backgroundColor:
+                  mode.kind === 'sent' ? theme.border : mode.kind === 'chat' ? theme.bg : theme.accent,
+              },
+            ]}
           >
-            <Text style={[type.headline, { color: theme.onAccent }]}>{t('venue.sendShyText')}</Text>
+            <Text
+              style={[
+                type.headline,
+                {
+                  color:
+                    mode.kind === 'sent'
+                      ? theme.quiet
+                      : mode.kind === 'chat'
+                        ? theme.text
+                        : theme.onAccent,
+                },
+              ]}
+            >
+              {label}
+            </Text>
           </PressScale>
           <Pressable onPress={onReport} accessibilityLabel={t('venue.reportMore')} hitSlop={8} style={styles.more}>
             <Ionicons name="ellipsis-horizontal" size={22} color={theme.quiet} />

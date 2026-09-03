@@ -57,6 +57,13 @@ export default function NotificationSettingsScreen() {
             theme={theme}
           />
           <SwitchRow
+            title={t('settings.newChat')}
+            subtitle={t('settings.newChatSub')}
+            value={prefs.chats}
+            onValueChange={(value) => void setPref('chats', value)}
+            theme={theme}
+          />
+          <SwitchRow
             title={t('settings.checkInEnding')}
             subtitle={t('settings.checkInEndingSub')}
             value={prefs.checkInEnding}

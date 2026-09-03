@@ -1,16 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import Animated from 'react-native-reanimated';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useHeaderHeight } from 'expo-router/react-navigation';
@@ -19,30 +18,39 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../../components/Screen';
 import { ReportModal } from '../../components/ReportModal';
 import { PressScale } from '../../components/PressScale';
+import { Avatar } from '../../components/Avatar';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import { radius, type, useTheme } from '../../theme';
-import { springLayout } from '../../hooks/usePressScale';
-import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useAuth } from '../../hooks/useAuth';
 import { ChatMessage, Conversation } from '../../types/chat';
 import { closeConversation, listenConversation, listenMessages, sendMessage } from '../../services/chat';
+import { setOpenChatId } from '../../services/openChat';
 import { getUserProfile } from '../../services/auth';
+import { rememberImage } from '../../services/imageCache';
 import { blockUser } from '../../services/blocks';
 import { MAX_MESSAGE_LENGTH } from '../../utils/config';
 import { chatSendUntil, isChatSendingOpen } from '../../utils/chatTime';
 import { useTranslation } from 'react-i18next';
 
+type Row = ChatMessage & { pending?: boolean };
+
+function timeLabel(ms: number) {
+  return new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
 export default function ChatScreen() {
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
   const theme = useTheme();
   const { t } = useTranslation();
-  const reduce = useReduceMotion();
   const headerHeight = useHeaderHeight();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const list = useRef<FlatList<Row>>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [pending, setPending] = useState<Row[]>([]);
   const [convo, setConvo] = useState<Conversation | null>(null);
   const [otherName, setOtherName] = useState(t('common.chat'));
+  const [otherAvatar, setOtherAvatar] = useState<string>();
   const [otherId, setOtherId] = useState<string>();
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -51,30 +59,77 @@ export default function ChatScreen() {
 
   useEffect(() => {
     if (!chatId) return;
+    setOpenChatId(chatId);
+    return () => setOpenChatId(null);
+  }, [chatId]);
+
+  useEffect(() => {
+    if (!chatId) return;
     const unsubConvo = listenConversation(chatId, async (next) => {
       setConvo(next);
       const other = next?.participantIds.find((id) => id !== user?.uid);
       setOtherId(other);
+      if (next?.otherName) setOtherName(next.otherName);
+      if (next?.otherAvatarUrl) {
+        rememberImage([next.otherAvatarUrl], next.otherAvatarUrl);
+        setOtherAvatar(next.otherAvatarUrl);
+      }
       if (other) {
-        const profile = await getUserProfile(other);
-        setOtherName(profile?.displayName ?? t('common.someone'));
+        const profile = await getUserProfile(other).catch(() => null);
+        setOtherName(profile?.displayName ?? next?.otherName ?? t('common.someone'));
+        if (profile?.avatarUrl) {
+          rememberImage([other, profile.avatarUrl], profile.avatarUrl);
+          setOtherAvatar(profile.avatarUrl);
+        }
       }
     });
-    const unsubMessages = listenMessages(chatId, setMessages);
+    const unsubMessages = listenMessages(chatId, (next) => {
+      setMessages(next);
+      setPending((rows) =>
+        rows.filter((row) => !next.some((item) => item.senderId === row.senderId && item.text === row.text))
+      );
+    });
     return () => {
       unsubConvo();
       unsubMessages();
     };
-  }, [chatId, user?.uid]);
+  }, [chatId, user?.uid, t]);
+
+  const rows = useMemo<Row[]>(() => {
+    const seeded: Row[] = [];
+    if (convo && messages.length === 0 && pending.length === 0 && convo.lastMessage && convo.lastSenderId) {
+      seeded.push({
+        id: `intro:${convo.id}`,
+        conversationId: convo.id,
+        senderId: convo.lastSenderId,
+        text: convo.lastMessage,
+        createdAt: convo.createdAt,
+      });
+    }
+    return [...seeded, ...messages, ...pending];
+  }, [messages, pending, convo]);
 
   const post = async () => {
-    if (!chatId || !text.trim() || !sendingOpen) return;
+    const body = text.trim();
+    if (!chatId || !body || !sendingOpen || !user) return;
+    const local: Row = {
+      id: `pending:${Date.now()}`,
+      conversationId: chatId,
+      senderId: user.uid,
+      text: body,
+      createdAt: Date.now(),
+      pending: true,
+    };
+    setPending((prev) => [...prev, local]);
+    setText('');
+    setError(null);
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    requestAnimationFrame(() => list.current?.scrollToEnd({ animated: true }));
     try {
-      await sendMessage(chatId, text);
-      setText('');
-      setError(null);
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      await sendMessage(chatId, body);
     } catch (err) {
+      setPending((prev) => prev.filter((item) => item.id !== local.id));
+      setText(body);
       setError(err instanceof Error ? err.message : t('errors.couldNotSend'));
     }
   };
@@ -83,7 +138,14 @@ export default function ChatScreen() {
     <Screen theme={theme} inset={false}>
       <Stack.Screen
         options={{
-          title: otherName,
+          headerTitle: () => (
+            <View style={styles.head}>
+              <Avatar name={otherName} uri={otherAvatar} userId={otherId} theme={theme} size={28} />
+              <Text style={[type.headline, { color: theme.text }]} numberOfLines={1}>
+                {otherName}
+              </Text>
+            </View>
+          ),
           headerRight: () => (
             <Pressable
               accessibilityLabel={t('common.more')}
@@ -127,27 +189,54 @@ export default function ChatScreen() {
         keyboardVerticalOffset={headerHeight}
         style={{ flex: 1 }}
       >
-        <ScrollView contentContainerStyle={styles.thread} contentInsetAdjustmentBehavior="automatic">
-          {messages.map((item) => {
+        <FlatList
+          ref={list}
+          data={rows}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.thread}
+          contentInsetAdjustmentBehavior="automatic"
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={() => list.current?.scrollToEnd({ animated: false })}
+          renderItem={({ item, index }) => {
             const mine = item.senderId === user?.uid;
+            const prev = rows[index - 1];
+            const showTime = !prev || item.createdAt - prev.createdAt > 5 * 60_000;
+            const stacked = prev && prev.senderId === item.senderId && !showTime;
             return (
-              <Animated.View
-                key={item.id}
-                layout={reduce ? undefined : springLayout()}
-                style={[
-                  styles.bubble,
-                  mine ? styles.mine : styles.theirs,
-                  {
-                    alignSelf: mine ? 'flex-end' : 'flex-start',
-                    backgroundColor: mine ? theme.accent : theme.card,
-                  },
-                ]}
-              >
-                <Text style={[type.body, { color: mine ? theme.onAccent : theme.text }]}>{item.text}</Text>
-              </Animated.View>
+              <View style={{ gap: 6 }}>
+                {showTime ? (
+                  <Text style={[type.caption, { color: theme.quiet, textAlign: 'center', marginVertical: 8 }]}>
+                    {timeLabel(item.createdAt)}
+                  </Text>
+                ) : null}
+                <View
+                  style={[
+                    styles.line,
+                    { justifyContent: mine ? 'flex-end' : 'flex-start', marginTop: stacked ? 2 : 6 },
+                  ]}
+                >
+                  {!mine ? (
+                    <View style={{ width: 28, marginRight: 6 }}>
+                      {stacked ? null : <Avatar name={otherName} uri={otherAvatar} userId={otherId} theme={theme} size={28} />}
+                    </View>
+                  ) : null}
+                  <View
+                    style={[
+                      styles.bubble,
+                      mine ? styles.mine : styles.theirs,
+                      {
+                        backgroundColor: mine ? theme.accent : theme.card,
+                        opacity: item.pending ? 0.7 : 1,
+                      },
+                    ]}
+                  >
+                    <Text style={[type.body, { color: mine ? theme.onAccent : theme.text }]}>{item.text}</Text>
+                  </View>
+                </View>
+              </View>
             );
-          })}
-        </ScrollView>
+          }}
+        />
         {error ? (
           <Text selectable style={[type.body, { color: theme.danger, paddingHorizontal: 16 }]}>
             {error}
@@ -178,10 +267,7 @@ export default function ChatScreen() {
               accessibilityLabel={t('common.send')}
               disabled={!text.trim()}
               hitSlop={4}
-              style={[
-                styles.send,
-                { backgroundColor: text.trim() ? theme.accent : theme.border },
-              ]}
+              style={[styles.send, { backgroundColor: text.trim() ? theme.accent : theme.border }]}
               onPress={() => {
                 void post();
               }}
@@ -190,16 +276,9 @@ export default function ChatScreen() {
             </PressScale>
           </View>
         ) : (
-          <View
-            style={[
-              styles.irl,
-              { backgroundColor: theme.card, marginBottom: Math.max(insets.bottom, 12) },
-            ]}
-          >
+          <View style={[styles.irl, { backgroundColor: theme.card, marginBottom: Math.max(insets.bottom, 12) }]}>
             <Text style={[type.headline, { color: theme.text, textAlign: 'center' }]}>{t('chats.timeToTalk')}</Text>
-            <Text style={[type.body, { color: theme.muted, textAlign: 'center' }]}>
-              {t('chats.closedBody')}
-            </Text>
+            <Text style={[type.body, { color: theme.muted, textAlign: 'center' }]}>{t('chats.closedBody')}</Text>
           </View>
         )}
       </KeyboardAvoidingView>
@@ -215,7 +294,9 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  thread: { padding: 16, gap: 8, flexGrow: 1 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 8, maxWidth: 220 },
+  thread: { padding: 16, paddingBottom: 8, flexGrow: 1 },
+  line: { flexDirection: 'row', alignItems: 'flex-end' },
   bubble: { maxWidth: '78%', borderRadius: 20, borderCurve: 'continuous', paddingHorizontal: 14, paddingVertical: 10 },
   mine: { borderBottomRightRadius: 5 },
   theirs: { borderBottomLeftRadius: 5 },

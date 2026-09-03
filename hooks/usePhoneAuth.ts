@@ -38,8 +38,8 @@ async function afterSignIn() {
   const user = auth.currentUser;
   if (!user) return;
   await user.getIdToken(true);
-  const profile = await getUserProfile(user.uid);
-  if (profile?.displayName) {
+  const profile = await getUserProfile(user.uid).catch(() => null);
+  if (profile?.displayName || user.displayName) {
     router.replace('/(tabs)/nearby');
   } else {
     router.replace('/(auth)/profile-setup');

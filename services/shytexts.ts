@@ -70,7 +70,11 @@ export function listenShyTexts(venueId: string, onChange: (posts: ShyTextPost[])
     if (user) {
       const visible: ShyTextPost[] = [];
       for (const post of posts) {
-        if (await isBlockedEitherWay(user.uid, post.authorId)) continue;
+        try {
+          if (await isBlockedEitherWay(user.uid, post.authorId)) continue;
+        } catch {
+          // Show the post if block lookup fails.
+        }
         visible.push(post);
       }
       posts = visible;

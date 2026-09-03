@@ -16,9 +16,10 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuth } from '../hooks/useAuth';
 import { persistUserLanguage } from '../services/auth';
-import { registerPushToken } from '../services/notifications';
+import { listenNotificationTaps, registerPushToken } from '../services/notifications';
 import { brand, useTheme } from '../theme';
 import { AwayCheckoutHost } from '../components/AwayCheckoutHost';
+import { IncomingPushHost } from '../components/IncomingPushHost';
 
 export default function RootLayout() {
   const theme = useTheme();
@@ -32,6 +33,11 @@ export default function RootLayout() {
       void persistUserLanguage();
     }
   }, [user, hasProfile]);
+
+  useEffect(() => {
+    const sub = listenNotificationTaps();
+    return () => sub.remove();
+  }, []);
 
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: theme.bg }}>
@@ -64,6 +70,7 @@ export default function RootLayout() {
           <Stack.Screen name="legal/terms" options={{ headerShown: true, title: t('legal.terms') }} />
         </Stack>
         <AwayCheckoutHost />
+        <IncomingPushHost />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

@@ -20,7 +20,7 @@ export default function BlockedUsersScreen() {
     const people = await Promise.all(
       ids.map(async (id) => ({
         id,
-        name: (await getUserProfile(id))?.displayName ?? t('common.someone'),
+        name: (await getUserProfile(id).catch(() => null))?.displayName ?? t('common.someone'),
       }))
     );
     setRows(people);

@@ -5,12 +5,14 @@ export type UserStatus = 'active' | 'suspended';
 export type NotificationPrefs = {
   shytexts: boolean;
   accepted: boolean;
+  chats: boolean;
   checkInEnding: boolean;
 };
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   shytexts: true,
   accepted: true,
+  chats: true,
   checkInEnding: true,
 };
 

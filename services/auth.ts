@@ -25,13 +25,9 @@ export function notificationPrefsOf(profile?: UserProfile | null): NotificationP
 }
 
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
-  try {
-    const snap = await getDoc(doc(db, 'users', uid));
-    if (!snap.exists()) return null;
-    return { id: snap.id, ...snap.data() } as UserProfile;
-  } catch {
-    return null;
-  }
+  const snap = await getDoc(doc(db, 'users', uid));
+  if (!snap.exists()) return null;
+  return { id: snap.id, ...snap.data() } as UserProfile;
 }
 
 export function sanitizeAge(value?: number): number | undefined {

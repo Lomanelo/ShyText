@@ -104,18 +104,20 @@
     "unavailable": "Location unavailable right now."
   },
   "venue": {
-    "youreHere": "Shyning 🔥",
-    "shydIn": "Shyning 🔥",
+    "youreHere": "Here",
+    "shydIn": "Here",
     "statusPlaceholder": "What are you up to?",
     "checkInToSee": "Shyne to see who’s here",
     "shyInToSee": "Shyne to see who’s here",
     "justYou": "Just you",
     "demoPerson": "This is a demo person. Shyne yourself to send a real Shy Text.",
-    "sent": "Shy Text sent. They’ll see it in Requests.",
+    "sent": "On its way",
     "sendTo": "Send a Shy Text to {{name}}?",
     "writeOwn": "Write my own…",
     "helloPlaceholder": "Write a short hello…",
     "notNow": "Not now",
+    "alreadySent": "Sent",
+    "alreadySentA11y": "Shy Text already sent to {{name}}",
     "sendShyText": "Send a Shy Text",
     "sendToA11y": "Send a Shy Text to {{name}}",
     "reportMore": "Report or more",
@@ -125,10 +127,15 @@
     "slideA11y": "Slide to Shyne at {{name}}",
     "flickA11y": "Slide to Shyne at {{name}}. Drag the flame right.",
     "tapA11y": "Shyne at {{name}}",
-    "shydInA11y": "Shyning at {{name}}",
+    "shydInA11y": "Here at {{name}}",
     "leftTitle": "Shy’d out of {{venue}}",
     "leftBody": "You don’t seem to be there anymore, so you’re no longer visible.",
-    "noLongerVisible": "They’re no longer visible."
+    "noLongerVisible": "They’re no longer visible.",
+    "timeLeftLabel": "{{time}} left",
+    "theySentFirst": "They already sent you a ShyText",
+    "acceptA11y": "Accept ShyText from {{name}}",
+    "openChat": "Open chat",
+    "openChatA11y": "Open chat with {{name}}"
   },
   "chats": {
     "emptyTitle": "No chats yet",
@@ -171,6 +178,8 @@
     "newShyTextSub": "Someone sent you a note at this venue",
     "theyAccepted": "They accepted",
     "theyAcceptedSub": "You can start chatting",
+    "newChat": "Chat messages",
+    "newChatSub": "When someone texts you and you’re not in that chat",
     "checkInEnding": "Shyne ending",
     "checkInEndingSub": "About 5 minutes before you go invisible",
     "deleteTitle": "Delete account",
@@ -209,11 +218,16 @@
   },
   "push": {
     "shytextTitle": "Someone sent you a Shy Text",
-    "openToRead": "Open to read it.",
+    "openToRead": "Open the app to read it.",
     "acceptedTitle": "They accepted",
-    "acceptedBody": "You can chat now.",
+    "acceptedBody": "Open the app to chat.",
+    "chatTitle": "{{name}} sent a message",
+    "chatBody": "Open the app to read it.",
     "endingTitle": "Shyne ending",
-    "endingBody": "Your Shyne ends in about 5 minutes."
+    "endingBody": "Your Shyne ends in about 5 minutes.",
+    "openToReadOpen": "Tap to view it.",
+    "acceptedBodyOpen": "Tap to open the chat.",
+    "chatBodyOpen": "Tap to read it."
   },
   "errors": {
     "signInFirst": "Sign in first.",
@@ -248,6 +262,7 @@
     "tryAgain": "Try again in a moment.",
     "couldNotSend": "Could not send.",
     "couldNotAccept": "Could not accept.",
+    "couldNotDecline": "Could not decline.",
     "couldNotCheckIn": "Could not Shyne.",
     "couldNotLoadVenues": "Could not load venues.",
     "couldNotOpenVenue": "Could not open this venue.",
@@ -258,7 +273,9 @@
     "placesLoad": "Could not load nearby venues.",
     "moveCloserShyText": "Move closer to this venue to drop a Shy Text.",
     "siriNoNearby": "Nothing within 100 m to Shyne.",
-    "siriVenueNotFound": "Couldn't find {{name}} within 100 m."
+    "siriVenueNotFound": "Couldn't find {{name}} within 100 m.",
+    "theyAlreadySent": "They already sent you a ShyText — accept it instead.",
+    "theyAlreadyAccepted": "You are already chatting with them."
   },
   "vibes": {
     "chat": "💬 Chat",
@@ -271,14 +288,46 @@
     "other": "✨ Other"
   },
   "icebreakers": {
-    "chat": ["Hey 💬", "Come say hi?", "What are you up to?"],
-    "drink": ["I'm in 🍺", "What are you drinking?", "Mind if I join?"],
-    "coffee": ["I'm down ☕", "Come say hi?", "How long are you here?"],
-    "play": ["I'm in 🎱", "Got room for one more?", "How many are playing?"],
-    "study": ["Need a study buddy?", "What are you working on?", "Mind if I sit nearby?"],
-    "network": ["Mind if I say hi?", "What brought you here?", "Happy to connect"],
-    "flirt": ["You seem fun ❤️", "Come say hi?", "Can I buy you a drink?"],
-    "other": ["Hey", "Come say hi?", "How long are you here?"]
+    "chat": [
+      "Hey 💬",
+      "Come say hi?",
+      "What are you up to?"
+    ],
+    "drink": [
+      "I'm in 🍺",
+      "What are you drinking?",
+      "Mind if I join?"
+    ],
+    "coffee": [
+      "I'm down ☕",
+      "Come say hi?",
+      "How long are you here?"
+    ],
+    "play": [
+      "I'm in 🎱",
+      "Got room for one more?",
+      "How many are playing?"
+    ],
+    "study": [
+      "Need a study buddy?",
+      "What are you working on?",
+      "Mind if I sit nearby?"
+    ],
+    "network": [
+      "Mind if I say hi?",
+      "What brought you here?",
+      "Happy to connect"
+    ],
+    "flirt": [
+      "You seem fun ❤️",
+      "Come say hi?",
+      "Can I buy you a drink?"
+    ],
+    "other": [
+      "Hey",
+      "Come say hi?",
+      "How long are you here?"
+    ]
   },
   "placeKind": {
     "bar": "bar",
@@ -299,7 +348,9 @@
   },
   "a11y": {
     "dismissHint": "Dismiss hint",
-    "holdToConfirm": "{{title}}. Hold to confirm."
+    "holdToConfirm": "{{title}}. Hold to confirm.",
+    "viewPhoto": "View photo of {{name}}",
+    "pinchToZoom": "Pinch to zoom"
   },
   "time": {
     "ending": "ending"

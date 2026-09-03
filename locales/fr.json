@@ -104,19 +104,21 @@
     "unavailable": "Localisation indisponible pour le moment."
   },
   "venue": {
-    "youreHere": "Shyning 🔥",
-    "shydIn": "Shyning 🔥",
+    "youreHere": "Ici",
+    "shydIn": "Ici",
     "statusPlaceholder": "Tu fais quoi ?",
     "checkInToSee": "Fais Shyne pour voir qui est là",
     "shyInToSee": "Fais Shyne pour voir qui est là",
     "justYou": "Juste toi",
     "demoPerson": "C’est une personne de démo. Fais Shyne toi-même pour envoyer un vrai Shy Text.",
-    "sent": "Shy Text envoyé. La personne le verra dans Demandes.",
+    "sent": "C’est parti",
     "sendTo": "Envoyer un Shy Text à {{name}} ?",
     "writeOwn": "Écrire le mien…",
-    "helloPlaceholder": "Écris un petit hello…",
+    "helloPlaceholder": "Écris un petit salut…",
     "notNow": "Pas maintenant",
-    "sendShy Text": "Envoyer un Shy Text",
+    "alreadySent": "Envoyé",
+    "alreadySentA11y": "Shy Text déjà envoyé à {{name}}",
+    "sendShyText": "Envoyer un Shy Text",
     "sendToA11y": "Envoyer un Shy Text à {{name}}",
     "reportMore": "Signaler ou plus",
     "openA11y": "Ouvrir {{name}}{{distance}}{{live}}",
@@ -125,10 +127,15 @@
     "slideA11y": "Glisse pour Shyne à {{name}}",
     "flickA11y": "Glisse pour Shyne à {{name}}. Fais glisser la flamme vers la droite.",
     "tapA11y": "Shyne à {{name}}",
-    "shydInA11y": "Shyning à {{name}}",
-    "leftTitle": "Shy’d out de {{venue}}",
+    "shydInA11y": "Ici — {{name}}",
+    "leftTitle": "Plus visible à {{venue}}",
     "leftBody": "Tu n’as plus l’air d’y être, donc tu n’es plus visible.",
-    "noLongerVisible": "Cette personne n’est plus visible."
+    "noLongerVisible": "Cette personne n’est plus visible.",
+    "timeLeftLabel": "Encore {{time}}",
+    "theySentFirst": "Ils t’ont déjà envoyé un ShyText",
+    "acceptA11y": "Accepter le ShyText de {{name}}",
+    "openChat": "Ouvrir le chat",
+    "openChatA11y": "Ouvrir le chat avec {{name}}"
   },
   "chats": {
     "emptyTitle": "Pas encore de chats",
@@ -167,10 +174,12 @@
     "nobodyBlocked": "Personne n’est bloqué",
     "unblock": "Débloquer",
     "lockScreenFooter": "Les bannières sur l’écran verrouillé n’incluent jamais la note.",
-    "newShy Text": "Nouveau Shy Text",
-    "newShy TextSub": "Quelqu’un t’a envoyé une note ici",
+    "newShyText": "Nouveau Shy Text",
+    "newShyTextSub": "Quelqu’un t’a envoyé une note ici",
     "theyAccepted": "C’est accepté",
     "theyAcceptedSub": "Tu peux commencer à chatter",
+    "newChat": "Messages du chat",
+    "newChatSub": "Quand quelqu’un t’écrit et que tu n’es pas dans ce chat",
     "checkInEnding": "Shyne bientôt fini",
     "checkInEndingSub": "Environ 5 minutes avant de redevenir invisible",
     "deleteTitle": "Supprimer le compte",
@@ -211,9 +220,14 @@
     "shytextTitle": "Quelqu’un t’a envoyé un Shy Text",
     "openToRead": "Ouvre l’app pour le lire.",
     "acceptedTitle": "C’est accepté",
-    "acceptedBody": "Tu peux chatter maintenant.",
+    "acceptedBody": "Ouvre l’app pour chatter.",
+    "chatTitle": "{{name}} t’a envoyé un message",
+    "chatBody": "Ouvre l’app pour le lire.",
     "endingTitle": "Shyne bientôt fini",
-    "endingBody": "Ton Shyne se termine dans environ 5 minutes."
+    "endingBody": "Ton Shyne se termine dans environ 5 minutes.",
+    "openToReadOpen": "Touche pour le voir.",
+    "acceptedBodyOpen": "Touche pour ouvrir le chat.",
+    "chatBodyOpen": "Touche pour le lire."
   },
   "errors": {
     "signInFirst": "Connecte-toi d’abord.",
@@ -248,6 +262,7 @@
     "tryAgain": "Réessaie dans un instant.",
     "couldNotSend": "Impossible d’envoyer.",
     "couldNotAccept": "Impossible d’accepter.",
+    "couldNotDecline": "Impossible de refuser.",
     "couldNotCheckIn": "Impossible de faire Shyne.",
     "couldNotLoadVenues": "Impossible de charger les lieux.",
     "couldNotOpenVenue": "Impossible d’ouvrir ce lieu.",
@@ -256,9 +271,11 @@
     "placesBusy": "La recherche de lieux est occupée. Réessaie dans un instant.",
     "placesUnavailable": "La recherche de lieux n’est pas encore disponible.",
     "placesLoad": "Impossible de charger les lieux autour.",
-    "moveCloserShy Text": "Rapproche-toi de ce lieu pour laisser un Shy Text.",
+    "moveCloserShyText": "Rapproche-toi de ce lieu pour laisser un Shy Text.",
     "siriNoNearby": "Rien dans les 100 m pour Shyne.",
-    "siriVenueNotFound": "Impossible de trouver {{name}} dans les 100 m."
+    "siriVenueNotFound": "Impossible de trouver {{name}} dans les 100 m.",
+    "theyAlreadySent": "Ils t’ont déjà envoyé un ShyText — accepte-le.",
+    "theyAlreadyAccepted": "Vous chattez déjà."
   },
   "vibes": {
     "chat": "💬 Discuter",
@@ -271,14 +288,46 @@
     "other": "✨ Autre"
   },
   "icebreakers": {
-    "chat": ["Salut 💬", "Tu viens dire hi ?", "Tu fais quoi ?"],
-    "drink": ["Je suis partant 🍺", "Tu bois quoi ?", "Je peux me joindre ?"],
-    "coffee": ["Je suis chaud ☕", "Tu viens dire hi ?", "Tu restes longtemps ?"],
-    "play": ["Je suis partant 🎱", "Y a de la place ?", "Vous êtes combien ?"],
-    "study": ["Besoin d’un binôme ?", "Tu travailles sur quoi ?", "Je peux m’asseoir près de toi ?"],
-    "network": ["Je peux te dire salut ?", "Qu’est-ce qui t’amène ?", "Content de connecter"],
-    "flirt": ["T’as l’air fun ❤️", "Tu viens dire hi ?", "Je t’offre un verre ?"],
-    "other": ["Salut", "Tu viens dire hi ?", "Tu restes longtemps ?"]
+    "chat": [
+      "Salut 💬",
+      "Tu viens dire hi ?",
+      "Tu fais quoi ?"
+    ],
+    "drink": [
+      "Je suis partant 🍺",
+      "Tu bois quoi ?",
+      "Je peux me joindre ?"
+    ],
+    "coffee": [
+      "Je suis chaud ☕",
+      "Tu viens dire hi ?",
+      "Tu restes longtemps ?"
+    ],
+    "play": [
+      "Je suis partant 🎱",
+      "Y a de la place ?",
+      "Vous êtes combien ?"
+    ],
+    "study": [
+      "Besoin d’un binôme ?",
+      "Tu travailles sur quoi ?",
+      "Je peux m’asseoir près de toi ?"
+    ],
+    "network": [
+      "Je peux te dire salut ?",
+      "Qu’est-ce qui t’amène ?",
+      "Content de connecter"
+    ],
+    "flirt": [
+      "T’as l’air fun ❤️",
+      "Tu viens dire hi ?",
+      "Je t’offre un verre ?"
+    ],
+    "other": [
+      "Salut",
+      "Tu viens dire hi ?",
+      "Tu restes longtemps ?"
+    ]
   },
   "placeKind": {
     "bar": "bar",
@@ -299,7 +348,9 @@
   },
   "a11y": {
     "dismissHint": "Fermer l’indice",
-    "holdToConfirm": "{{title}}. Maintiens pour confirmer."
+    "holdToConfirm": "{{title}}. Maintiens pour confirmer.",
+    "viewPhoto": "Voir la photo de {{name}}",
+    "pinchToZoom": "Pince pour zoomer"
   },
   "time": {
     "ending": "fin"

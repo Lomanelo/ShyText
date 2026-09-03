@@ -96,16 +96,25 @@ service cloud.firestore {
     }
 
     match /chatRequests/{requestId} {
-      allow read: if signedIn() && (
-        resource.data.senderId == request.auth.uid ||
-        resource.data.receiverId == request.auth.uid
+      function partyToRequest() {
+        return signedIn() && (
+          resource.data.senderId == request.auth.uid ||
+          resource.data.receiverId == request.auth.uid
+        );
+      }
+      allow get: if signedIn() && (
+        (resource == null && requestId.matches('^' + request.auth.uid + '_.+'))
+        || (resource != null && partyToRequest())
       );
+      allow list: if partyToRequest();
       allow create: if isSelf(request.resource.data.senderId)
-        && request.resource.data.senderId != request.resource.data.receiverId;
-      allow update: if signedIn() && (
-        resource.data.receiverId == request.auth.uid ||
-        resource.data.senderId == request.auth.uid
-      );
+        && request.resource.data.senderId != request.resource.data.receiverId
+        && request.resource.data.receiverId is string
+        && request.resource.data.venueId is string
+        && request.resource.data.status == 'pending';
+      allow update: if partyToRequest()
+        && request.resource.data.senderId == resource.data.senderId
+        && request.resource.data.receiverId == resource.data.receiverId;
       allow delete: if false;
     }
 
@@ -146,11 +155,27 @@ service cloud.firestore {
     }
 
     match /blocks/{blockId} {
-      allow read: if signedIn() && (
+      // Missing docs have no resource.data — a plain resource.data check
+      // denies the get, which broke venue preview whenever anyone else was there.
+      function ownBlockDocId() {
+        return signedIn() && (
+          blockId.matches('^' + request.auth.uid + '_.+') ||
+          blockId.matches('.+_' + request.auth.uid + '$')
+        );
+      }
+      allow get: if ownBlockDocId() && (
+        resource == null
+        || resource.data.blockerId == request.auth.uid
+        || resource.data.blockedId == request.auth.uid
+      );
+      allow list: if signedIn() && (
         resource.data.blockerId == request.auth.uid ||
         resource.data.blockedId == request.auth.uid
       );
-      allow create: if isSelf(request.resource.data.blockerId);
+      allow create: if isSelf(request.resource.data.blockerId)
+        && request.resource.data.blockedId is string
+        && request.auth.uid != request.resource.data.blockedId
+        && blockId == request.auth.uid + '_' + request.resource.data.blockedId;
       allow delete: if isSelf(resource.data.blockerId);
       allow update: if false;
     }

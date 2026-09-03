@@ -36,7 +36,7 @@ export default function ProfileScreen() {
         }
       >
         <View style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}>
-          <Avatar name={profile?.displayName} uri={profile?.avatarUrl} theme={theme} size={72} />
+          <Avatar name={profile?.displayName} uri={profile?.avatarUrl} userId={user?.uid} theme={theme} size={72} />
           <Text style={[type.title, { color: theme.text }]}>
             {profile?.displayName || t('common.you')}
             {profile?.age ? `, ${profile.age}` : ''}

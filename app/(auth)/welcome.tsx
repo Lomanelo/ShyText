@@ -64,7 +64,7 @@ export default function WelcomeScreen() {
 
         <View style={styles.hero}>
           <Animated.View entering={reduce ? undefined : ZoomIn.springify().damping(16).stiffness(240)}>
-            <FlameMark size={112} />
+            <FlameMark size={112} variant="lit" />
           </Animated.View>
           <Animated.View
             key={line}

@@ -15,7 +15,10 @@ let pendingError: { venueId: string; message: string } | null = null;
 const listeners = new Set<Listener>();
 
 function notify() {
-  listeners.forEach((listener) => listener());
+  // Defer so listeners never setState during another component's render/updater.
+  queueMicrotask(() => {
+    listeners.forEach((listener) => listener());
+  });
 }
 
 export function subscribePendingShyne(listener: Listener): () => void {

@@ -1,24 +1,74 @@
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { DEFAULT_NOTIFICATION_PREFS } from '../types/user';
+import { getOpenChatId } from './openChat';
+import { publishPushNotice } from './pushInbox';
 import i18n from '../i18n';
 
 const CHECK_IN_ENDING_ID = 'check-in-ending';
 
+function isAppActive() {
+  return AppState.currentState === 'active';
+}
+
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-    shouldShowAlert: true,
-  }),
+  handleNotification: async (notification) => {
+    const data = notification.request.content.data ?? {};
+    const chatId = typeof data.chatId === 'string' ? data.chatId : undefined;
+    const kind = typeof data.kind === 'string' ? data.kind : undefined;
+    const viewingThisChat = Boolean(chatId) && chatId === getOpenChatId();
+
+    // App already open: never show the lock-screen “open the app” banner.
+    // In-app toast handles copy that fits an open session.
+    if (isAppActive()) {
+      if (!(kind === 'chats' && viewingThisChat)) {
+        const title = notification.request.content.title ?? '';
+        const body = i18n.t(
+          kind === 'accepted'
+            ? 'push.acceptedBodyOpen'
+            : kind === 'chats'
+              ? 'push.chatBodyOpen'
+              : 'push.openToReadOpen'
+        );
+        publishPushNotice({
+          title,
+          body,
+          chatId,
+          route: chatId ? `/chat/${chatId}` : '/(tabs)/chats',
+        });
+      }
+      return {
+        shouldShowBanner: false,
+        shouldShowList: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowAlert: false,
+      };
+    }
+
+    const show = !(kind === 'chats' && viewingThisChat);
+    return {
+      shouldShowBanner: show,
+      shouldShowList: show,
+      shouldPlaySound: show,
+      shouldSetBadge: false,
+      shouldShowAlert: show,
+    };
+  },
 });
 
-export type PushKind = 'shytexts' | 'accepted';
+export type PushKind = 'shytexts' | 'accepted' | 'chats';
+
+type PushPayload = {
+  titleKey: 'push.shytextTitle' | 'push.acceptedTitle' | 'push.chatTitle';
+  bodyKey: 'push.openToRead' | 'push.acceptedBody' | 'push.chatBody';
+  titleParams?: Record<string, string>;
+  data?: Record<string, string>;
+};
 
 export async function registerPushToken() {
   if (Platform.OS === 'web') return;
@@ -28,6 +78,12 @@ export async function registerPushToken() {
     status = (await Notifications.requestPermissionsAsync()).status;
   }
   if (status !== 'granted') return;
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('chat', {
+      name: 'Chat',
+      importance: Notifications.AndroidImportance.HIGH,
+    });
+  }
   const projectId = Constants.expoConfig?.extra?.eas?.projectId;
   if (!projectId) return;
   const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
@@ -40,11 +96,7 @@ export async function registerPushToken() {
   }
 }
 
-export async function notifyUser(
-  userId: string,
-  payload: { titleKey: 'push.shytextTitle' | 'push.acceptedTitle'; bodyKey: 'push.openToRead' | 'push.acceptedBody' },
-  kind: PushKind = 'shytexts'
-) {
+export async function notifyUser(userId: string, payload: PushPayload, kind: PushKind = 'shytexts') {
   try {
     const snap = await getDoc(doc(db, 'users', userId));
     const data = snap.data();
@@ -59,13 +111,40 @@ export async function notifyUser(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: token,
-        title: t(payload.titleKey),
+        sound: 'default',
+        channelId: kind === 'chats' ? 'chat' : 'default',
+        title: t(payload.titleKey, payload.titleParams),
         body: t(payload.bodyKey),
+        data: { kind, ...(payload.data ?? {}) },
       }),
     });
   } catch {
     // Push is best-effort in MVP.
   }
+}
+
+let lastOpenedResponseId: string | undefined;
+
+export function listenNotificationTaps() {
+  const openFromResponse = (response: Notifications.NotificationResponse | null | undefined) => {
+    if (!response) return;
+    const id = response.notification.request.identifier;
+    if (id === lastOpenedResponseId) return;
+    lastOpenedResponseId = id;
+    const data = response.notification.request.content.data ?? {};
+    const chatId = data.chatId;
+    if (typeof chatId === 'string' && chatId.length > 0) {
+      router.push(`/chat/${chatId}`);
+      return;
+    }
+    if (data.kind === 'shytexts' || data.kind === 'accepted') {
+      router.push('/(tabs)/chats');
+    }
+  };
+
+  void Notifications.getLastNotificationResponseAsync().then(openFromResponse);
+
+  return Notifications.addNotificationResponseReceivedListener(openFromResponse);
 }
 
 export async function syncCheckInEndingNotice(expiresAt?: number | null) {

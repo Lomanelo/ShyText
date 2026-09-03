@@ -158,7 +158,7 @@ export default function EditProfileScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <Pressable onPress={onPhotoPress} style={styles.photo} accessibilityLabel={t('profile.changePhotoA11y')}>
-            <Avatar name={trimmedName || profile?.displayName} uri={displayUri} theme={theme} size={96} />
+            <Avatar name={trimmedName || profile?.displayName} uri={displayUri} userId={profile?.id} theme={theme} size={96} />
             <Text style={[type.headline, { color: theme.accent, marginTop: 10 }]}>
               {displayUri ? t('profile.changePhoto') : t('auth.addPhoto')}
             </Text>

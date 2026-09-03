@@ -8,18 +8,55 @@ import {
   onSnapshot,
   query,
   serverTimestamp,
+  setDoc,
   updateDoc,
   where,
 } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 import { auth, db } from './firebase';
 import { ChatMessage, ChatRequest, Conversation } from '../types/chat';
 import { moderateText } from './moderation';
-import { CHAT_SEND_MS, MAX_REQUESTS_PER_HOUR } from '../utils/config';
+import { CHAT_SEND_MS, MAX_REQUESTS_PER_HOUR, REQUEST_REPLY_LOCK_MS } from '../utils/config';
 import { isChatSendingOpen } from '../utils/chatTime';
 import { isBlockedEitherWay } from './blocks';
 import { notifyUser } from './notifications';
+import { getUserProfile } from './auth';
 import { getActiveCheckIn } from './venues';
+import { prefetchProfileImage } from './imageCache';
 import i18n from '../i18n';
+
+function isDenied(err: unknown) {
+  return err instanceof FirebaseError && err.code === 'permission-denied';
+}
+
+function requestDocId(senderId: string, receiverId: string, venueId: string) {
+  return `${senderId}_${receiverId}_${venueId}`;
+}
+
+function pairKey(ids: string[]) {
+  return [...ids].sort().join(':');
+}
+
+function dedupeConversations(items: Conversation[]) {
+  const best = new Map<string, Conversation>();
+  for (const item of items) {
+    const key = pairKey(item.participantIds);
+    const prev = best.get(key);
+    if (!prev || item.lastMessageAt > prev.lastMessageAt) best.set(key, item);
+  }
+  return [...best.values()].sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+}
+
+async function findOpenConversation(userId: string, otherId: string): Promise<Conversation | null> {
+  const snap = await getDocs(
+    query(collection(db, 'conversations'), where('participantIds', 'array-contains', userId))
+  );
+  const open = snap.docs
+    .map((item) => ({ id: item.id, ...item.data() } as Conversation))
+    .filter((item) => item.status === 'active' && item.participantIds.includes(otherId))
+    .sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+  return open[0] ?? null;
+}
 
 export async function sendChatRequest(input: {
   checkInId?: string;
@@ -30,6 +67,7 @@ export async function sendChatRequest(input: {
   venueId: string;
   venueName?: string;
   senderName: string;
+  senderAvatarUrl?: string;
   introMessage?: string;
 }) {
   const user = auth.currentUser;
@@ -53,11 +91,17 @@ export async function sendChatRequest(input: {
     if (!moderated.ok) throw new Error(moderated.reason);
   }
 
-  const existing = await getDocs(query(collection(db, 'chatRequests'), where('senderId', '==', user.uid)));
+  const existingSnap = await getDocs(
+    query(collection(db, 'chatRequests'), where('senderId', '==', user.uid))
+  ).catch((err) => {
+    if (isDenied(err)) return null;
+    throw err;
+  });
+  const existingDocs = existingSnap?.docs ?? [];
   if (
-    existing.docs.some(
+    existingDocs.some(
       (item) =>
-        item.data().status === 'pending' &&
+        (item.data().status === 'pending' || item.data().status === 'accepted') &&
         item.data().receiverId === input.receiverId &&
         item.data().venueId === input.venueId
     )
@@ -65,21 +109,75 @@ export async function sendChatRequest(input: {
     throw new Error(i18n.t('errors.alreadySent'));
   }
 
-  const hourCount = existing.docs.filter((item) => Date.now() - Number(item.data().createdAt) < 60 * 60 * 1000).length;
+  const hourCount = existingDocs.filter((item) => Date.now() - Number(item.data().createdAt) < 60 * 60 * 1000).length;
   if (hourCount >= MAX_REQUESTS_PER_HOUR) {
     throw new Error(i18n.t('errors.tooManyHour'));
   }
 
-  await addDoc(collection(db, 'chatRequests'), {
-    ...input,
-    checkInId: theirs.id,
-    shytextId: input.shytextId ?? theirs.id,
-    senderId: user.uid,
-    status: 'pending',
-    createdAt: Date.now(),
-    serverCreatedAt: serverTimestamp(),
+  // Mutual exclusivity: if they already asked you, accept theirs instead of sending a second request.
+  const inboundRef = doc(db, 'chatRequests', requestDocId(input.receiverId, user.uid, input.venueId));
+  const inboundSnap = await getDoc(inboundRef).catch((err) => {
+    if (isDenied(err)) return null;
+    throw err;
   });
-  await notifyUser(input.receiverId, { titleKey: 'push.shytextTitle', bodyKey: 'push.openToRead' }, 'shytexts');
+  const inboundPending =
+    inboundSnap?.exists() && inboundSnap.data().status === 'pending'
+      ? ({ id: inboundSnap.id, ...inboundSnap.data() } as ChatRequest)
+      : null;
+  const inboundAccepted =
+    inboundSnap?.exists() && inboundSnap.data().status === 'accepted'
+      ? ({ id: inboundSnap.id, ...inboundSnap.data() } as ChatRequest)
+      : null;
+
+  if (inboundAccepted) {
+    throw new Error(i18n.t('errors.theyAlreadyAccepted'));
+  }
+
+  if (inboundPending) {
+    const age = Date.now() - inboundPending.createdAt;
+    if (age < REQUEST_REPLY_LOCK_MS) {
+      throw new Error(i18n.t('errors.theyAlreadySent'));
+    }
+    // After the lock window, their unanswered note no longer blocks you.
+    await updateDoc(inboundRef, { status: 'cancelled' }).catch(() => undefined);
+  }
+
+  const ref = doc(db, 'chatRequests', requestDocId(user.uid, input.receiverId, input.venueId));
+  const already = await getDoc(ref).catch((err) => {
+    if (isDenied(err)) return null;
+    throw err;
+  });
+  if (already?.exists() && (already.data().status === 'pending' || already.data().status === 'accepted')) {
+    throw new Error(i18n.t('errors.alreadySent'));
+  }
+
+  const payload = Object.fromEntries(
+    Object.entries({
+      checkInId: theirs.id,
+      shytextId: input.shytextId ?? theirs.id,
+      shytextIntent: input.shytextIntent ?? null,
+      receiverId: input.receiverId,
+      venueId: input.venueId,
+      venueName: input.venueName ?? null,
+      senderName: input.senderName,
+      senderAvatarUrl: input.senderAvatarUrl ?? null,
+      introMessage: input.introMessage ?? null,
+      senderId: user.uid,
+      status: 'pending',
+      createdAt: Date.now(),
+      serverCreatedAt: serverTimestamp(),
+    }).filter(([, value]) => value !== undefined)
+  );
+  if (already?.exists()) {
+    await updateDoc(ref, payload);
+  } else {
+    await setDoc(ref, payload);
+  }
+  await notifyUser(
+    input.receiverId,
+    { titleKey: 'push.shytextTitle', bodyKey: 'push.openToRead', data: { type: 'shytext' } },
+    'shytexts'
+  ).catch(() => undefined);
 }
 
 export function listenRequests(userId: string, onChange: (items: ChatRequest[]) => void) {
@@ -90,44 +188,68 @@ export function listenRequests(userId: string, onChange: (items: ChatRequest[]) 
       const items = snap.docs
         .map((item) => ({ id: item.id, ...item.data() } as ChatRequest))
         .sort((a, b) => b.createdAt - a.createdAt);
-      onChange(items);
+      const unique = new Map<string, ChatRequest>();
+      for (const item of items) {
+        const key = `${item.senderId}:${item.venueId}`;
+        if (!unique.has(key)) unique.set(key, item);
+        prefetchProfileImage([item.senderId, item.senderAvatarUrl], item.senderAvatarUrl);
+      }
+      onChange([...unique.values()]);
     },
-    () => onChange([])
+    () => undefined
+  );
+}
+
+export function listenOutgoingRequests(userId: string, onChange: (items: ChatRequest[]) => void) {
+  const outgoing = query(collection(db, 'chatRequests'), where('senderId', '==', userId));
+  return onSnapshot(
+    outgoing,
+    (snap) => {
+      onChange(snap.docs.map((item) => ({ id: item.id, ...item.data() } as ChatRequest)));
+    },
+    () => undefined
   );
 }
 
 export async function respondToRequest(request: ChatRequest, accept: boolean): Promise<string | null> {
   const user = auth.currentUser;
   if (!user || user.uid !== request.receiverId) throw new Error(i18n.t('errors.notAllowed'));
-  if (accept) {
-    const now = Date.now();
-    const convo = await addDoc(collection(db, 'conversations'), {
-      participantIds: [request.senderId, request.receiverId],
-      createdFromShytextId: request.checkInId ?? request.shytextId,
-      venueName: request.venueName ?? null,
-      createdAt: now,
-      sendUntil: now + CHAT_SEND_MS,
-      lastMessageAt: now,
-      lastMessage: request.introMessage || 'Hi',
-      lastSenderId: request.senderId,
-      status: 'active',
-      serverCreatedAt: serverTimestamp(),
-    });
-    if (request.introMessage) {
-      await addDoc(collection(db, 'conversations', convo.id, 'messages'), {
-        senderId: request.senderId,
-        text: request.introMessage,
-        createdAt: Date.now(),
-        serverCreatedAt: serverTimestamp(),
-      });
-    }
-    await updateDoc(doc(db, 'chatRequests', request.id), { status: 'accepted', conversationId: convo.id });
-    await updateDoc(doc(db, 'users', user.uid), { 'stats.chatsStarted': increment(1) }).catch(() => undefined);
-    await notifyUser(request.senderId, { titleKey: 'push.acceptedTitle', bodyKey: 'push.acceptedBody' }, 'accepted');
-    return convo.id;
+  const ref = doc(db, 'chatRequests', request.id);
+  if (!accept) {
+    await updateDoc(ref, { status: 'declined' });
+    return null;
   }
-  await updateDoc(doc(db, 'chatRequests', request.id), { status: 'declined' });
-  return null;
+
+  const existing = await findOpenConversation(user.uid, request.senderId);
+  const now = Date.now();
+  const convoId =
+    existing?.id ??
+    (
+      await addDoc(collection(db, 'conversations'), {
+        participantIds: [request.senderId, request.receiverId],
+        createdFromShytextId: request.checkInId ?? request.shytextId,
+        venueName: request.venueName ?? null,
+        otherName: request.senderName ?? null,
+        otherAvatarUrl: request.senderAvatarUrl ?? null,
+        introMessage: request.introMessage ?? null,
+        createdAt: now,
+        sendUntil: now + CHAT_SEND_MS,
+        lastMessageAt: now,
+        lastMessage: request.introMessage || 'Hi',
+        lastSenderId: request.senderId,
+        status: 'active',
+        serverCreatedAt: serverTimestamp(),
+      })
+    ).id;
+
+  await updateDoc(ref, { status: 'accepted', conversationId: convoId });
+  await updateDoc(doc(db, 'users', user.uid), { 'stats.chatsStarted': increment(1) }).catch(() => undefined);
+  await notifyUser(
+    request.senderId,
+    { titleKey: 'push.acceptedTitle', bodyKey: 'push.acceptedBody', data: { type: 'accepted', chatId: convoId } },
+    'accepted'
+  ).catch(() => undefined);
+  return convoId;
 }
 
 export function listenConversation(conversationId: string, onChange: (item: Conversation | null) => void) {
@@ -153,9 +275,13 @@ export function listenConversations(userId: string, onChange: (items: Conversati
         .map((item) => ({ id: item.id, ...item.data() } as Conversation))
         .filter((item) => item.status !== 'closed')
         .sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-      onChange(items);
+      const unique = dedupeConversations(items);
+      for (const item of unique) {
+        prefetchProfileImage([item.otherAvatarUrl], item.otherAvatarUrl);
+      }
+      onChange(unique);
     },
-    () => onChange([])
+    () => undefined
   );
 }
 
@@ -169,7 +295,7 @@ export function listenMessages(conversationId: string, onChange: (items: ChatMes
         .sort((a, b) => a.createdAt - b.createdAt);
       onChange(items);
     },
-    () => onChange([])
+    () => undefined
   );
 }
 
@@ -195,6 +321,23 @@ export async function sendMessage(conversationId: string, text: string) {
     lastMessageAt: Date.now(),
     lastSenderId: user.uid,
   });
+  const otherId = convo.participantIds.find((id) => id !== user.uid);
+  if (otherId) {
+    void (async () => {
+      const profile = await getUserProfile(user.uid).catch(() => null);
+      const senderName = profile?.displayName?.trim() || user.displayName?.trim() || i18n.t('common.someone');
+      await notifyUser(
+        otherId,
+        {
+          titleKey: 'push.chatTitle',
+          bodyKey: 'push.chatBody',
+          titleParams: { name: senderName },
+          data: { type: 'chat', chatId: conversationId },
+        },
+        'chats'
+      );
+    })();
+  }
 }
 
 export async function closeConversation(conversationId: string) {

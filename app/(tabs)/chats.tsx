@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
 import { EmptyState } from '../../components/EmptyState';
 import { Avatar } from '../../components/Avatar';
-import { PrimaryButton } from '../../components/PrimaryButton';
+import { RequestCard } from '../../components/RequestCard';
 import { CountdownBadge } from '../../components/CountdownBadge';
 import { radius, type, useTheme } from '../../theme';
 import { springLayout, springSlideOutRight } from '../../hooks/usePressScale';
@@ -16,8 +17,10 @@ import { useChatRequests } from '../../hooks/useChatRequests';
 import { useChats } from '../../hooks/useChats';
 import { chatSendUntil, isChatSendingOpen } from '../../utils/chatTime';
 import { getUserProfile } from '../../services/auth';
+import { prefetchProfileImage } from '../../services/imageCache';
 import { respondToRequest } from '../../services/chat';
 import { ChatRequest } from '../../types/chat';
+import { PressScale } from '../../components/PressScale';
 import { useTranslation } from 'react-i18next';
 
 export default function ChatsScreen() {
@@ -28,6 +31,9 @@ export default function ChatsScreen() {
   const { incoming } = useChatRequests(user?.uid);
   const { conversations } = useChats(user?.uid);
   const [names, setNames] = useState<Record<string, string>>({});
+  const [avatars, setAvatars] = useState<Record<string, string>>({});
+  const [hidden, setHidden] = useState<Record<string, true>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [, setTick] = useState(0);
 
@@ -40,31 +46,80 @@ export default function ChatsScreen() {
     if (!user) return;
     let cancelled = false;
     (async () => {
-      const next: Record<string, string> = {};
+      const nextNames: Record<string, string> = {};
+      const nextAvatars: Record<string, string> = {};
       for (const convo of conversations) {
+        if (convo.otherName) nextNames[convo.id] = convo.otherName;
+        if (convo.otherAvatarUrl) {
+          nextAvatars[convo.id] = convo.otherAvatarUrl;
+          prefetchProfileImage([convo.otherAvatarUrl], convo.otherAvatarUrl);
+        }
         const other = convo.participantIds.find((id) => id !== user.uid);
         if (!other) continue;
-        const profile = await getUserProfile(other);
-        next[convo.id] = profile?.displayName ?? t('common.someone');
+        const profile = await getUserProfile(other).catch(() => null);
+        if (cancelled) return;
+        nextNames[convo.id] = profile?.displayName ?? nextNames[convo.id] ?? t('common.someone');
+        if (profile?.avatarUrl) {
+          nextAvatars[convo.id] = profile.avatarUrl;
+          prefetchProfileImage([other, profile.avatarUrl], profile.avatarUrl);
+        }
       }
-      if (!cancelled) setNames(next);
+      if (!cancelled) {
+        setNames(nextNames);
+        setAvatars(nextAvatars);
+      }
     })();
     return () => {
       cancelled = true;
     };
-  }, [conversations, user]);
+  }, [conversations, user, t]);
+
+  const visibleIncoming = useMemo(
+    () => incoming.filter((item) => !hidden[item.id]),
+    [incoming, hidden]
+  );
+
+  const hide = useCallback((id: string) => {
+    setHidden((prev) => ({ ...prev, [id]: true }));
+  }, []);
 
   const accept = async (request: ChatRequest) => {
+    hide(request.id);
+    setBusyId(request.id);
+    setError(null);
     try {
       const id = await respondToRequest(request, true);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       if (id) router.push(`/chat/${id}`);
     } catch (err) {
+      setHidden((prev) => {
+        const next = { ...prev };
+        delete next[request.id];
+        return next;
+      });
       setError(err instanceof Error ? err.message : t('errors.couldNotAccept'));
+    } finally {
+      setBusyId(null);
     }
   };
 
-  const empty = incoming.length === 0 && conversations.length === 0;
+  const decline = async (request: ChatRequest) => {
+    hide(request.id);
+    setError(null);
+    try {
+      await respondToRequest(request, false);
+      await Haptics.selectionAsync();
+    } catch (err) {
+      setHidden((prev) => {
+        const next = { ...prev };
+        delete next[request.id];
+        return next;
+      });
+      setError(err instanceof Error ? err.message : t('errors.couldNotDecline'));
+    }
+  };
+
+  const empty = visibleIncoming.length === 0 && conversations.length === 0;
 
   return (
     <Screen theme={theme} inset={false}>
@@ -84,36 +139,22 @@ export default function ChatsScreen() {
           />
         ) : null}
 
-        {incoming.length > 0 ? (
+        {visibleIncoming.length > 0 ? (
           <View style={{ gap: 10 }}>
             <Text style={[type.caption, { color: theme.quiet, paddingHorizontal: 4 }]}>{t('chats.requests')}</Text>
-            {incoming.map((request) => (
+            {visibleIncoming.map((request) => (
               <Animated.View
                 key={request.id}
                 layout={reduce ? undefined : springLayout()}
                 exiting={reduce ? undefined : springSlideOutRight()}
-                style={[styles.request, { backgroundColor: theme.card }]}
               >
-                <Text style={[type.headline, { color: theme.text }]}>{request.senderName}</Text>
-                {request.venueName ? (
-                  <Text style={[type.caption, { color: theme.quiet }]}>{request.venueName}</Text>
-                ) : null}
-                {request.introMessage ? (
-                  <Text style={[type.body, { color: theme.text }]}>“{request.introMessage}”</Text>
-                ) : null}
-                <View style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <PrimaryButton
-                      title={t('common.decline')}
-                      theme={theme}
-                      variant="ghost"
-                      onPress={() => void respondToRequest(request, false)}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <PrimaryButton title={t('common.accept')} theme={theme} onPress={() => void accept(request)} />
-                  </View>
-                </View>
+                <RequestCard
+                  request={request}
+                  theme={theme}
+                  busy={busyId === request.id}
+                  onAccept={() => void accept(request)}
+                  onDecline={() => void decline(request)}
+                />
               </Animated.View>
             ))}
           </View>
@@ -126,34 +167,61 @@ export default function ChatsScreen() {
               {conversations.map((convo, index) => {
                 const unread = convo.lastSenderId && convo.lastSenderId !== user?.uid;
                 const open = isChatSendingOpen(convo);
+                const label = names[convo.id] || t('chats.privateChat');
                 return (
-                  <Pressable
+                  <PressScale
                     key={convo.id}
                     onPress={() => router.push(`/chat/${convo.id}`)}
-                    style={({ pressed }) => [
+                    style={[
                       styles.card,
-                      { backgroundColor: pressed ? theme.bg : 'transparent' },
                       index < conversations.length - 1
                         ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }
                         : null,
+                      !open ? { opacity: 0.92 } : null,
                     ]}
                   >
-                    <Avatar name={names[convo.id] || convo.venueName || t('common.chat')} theme={theme} />
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Text style={[type.headline, { color: theme.text }]}>{names[convo.id] || t('chats.privateChat')}</Text>
-                      <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
-                        {open ? convo.lastMessage : t('chats.goTalk')}
+                    <Avatar
+                      name={label}
+                      uri={avatars[convo.id]}
+                      userId={convo.participantIds.find((id) => id !== user?.uid)}
+                      theme={theme}
+                      size={48}
+                    />
+                    <View style={{ flex: 1, gap: open ? 2 : 6, minWidth: 0 }}>
+                      <Text
+                        style={[type.headline, { color: open ? theme.text : theme.muted }]}
+                        numberOfLines={1}
+                      >
+                        {label}
                       </Text>
+                      {open ? (
+                        <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
+                          {convo.lastMessage}
+                        </Text>
+                      ) : (
+                        <View
+                          style={[styles.wrapChip, { backgroundColor: theme.accentSoft }]}
+                          accessibilityRole="text"
+                          accessibilityLabel={t('chats.goTalk')}
+                        >
+                          <Ionicons name="walk-outline" size={14} color={theme.accent} />
+                          <Text style={[styles.wrapChipText, { color: theme.accent }]} numberOfLines={1}>
+                            {t('chats.goTalk')}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 6 }}>
                       {open ? (
                         <CountdownBadge expiresAt={chatSendUntil(convo)} theme={theme} />
                       ) : (
-                        <Text style={[type.caption, { color: theme.quiet }]}>{t('chats.wrapped')}</Text>
+                        <Text style={[type.caption, { color: theme.quiet, fontWeight: '600' }]}>
+                          {t('chats.wrapped')}
+                        </Text>
                       )}
                       {unread && open ? <View style={[styles.dot, { backgroundColor: theme.accent }]} /> : null}
                     </View>
-                  </Pressable>
+                  </PressScale>
                 );
               })}
             </View>
@@ -166,14 +234,28 @@ export default function ChatsScreen() {
 
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32, gap: 16 },
-  request: { borderRadius: radius.lg, borderCurve: 'continuous', padding: 16, gap: 6 },
-  row: { flexDirection: 'row', gap: 8, marginTop: 10 },
   group: { borderRadius: 16, borderCurve: 'continuous', overflow: 'hidden' },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     padding: 14,
+  },
+  wrapChip: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    maxWidth: '100%',
+  },
+  wrapChipText: {
+    ...type.caption,
+    fontWeight: '700',
+    fontStyle: 'italic',
+    flexShrink: 1,
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
 });
