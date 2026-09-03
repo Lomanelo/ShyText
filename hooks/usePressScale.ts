@@ -1,5 +1,7 @@
 import { useCallback } from 'react';
 import {
+  FadeInDown,
+  FadeOutUp,
   LinearTransition,
   SlideInDown,
   SlideInUp,
@@ -52,6 +54,20 @@ export function springSlideOutRight() {
 
 export function springPop() {
   return ZoomIn.springify().damping(motion.spring.damping).stiffness(motion.spring.stiffness);
+}
+
+/** Arrival for someone who just Shyned into a live venue list. */
+export function springPersonIn() {
+  return FadeInDown.duration(480)
+    .springify()
+    .damping(17)
+    .stiffness(150)
+    .mass(0.85);
+}
+
+export function springPersonOut() {
+  // Timing — not spring — so opacity can't overshoot and flash back visible.
+  return FadeOutUp.duration(240);
 }
 
 export function usePressScale(disabled?: boolean) {

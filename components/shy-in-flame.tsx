@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo, LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -52,6 +52,7 @@ function LitStrip({
   onShyOut,
   accessory,
   dock,
+  disabled,
 }: {
   theme: Theme;
   venueName: string;
@@ -62,6 +63,7 @@ function LitStrip({
   onShyOut?: () => void;
   accessory?: ReactNode;
   dock?: boolean;
+  disabled?: boolean;
 }) {
   const { t } = useTranslation();
   const reduce = useReduceMotion();
@@ -74,7 +76,7 @@ function LitStrip({
   }, []);
 
   useEffect(() => {
-    if (reduce) {
+    if (reduce || disabled) {
       breathe.value = 1;
       return;
     }
@@ -83,7 +85,7 @@ function LitStrip({
       -1,
       true
     );
-  }, [breathe, reduce]);
+  }, [breathe, reduce, disabled]);
 
   const flameStyle = useAnimatedStyle(() => ({
     transform: [{ scale: breathe.value }],
@@ -103,8 +105,9 @@ function LitStrip({
           height: trackH,
           backgroundColor: theme.accentSoft,
           borderCurve: 'continuous' as const,
+          opacity: disabled ? 0.72 : 1,
         },
-        dock ? [cardShadow(theme), { minHeight: 56, height: undefined, paddingVertical: 10 }] : null,
+        dock ? [cardShadow(theme), { height: trackH, minHeight: trackH, paddingVertical: 0 }] : null,
       ]}
     >
       <View
@@ -134,8 +137,9 @@ function LitStrip({
             accessibilityRole="button"
             accessibilityLabel={t('common.shyOut')}
             onPress={onShyOut}
+            disabled={disabled}
             hitSlop={8}
-            style={styles.outBtn}
+            style={[styles.outBtn, disabled ? { opacity: 0.45 } : null]}
           >
             <Text style={[type.caption, { color: theme.accent, fontWeight: '700' }]}>{t('common.shyOut')}</Text>
           </PressScale>
@@ -144,7 +148,7 @@ function LitStrip({
     </View>
   );
 
-  if (onPress) {
+  if (onPress && !disabled) {
     return (
       <PressScale accessibilityRole="button" accessibilityLabel={a11y} onPress={onPress} style={styles.wrap}>
         {body}
@@ -158,6 +162,8 @@ function LitStrip({
     </View>
   );
 }
+
+const EXTINGUISH_MS = 240;
 
 export function ShyInFlame({
   venueName,
@@ -188,6 +194,8 @@ export function ShyInFlame({
   const reduce = useReduceMotion();
   const [reader, setReader] = useState(false);
   const [ignited, setIgnited] = useState(lit);
+  const [extinguishing, setExtinguishing] = useState(false);
+  const showingFlame = useRef(lit);
   const size = SIZES[variant];
   const thumb = size.thumb;
   const mark = size.mark;
@@ -204,6 +212,8 @@ export function ShyInFlame({
   const caught = useSharedValue(0);
   const committed = useSharedValue(lit ? 1 : 0);
   const active = useSharedValue(0);
+  const stripFade = useSharedValue(lit ? 1 : 0);
+  const trackFade = useSharedValue(lit ? 0 : 1);
 
   useEffect(() => {
     AccessibilityInfo.isScreenReaderEnabled().then(setReader);
@@ -212,29 +222,75 @@ export function ShyInFlame({
   }, []);
 
   const simple = reduce || reader;
-  const showLit = lit || ignited;
-  const locked = disabled || loading || !onShyIn;
+  const showLit = lit || ignited || extinguishing;
+  const locked = disabled || loading || !onShyIn || extinguishing;
+
+  const resetSlider = useCallback(() => {
+    committed.value = 0;
+    caught.value = 0;
+    slide.value = 0;
+    active.value = 0;
+    progress.value = 0;
+    grow.value = 1;
+    flicker.value = 0;
+  }, [active, caught, committed, flicker, grow, progress, slide]);
+
+  const finishExtinguish = useCallback(() => {
+    showingFlame.current = false;
+    setIgnited(false);
+    setExtinguishing(false);
+    stripFade.value = 0;
+    resetSlider();
+    trackFade.value = 0;
+    trackFade.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.cubic) });
+  }, [resetSlider, stripFade, trackFade]);
 
   useEffect(() => {
     if (lit) {
+      showingFlame.current = true;
       setIgnited(true);
+      setExtinguishing(false);
+      stripFade.value = 1;
+      trackFade.value = 0;
       progress.value = 1;
       committed.value = 1;
       grow.value = 1;
       flicker.value = 0;
       return;
     }
-    if (!loading) {
-      setIgnited(false);
-      committed.value = 0;
-      caught.value = 0;
-      slide.value = 0;
-      active.value = 0;
-      progress.value = 0;
-      grow.value = 1;
-      flicker.value = 0;
+
+    // Shyne-in still resolving — keep the committed flame UI until parent confirms or fails.
+    if (loading && showingFlame.current) return;
+
+    if (!showingFlame.current) {
+      resetSlider();
+      stripFade.value = 0;
+      trackFade.value = 1;
+      return;
     }
-  }, [lit, loading, active, caught, committed, flicker, grow, progress, slide]);
+
+    if (reduce) {
+      finishExtinguish();
+      return;
+    }
+
+    setExtinguishing(true);
+    stripFade.value = withTiming(0, { duration: EXTINGUISH_MS, easing: Easing.out(Easing.cubic) });
+    const id = setTimeout(() => finishExtinguish(), EXTINGUISH_MS + 16);
+    return () => clearTimeout(id);
+  }, [
+    lit,
+    loading,
+    reduce,
+    finishExtinguish,
+    resetSlider,
+    committed,
+    flicker,
+    grow,
+    progress,
+    stripFade,
+    trackFade,
+  ]);
 
   const onTrackLayout = useCallback(
     (event: LayoutChangeEvent) => {
@@ -245,12 +301,16 @@ export function ShyInFlame({
 
   const playIgnite = useCallback(() => {
     hapticIgnite();
+    showingFlame.current = true;
     setIgnited(true);
+    setExtinguishing(false);
+    stripFade.value = 1;
+    trackFade.value = 0;
     progress.value = 1;
     grow.value = 1;
     flicker.value = 0;
     void onShyIn?.();
-  }, [flicker, grow, onShyIn, progress]);
+  }, [flicker, grow, onShyIn, progress, stripFade, trackFade]);
 
   const snapBack = useCallback(() => {
     slide.value = withTiming(0, { duration: 120 });
@@ -375,30 +435,24 @@ export function ShyInFlame({
     };
   });
 
+  const stripStyle = useAnimatedStyle(() => ({
+    opacity: stripFade.value,
+    transform: [{ scale: 0.98 + stripFade.value * 0.02 }],
+  }));
+
+  const trackRevealStyle = useAnimatedStyle(() => ({
+    opacity: trackFade.value,
+    transform: [{ translateY: (1 - trackFade.value) * 4 }],
+  }));
+
   const a11y = showLit
     ? t('venue.shydInA11y', { name: venueName })
     : simple
       ? t('venue.tapA11y', { name: venueName })
       : t('venue.slideA11y', { name: venueName });
 
-  if (showLit) {
-    return (
-      <LitStrip
-        theme={theme}
-        venueName={venueName}
-        trackH={trackH}
-        mark={mark}
-        expiresAt={expiresAt}
-        onPress={onPress}
-        onShyOut={onShyOut}
-        accessory={accessory}
-        dock={variant === 'dock'}
-      />
-    );
-  }
-
-  return (
-    <View style={styles.wrap}>
+  const slider = (
+    <Animated.View style={[styles.wrap, trackRevealStyle]}>
       {hideName ? null : (
         <Text style={[type.caption, { color: theme.muted, marginBottom: 6 }]} numberOfLines={1}>
           {venueName}
@@ -471,8 +525,32 @@ export function ShyInFlame({
           </GestureDetector>
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
+
+  if (showLit) {
+    return (
+      <Animated.View
+        style={[styles.wrap, stripStyle]}
+        pointerEvents={extinguishing || loading ? 'none' : 'auto'}
+      >
+        <LitStrip
+          theme={theme}
+          venueName={venueName}
+          trackH={trackH}
+          mark={mark}
+          expiresAt={expiresAt}
+          onPress={onPress}
+          onShyOut={onShyOut}
+          accessory={accessory}
+          dock={variant === 'dock'}
+          disabled={loading || extinguishing}
+        />
+      </Animated.View>
+    );
+  }
+
+  return slider;
 }
 
 const styles = StyleSheet.create({

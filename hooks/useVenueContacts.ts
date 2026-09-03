@@ -18,7 +18,8 @@ export function useVenueContacts(userId?: string, venueId?: string) {
   const [outgoing, setOutgoing] = useState<ChatRequest[]>([]);
   const [incoming, setIncoming] = useState<ChatRequest[]>([]);
   const [localSent, setLocalSent] = useState<Record<string, true>>({});
-  const [localAccepted, setLocalAccepted] = useState<Record<string, true>>({});
+  /** Optimistic accept map: otherUserId → conversationId (empty string until known). */
+  const [localAccepted, setLocalAccepted] = useState<Record<string, string>>({});
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -56,8 +57,11 @@ export function useVenueContacts(userId?: string, venueId?: string) {
     for (const item of incoming) {
       if (venueId && item.venueId !== venueId) continue;
       if (map.has(item.senderId)) continue;
-      if (item.status === 'accepted' || localAccepted[item.senderId]) {
-        map.set(item.senderId, { kind: 'chat', conversationId: item.conversationId });
+      if (item.status === 'accepted' || item.senderId in localAccepted) {
+        map.set(item.senderId, {
+          kind: 'chat',
+          conversationId: item.conversationId || localAccepted[item.senderId] || undefined,
+        });
         continue;
       }
       if (item.status === 'pending') {
@@ -69,8 +73,16 @@ export function useVenueContacts(userId?: string, venueId?: string) {
     for (const id of Object.keys(localSent)) {
       if (!map.has(id)) map.set(id, { kind: 'sent' });
     }
-    for (const id of Object.keys(localAccepted)) {
-      map.set(id, { kind: 'chat' });
+    for (const [id, conversationId] of Object.entries(localAccepted)) {
+      const prev = map.get(id);
+      if (prev?.kind === 'chat') {
+        map.set(id, {
+          kind: 'chat',
+          conversationId: prev.conversationId || conversationId || undefined,
+        });
+      } else if (!prev) {
+        map.set(id, { kind: 'chat', conversationId: conversationId || undefined });
+      }
     }
 
     return map;
@@ -79,6 +91,10 @@ export function useVenueContacts(userId?: string, venueId?: string) {
   return {
     modeFor: (otherUserId: string): VenueContactMode => modes.get(otherUserId) ?? { kind: 'send' },
     markSent: (receiverId: string) => setLocalSent((prev) => ({ ...prev, [receiverId]: true })),
-    markAccepted: (senderId: string) => setLocalAccepted((prev) => ({ ...prev, [senderId]: true })),
+    markAccepted: (senderId: string, conversationId?: string) =>
+      setLocalAccepted((prev) => ({
+        ...prev,
+        [senderId]: conversationId || prev[senderId] || '',
+      })),
   };
 }

@@ -18,7 +18,7 @@ import { useChats } from '../../hooks/useChats';
 import { chatSendUntil, isChatSendingOpen } from '../../utils/chatTime';
 import { getUserProfile } from '../../services/auth';
 import { prefetchProfileImage } from '../../services/imageCache';
-import { respondToRequest } from '../../services/chat';
+import { ensureConversationOpen, respondToRequest } from '../../services/chat';
 import { ChatRequest } from '../../types/chat';
 import { PressScale } from '../../components/PressScale';
 import { useTranslation } from 'react-i18next';
@@ -166,12 +166,17 @@ export default function ChatsScreen() {
             <View style={[styles.group, { backgroundColor: theme.card }]}>
               {conversations.map((convo, index) => {
                 const unread = convo.lastSenderId && convo.lastSenderId !== user?.uid;
-                const open = isChatSendingOpen(convo);
+                const ended = convo.status === 'closed';
+                const open = !ended && isChatSendingOpen(convo);
                 const label = names[convo.id] || t('chats.privateChat');
                 return (
                   <PressScale
                     key={convo.id}
-                    onPress={() => router.push(`/chat/${convo.id}`)}
+                    onPress={() => {
+                      void ensureConversationOpen(convo.id)
+                        .then((id) => router.push(`/chat/${id}`))
+                        .catch(() => router.push(`/chat/${convo.id}`));
+                    }}
                     style={[
                       styles.card,
                       index < conversations.length - 1
@@ -202,11 +207,15 @@ export default function ChatsScreen() {
                         <View
                           style={[styles.wrapChip, { backgroundColor: theme.accentSoft }]}
                           accessibilityRole="text"
-                          accessibilityLabel={t('chats.goTalk')}
+                          accessibilityLabel={ended ? t('chats.ended') : t('chats.goTalk')}
                         >
-                          <Ionicons name="walk-outline" size={14} color={theme.accent} />
+                          <Ionicons
+                            name={ended ? 'chatbubble-ellipses-outline' : 'walk-outline'}
+                            size={14}
+                            color={theme.accent}
+                          />
                           <Text style={[styles.wrapChipText, { color: theme.accent }]} numberOfLines={1}>
-                            {t('chats.goTalk')}
+                            {ended ? t('chats.ended') : t('chats.goTalk')}
                           </Text>
                         </View>
                       )}
@@ -216,7 +225,7 @@ export default function ChatsScreen() {
                         <CountdownBadge expiresAt={chatSendUntil(convo)} theme={theme} />
                       ) : (
                         <Text style={[type.caption, { color: theme.quiet, fontWeight: '600' }]}>
-                          {t('chats.wrapped')}
+                          {ended ? t('chats.endedShort') : t('chats.wrapped')}
                         </Text>
                       )}
                       {unread && open ? <View style={[styles.dot, { backgroundColor: theme.accent }]} /> : null}

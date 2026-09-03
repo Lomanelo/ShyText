@@ -222,25 +222,33 @@ export async function respondToRequest(request: ChatRequest, accept: boolean): P
 
   const existing = await findOpenConversation(user.uid, request.senderId);
   const now = Date.now();
-  const convoId =
-    existing?.id ??
-    (
-      await addDoc(collection(db, 'conversations'), {
-        participantIds: [request.senderId, request.receiverId],
-        createdFromShytextId: request.checkInId ?? request.shytextId,
-        venueName: request.venueName ?? null,
-        otherName: request.senderName ?? null,
-        otherAvatarUrl: request.senderAvatarUrl ?? null,
-        introMessage: request.introMessage ?? null,
-        createdAt: now,
-        sendUntil: now + CHAT_SEND_MS,
-        lastMessageAt: now,
-        lastMessage: request.introMessage || 'Hi',
-        lastSenderId: request.senderId,
-        status: 'active',
-        serverCreatedAt: serverTimestamp(),
-      })
-    ).id;
+  const intro = request.introMessage?.trim() || 'Hi';
+  let convoId = existing?.id;
+  if (!convoId) {
+    const created = await addDoc(collection(db, 'conversations'), {
+      participantIds: [request.senderId, request.receiverId],
+      createdFromShytextId: request.checkInId ?? request.shytextId,
+      venueName: request.venueName ?? null,
+      otherName: request.senderName ?? null,
+      otherAvatarUrl: request.senderAvatarUrl ?? null,
+      introMessage: intro,
+      introSenderId: request.senderId,
+      createdAt: now,
+      sendUntil: now + CHAT_SEND_MS,
+      lastMessageAt: now,
+      lastMessage: intro,
+      lastSenderId: request.senderId,
+      status: 'active',
+      serverCreatedAt: serverTimestamp(),
+    });
+    convoId = created.id;
+  } else if (intro && !existing?.introMessage) {
+    await updateDoc(doc(db, 'conversations', convoId), {
+      introMessage: intro,
+      introSenderId: request.senderId,
+    }).catch(() => undefined);
+  }
+  if (!convoId) throw new Error(i18n.t('errors.couldNotAccept'));
 
   await updateDoc(ref, { status: 'accepted', conversationId: convoId });
   await updateDoc(doc(db, 'users', user.uid), { 'stats.chatsStarted': increment(1) }).catch(() => undefined);
@@ -273,16 +281,35 @@ export function listenConversations(userId: string, onChange: (items: Conversati
     (snap) => {
       const items = snap.docs
         .map((item) => ({ id: item.id, ...item.data() } as Conversation))
-        .filter((item) => item.status !== 'closed')
-        .sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+        .sort((a, b) => Number(b.lastMessageAt || 0) - Number(a.lastMessageAt || 0));
       const unique = dedupeConversations(items);
       for (const item of unique) {
         prefetchProfileImage([item.otherAvatarUrl], item.otherAvatarUrl);
       }
       onChange(unique);
     },
-    () => undefined
+    () => onChange([])
   );
+}
+
+/** Re-open a left chat so it shows in the list and can receive messages again. */
+export async function ensureConversationOpen(conversationId: string): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) throw new Error(i18n.t('errors.signInFirst'));
+  const ref = doc(db, 'conversations', conversationId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error(i18n.t('errors.chatNotFound'));
+  const data = snap.data() as Conversation;
+  if (!data.participantIds?.includes(user.uid)) throw new Error(i18n.t('errors.notAllowed'));
+  if (data.status === 'closed') {
+    const now = Date.now();
+    await updateDoc(ref, {
+      status: 'active',
+      sendUntil: now + CHAT_SEND_MS,
+      lastMessageAt: Math.max(Number(data.lastMessageAt) || 0, now),
+    });
+  }
+  return conversationId;
 }
 
 export function listenMessages(conversationId: string, onChange: (items: ChatMessage[]) => void) {

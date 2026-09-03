@@ -96,15 +96,21 @@ export default function ChatScreen() {
   }, [chatId, user?.uid, t]);
 
   const rows = useMemo<Row[]>(() => {
+    const introText = convo?.introMessage?.trim();
     const seeded: Row[] = [];
-    if (convo && messages.length === 0 && pending.length === 0 && convo.lastMessage && convo.lastSenderId) {
-      seeded.push({
-        id: `intro:${convo.id}`,
-        conversationId: convo.id,
-        senderId: convo.lastSenderId,
-        text: convo.lastMessage,
-        createdAt: convo.createdAt,
-      });
+    if (convo && introText) {
+      const alreadyInThread = messages.some(
+        (item) => item.text === introText && (!convo.introSenderId || item.senderId === convo.introSenderId)
+      );
+      if (!alreadyInThread) {
+        seeded.push({
+          id: `intro:${convo.id}`,
+          conversationId: convo.id,
+          senderId: convo.introSenderId ?? convo.participantIds[0],
+          text: introText,
+          createdAt: convo.createdAt,
+        });
+      }
     }
     return [...seeded, ...messages, ...pending];
   }, [messages, pending, convo]);

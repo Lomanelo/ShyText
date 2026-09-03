@@ -26,6 +26,8 @@ export interface Conversation {
   otherName?: string;
   otherAvatarUrl?: string;
   introMessage?: string;
+  /** Who wrote the opening ShyText — kept even after lastMessage updates. */
+  introSenderId?: string;
   createdAt: number;
   lastMessageAt: number;
   lastMessage?: string;

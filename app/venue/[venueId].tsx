@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import Animated from 'react-native-reanimated';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import * as Haptics from 'expo-haptics';
+import Animated, { Easing, runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Screen } from '../../components/Screen';
 import { NoticeBanner } from '../../components/NoticeBanner';
 import { ApproachableUserCard } from '../../components/ApproachableUserCard';
+import { PersonArrival } from '../../components/PersonArrival';
 import { EmptyState } from '../../components/EmptyState';
+import { VenueShynePrompt } from '../../components/VenueShynePrompt';
 import { Skeleton } from '../../components/Skeleton';
 import { ChatRequestModal } from '../../components/ChatRequestModal';
 import { ReportModal } from '../../components/ReportModal';
@@ -15,7 +17,6 @@ import { CountdownBadge } from '../../components/CountdownBadge';
 import { VenueStamp } from '../../components/VenueStamp';
 import { PressScale } from '../../components/PressScale';
 import { cardShadow, radius, space, type, useTheme } from '../../theme';
-import { springLayout } from '../../hooks/usePressScale';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useAuth } from '../../hooks/useAuth';
 import { useCurrentVenue } from '../../hooks/useCurrentVenue';
@@ -24,7 +25,7 @@ import { useVenueContacts } from '../../hooks/useVenueContacts';
 import { useLocation } from '../../hooks/useLocation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getVenue } from '../../services/venues';
-import { respondToRequest, sendChatRequest } from '../../services/chat';
+import { ensureConversationOpen, respondToRequest, sendChatRequest } from '../../services/chat';
 import { buildVenueImageUrl } from '../../services/venueImage';
 import { lookupVenueImage, rememberVenueImage } from '../../services/venueImageCache';
 import {
@@ -40,6 +41,8 @@ import { SHYTEXT_VIBES, normalizeVibe } from '../../types/shytext';
 import { vibeLabel } from '../../i18n/labels';
 import { useTranslation } from 'react-i18next';
 
+const SHY_OUT_MS = 260;
+
 function resolveHeroUrl(venueId: string | undefined, seed: Venue | null): string | null {
   const cached = lookupVenueImage(venueId, seed?.id, seed?.providerPlaceId);
   if (cached) return cached;
@@ -52,6 +55,7 @@ export default function VenueScreen() {
   const { venueId, mode } = useLocalSearchParams<{ venueId: string; mode?: string }>();
   const theme = useTheme();
   const { t } = useTranslation();
+  const navigation = useNavigation();
   const reduce = useReduceMotion();
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
@@ -71,6 +75,8 @@ export default function VenueScreen() {
   const [statusDraft, setStatusDraft] = useState('');
   const [statusError, setStatusError] = useState<string | null>(null);
   const [pendingTick, setPendingTick] = useState(0);
+  const [leaving, setLeaving] = useState(false);
+  const [frozen, setFrozen] = useState<{ mine: CheckIn | null; others: CheckIn[] } | null>(null);
   // Sync cache first — React context is often still stale on the first paint after push.
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(() => resolveHeroUrl(venueId, remembered));
 
@@ -118,15 +124,74 @@ export default function VenueScreen() {
     !current.checkIn.id.startsWith('pending:');
   const pendingHere = shyneIntent && isPendingShyne(venueId);
   const here = confirmedHere || pendingHere;
-  const { people, loading } = useCheckIns(here ? venueId : undefined);
-  const others = people.filter((item) => item.userId !== user?.uid);
-  const mine =
+  const { people, loading } = useCheckIns(here || leaving ? venueId : undefined);
+  const liveOthers = people.filter((item) => item.userId !== user?.uid);
+  const liveMine =
     people.find((item) => item.userId === user?.uid) ??
     (current.checkIn?.venueId === venueId && !current.expired ? current.checkIn : null) ??
     (pendingHere ? getPendingShyne(venueId)?.checkIn ?? null : null);
+  const others = leaving && frozen ? frozen.others : liveOthers;
+  const mine = leaving && frozen ? frozen.mine : liveMine;
   const vibe = normalizeVibe(mine?.vibe);
-  // Avoid skeleton flash while the Shyne check-in / people query is still catching up.
-  const showPeopleSkeleton = here && loading && others.length === 0 && !pendingHere && !mine;
+  const presence = useSharedValue(1);
+  const prompt = useSharedValue(here || leaving ? 0 : 1);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({ title: venue?.name ?? t('common.venue') });
+  }, [navigation, venue?.name, t]);
+
+  useEffect(() => {
+    if (here && !leaving) {
+      presence.value = withTiming(1, { duration: 200, easing: Easing.out(Easing.cubic) });
+      prompt.value = withTiming(0, { duration: 160, easing: Easing.out(Easing.cubic) });
+    }
+  }, [here, leaving, presence, prompt]);
+
+  // While the live list is catching up after Shyne, don't flash "Just you" or a skeleton.
+  const waitingForPeople = here && !leaving && loading && others.length === 0;
+  const showPeopleSkeleton = waitingForPeople && !pendingHere && !mine;
+  const showPresence = here || leaving;
+  const showShynePrompt = !showPresence;
+
+  const finishShyOut = useCallback(async () => {
+    setShyneIntent(false);
+    presence.value = 0;
+    try {
+      await current.leave();
+    } finally {
+      // Keep presence at 0 until the next Shyne so the roster never pops back in.
+      setFrozen(null);
+      setLeaving(false);
+      prompt.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
+      await Haptics.selectionAsync();
+    }
+  }, [current, presence, prompt]);
+
+  const shyOutNow = useCallback(() => {
+    if (!here || leaving || busy) return;
+    setFrozen({
+      mine: liveMine,
+      others: liveOthers,
+    });
+    setLeaving(true);
+    setShyneIntent(false);
+    if (reduce) {
+      void finishShyOut();
+      return;
+    }
+    presence.value = withTiming(0, { duration: SHY_OUT_MS, easing: Easing.out(Easing.cubic) }, (done) => {
+      if (done) runOnJS(finishShyOut)();
+    });
+  }, [here, leaving, busy, liveMine, liveOthers, reduce, finishShyOut, presence]);
+
+  const presenceStyle = useAnimatedStyle(() => ({
+    opacity: presence.value,
+    transform: [{ translateY: (1 - presence.value) * 8 }],
+  }));
+  const promptStyle = useAnimatedStyle(() => ({
+    opacity: prompt.value,
+    transform: [{ translateY: (1 - prompt.value) * 6 }],
+  }));
 
   useEffect(() => {
     if (!venueId) return;
@@ -151,10 +216,12 @@ export default function VenueScreen() {
   }, [here, vibe, statusDraft, mine?.id]);
 
   const checkInNow = async () => {
-    if (!venue || !profile || busy) return;
+    if (!venue || !profile || busy || leaving) return;
     setBusy(true);
     setNotice(null);
     setShyneIntent(true);
+    presence.value = 0;
+    prompt.value = withTiming(0, { duration: 140, easing: Easing.out(Easing.cubic) });
     try {
       current.beginShyne(venue, {
         displayName: profile.displayName,
@@ -169,6 +236,7 @@ export default function VenueScreen() {
       });
     } catch (err) {
       setShyneIntent(false);
+      prompt.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.cubic) });
       setNotice({ text: err instanceof Error ? err.message : t('errors.couldNotCheckIn'), tone: 'error' });
     } finally {
       setBusy(false);
@@ -177,14 +245,10 @@ export default function VenueScreen() {
 
   return (
     <Screen theme={theme} inset={false}>
-      <Stack.Screen options={{ title: venue?.name ?? t('common.venue') }} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl refreshing={here && loading} onRefresh={() => undefined} tintColor={theme.accent} />
-        }
       >
         {venue || heroImageUrl ? (
           <View style={[styles.hero, cardShadow(theme)]}>
@@ -193,118 +257,143 @@ export default function VenueScreen() {
         ) : null}
 
         <View style={styles.content}>
-          {here && mine ? (
-            <View style={[styles.own, cardShadow(theme), { backgroundColor: theme.card }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <CountdownBadge expiresAt={mine.expiresAt} theme={theme} />
-              </View>
-              <View style={styles.chips}>
-                {SHYTEXT_VIBES.map((item) => (
-                  <PressScale
-                    key={item}
-                    onPress={() => {
-                      void Haptics.selectionAsync();
-                      void current.setVibe(item);
-                      if (item !== 'other') {
-                        setStatusDraft('');
-                        setStatusError(null);
-                      }
-                    }}
-                    style={[styles.chip, { backgroundColor: item === vibe ? theme.accent : theme.bg }]}
-                  >
-                    <Text style={{ color: item === vibe ? theme.onAccent : theme.text, fontWeight: '700' }}>
-                      {vibeLabel(item)}
-                    </Text>
-                  </PressScale>
-                ))}
-              </View>
-              {vibe === 'other' ? (
-                <View style={[styles.statusBox, { backgroundColor: theme.bg }]}>
-                  <TextInput
-                    value={statusDraft}
-                    onChangeText={(value) => {
-                      setStatusError(null);
-                      setStatusDraft(value);
-                    }}
-                    maxLength={MAX_STATUS_LENGTH}
-                    placeholder={t('venue.statusPlaceholder')}
-                    placeholderTextColor={theme.quiet}
-                    returnKeyType="done"
-                    style={[styles.statusInput, { color: theme.text }]}
-                  />
-                  <Text style={[type.caption, { color: theme.quiet, fontVariant: ['tabular-nums'] }]}>
-                    {MAX_STATUS_LENGTH - statusDraft.length}
-                  </Text>
+          {showPresence ? (
+            <Animated.View
+              style={[styles.presenceBlock, presenceStyle]}
+              pointerEvents={leaving ? 'none' : 'auto'}
+            >
+              {mine ? (
+                <View style={[styles.own, cardShadow(theme), { backgroundColor: theme.card }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <CountdownBadge expiresAt={mine.expiresAt} theme={theme} />
+                  </View>
+                  <View style={styles.chips}>
+                    {SHYTEXT_VIBES.map((item) => (
+                      <PressScale
+                        key={item}
+                        onPress={() => {
+                          void Haptics.selectionAsync();
+                          void current.setVibe(item);
+                          if (item !== 'other') {
+                            setStatusDraft('');
+                            setStatusError(null);
+                          }
+                        }}
+                        style={[styles.chip, { backgroundColor: item === vibe ? theme.accent : theme.bg }]}
+                      >
+                        <Text style={{ color: item === vibe ? theme.onAccent : theme.text, fontWeight: '700' }}>
+                          {vibeLabel(item)}
+                        </Text>
+                      </PressScale>
+                    ))}
+                  </View>
+                  {vibe === 'other' ? (
+                    <View style={[styles.statusBox, { backgroundColor: theme.bg }]}>
+                      <TextInput
+                        value={statusDraft}
+                        onChangeText={(value) => {
+                          setStatusError(null);
+                          setStatusDraft(value);
+                        }}
+                        maxLength={MAX_STATUS_LENGTH}
+                        placeholder={t('venue.statusPlaceholder')}
+                        placeholderTextColor={theme.quiet}
+                        returnKeyType="done"
+                        style={[styles.statusInput, { color: theme.text }]}
+                      />
+                      <Text style={[type.caption, { color: theme.quiet, fontVariant: ['tabular-nums'] }]}>
+                        {MAX_STATUS_LENGTH - statusDraft.length}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {statusError ? <Text style={{ color: theme.danger }}>{statusError}</Text> : null}
                 </View>
               ) : null}
-              {statusError ? <Text style={{ color: theme.danger }}>{statusError}</Text> : null}
-            </View>
-          ) : null}
 
-          {notice ? (
-            <NoticeBanner
-              message={notice.text}
-              tone={notice.tone}
-              theme={theme}
-              onDismiss={() => setNotice(null)}
-            />
-          ) : null}
-
-          {!here ? (
-            <EmptyState theme={theme} title={t('venue.shyInToSee')} />
-          ) : showPeopleSkeleton ? (
-            <Skeleton theme={theme} />
-          ) : others.length === 0 ? (
-            <EmptyState theme={theme} title={t('venue.justYou')} />
-          ) : (
-            others.map((person) => {
-              const mode = modeFor(person.userId);
-              return (
-              <Animated.View key={person.id} layout={reduce ? undefined : springLayout()}>
-                <ApproachableUserCard
-                  person={person}
+              {notice ? (
+                <NoticeBanner
+                  message={notice.text}
+                  tone={notice.tone}
                   theme={theme}
-                  mode={mode}
-                  onSend={() => {
-                    if (mode.kind !== 'send') return;
-                    if (person.userId.startsWith('seed-')) {
-                      setNotice({
-                        text: isDevToolsEnabled()
-                          ? t('venue.demoPerson')
-                          : t('errors.noLongerCheckedIn'),
-                        tone: 'error',
-                      });
-                      return;
-                    }
-                    setHello(person);
-                  }}
-                  onAccept={async () => {
-                    if (mode.kind !== 'accept') return;
-                    try {
-                      markAccepted(person.userId);
-                      const convoId = await respondToRequest(mode.request, true);
-                      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                      if (convoId) router.push(`/chat/${convoId}`);
-                      else router.push('/(tabs)/chats');
-                    } catch (err) {
-                      setNotice({
-                        text: err instanceof Error ? err.message : t('errors.couldNotAccept'),
-                        tone: 'error',
-                      });
-                    }
-                  }}
-                  onOpenChat={() => {
-                    if (mode.kind === 'chat' && mode.conversationId) {
-                      router.push(`/chat/${mode.conversationId}`);
-                      return;
-                    }
-                    router.push('/(tabs)/chats');
-                  }}
-                  onReport={() => setReport(person)}
+                  onDismiss={() => setNotice(null)}
                 />
-              </Animated.View>
-              );
-            })
+              ) : null}
+
+              {showPeopleSkeleton ? (
+                <Skeleton theme={theme} />
+              ) : waitingForPeople ? null : others.length === 0 ? (
+                <EmptyState theme={theme} title={t('venue.justYou')} />
+              ) : (
+                others.map((person, index) => {
+                  const contactMode = modeFor(person.userId);
+                  return (
+                    <PersonArrival key={person.userId} reduceMotion={reduce || leaving} staggerIndex={index}>
+                      <ApproachableUserCard
+                        person={person}
+                        theme={theme}
+                        mode={contactMode}
+                        onSend={() => {
+                          if (contactMode.kind !== 'send') return;
+                          if (person.userId.startsWith('seed-')) {
+                            setNotice({
+                              text: isDevToolsEnabled()
+                                ? t('venue.demoPerson')
+                                : t('errors.noLongerCheckedIn'),
+                              tone: 'error',
+                            });
+                            return;
+                          }
+                          setHello(person);
+                        }}
+                        onAccept={async () => {
+                          if (contactMode.kind !== 'accept') return;
+                          try {
+                            markAccepted(person.userId);
+                            const convoId = await respondToRequest(contactMode.request, true);
+                            if (convoId) markAccepted(person.userId, convoId);
+                            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            if (convoId) router.push(`/chat/${convoId}`);
+                            else router.push('/(tabs)/chats');
+                          } catch (err) {
+                            setNotice({
+                              text: err instanceof Error ? err.message : t('errors.couldNotAccept'),
+                              tone: 'error',
+                            });
+                          }
+                        }}
+                        onOpenChat={() => {
+                          if (contactMode.kind === 'chat' && contactMode.conversationId) {
+                            const id = contactMode.conversationId;
+                            void ensureConversationOpen(id)
+                              .then((openId) => router.push(`/chat/${openId}`))
+                              .catch(() => router.push('/(tabs)/chats'));
+                            return;
+                          }
+                          router.push('/(tabs)/chats');
+                        }}
+                        onReport={() => setReport(person)}
+                      />
+                    </PersonArrival>
+                  );
+                })
+              )}
+            </Animated.View>
+          ) : (
+            <>
+              {notice ? (
+                <NoticeBanner
+                  message={notice.text}
+                  tone={notice.tone}
+                  theme={theme}
+                  onDismiss={() => setNotice(null)}
+                />
+              ) : null}
+              {showShynePrompt ? (
+                <Animated.View style={promptStyle}>
+                  <VenueShynePrompt theme={theme} />
+                </Animated.View>
+              ) : null}
+            </>
           )}
         </View>
       </ScrollView>
@@ -315,18 +404,11 @@ export default function VenueScreen() {
             variant="dock"
             venueName={venue.name}
             theme={theme}
-            lit={here}
-            loading={busy}
-            expiresAt={here ? mine?.expiresAt : undefined}
-            onShyIn={here ? undefined : checkInNow}
-            onShyOut={
-              here
-                ? async () => {
-                    await current.leave();
-                    await Haptics.selectionAsync();
-                  }
-                : undefined
-            }
+            lit={here || leaving}
+            loading={busy || leaving}
+            expiresAt={here || leaving ? mine?.expiresAt : undefined}
+            onShyIn={here || leaving ? undefined : checkInNow}
+            onShyOut={here || leaving ? shyOutNow : undefined}
           />
         </View>
       ) : null}
@@ -377,6 +459,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   content: { paddingHorizontal: space[16], gap: space[12] },
+  presenceBlock: { gap: space[12] },
   own: { borderRadius: radius.lg, borderCurve: 'continuous', padding: space[16], gap: space[12] },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 10, minHeight: 44, justifyContent: 'center' },
