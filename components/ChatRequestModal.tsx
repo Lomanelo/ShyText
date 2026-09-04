@@ -1,7 +1,7 @@
 import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useEffect, useState } from 'react';
 import * as Haptics from 'expo-haptics';
-import { icebreakersFor } from '../i18n/labels';
+import { icebreakerKeyFor, icebreakersFor } from '../i18n/labels';
 import { ShyTextVibe } from '../types/shytext';
 import { useTranslation } from 'react-i18next';
 import { radius, space, Theme, type } from '../theme';
@@ -24,7 +24,8 @@ export function ChatRequestModal({
   vibe?: ShyTextVibe;
   message?: string;
   onClose: () => void;
-  onSend: (intro?: string) => Promise<void>;
+  /** introKey is set when the intro is an unedited suggestion — receiver sees it translated. */
+  onSend: (intro?: string, introKey?: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [intro, setIntro] = useState('');
@@ -42,11 +43,11 @@ export function ChatRequestModal({
     }
   }, [visible]);
 
-  const send = async (text?: string) => {
+  const send = async (text?: string, introKey?: string) => {
     setBusy(true);
     setError(null);
     try {
-      await onSend(text?.trim() || undefined);
+      await onSend(text?.trim() || undefined, introKey);
       setIntro('');
       onClose();
     } catch (err) {
@@ -67,13 +68,13 @@ export function ChatRequestModal({
 
           {!writeOwn ? (
             <View style={styles.chips}>
-              {replies.map((reply) => (
+              {replies.map((reply, index) => (
                 <PressScale
                   key={reply}
                   disabled={busy}
                   onPress={() => {
                     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    void send(reply);
+                    void send(reply, icebreakerKeyFor(vibe ?? 'chat', index));
                   }}
                   style={[styles.chip, { backgroundColor: theme.bg }]}
                 >

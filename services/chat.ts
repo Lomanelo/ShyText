@@ -82,6 +82,8 @@ export async function sendChatRequest(input: {
   senderName: string;
   senderAvatarUrl?: string;
   introMessage?: string;
+  /** "vibe.index" when the intro is an unedited suggestion — receiver renders it in their language. */
+  introKey?: string;
 }) {
   const user = auth.currentUser;
   if (!user) throw new Error(i18n.t('errors.signInFirst'));
@@ -179,6 +181,7 @@ export async function sendChatRequest(input: {
       senderName: input.senderName,
       senderAvatarUrl: input.senderAvatarUrl ?? null,
       introMessage: input.introMessage ?? null,
+      introKey: input.introMessage ? input.introKey ?? null : null,
       senderId: user.uid,
       status: 'pending',
       createdAt: Date.now(),
@@ -245,6 +248,7 @@ export async function respondToRequest(request: ChatRequest, accept: boolean): P
   const existing = await findConversationBetween(user.uid, request.senderId);
   const now = Date.now();
   const intro = request.introMessage?.trim() || 'Hi';
+  const introKey = request.introMessage?.trim() ? request.introKey ?? null : null;
   let convoId = existing?.id;
 
   if (existing?.status === 'closed') {
@@ -259,6 +263,7 @@ export async function respondToRequest(request: ChatRequest, accept: boolean): P
       otherName: request.senderName ?? null,
       otherAvatarUrl: request.senderAvatarUrl ?? null,
       introMessage: intro,
+      introMessageKey: introKey,
       introSenderId: request.senderId,
       createdAt: now,
       lastMessageAt: now,
@@ -271,6 +276,7 @@ export async function respondToRequest(request: ChatRequest, accept: boolean): P
   } else if (intro && !existing?.introMessage) {
     await updateDoc(doc(db, 'conversations', convoId), {
       introMessage: intro,
+      introMessageKey: introKey,
       introSenderId: request.senderId,
     }).catch(() => undefined);
   }

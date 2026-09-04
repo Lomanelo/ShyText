@@ -19,6 +19,7 @@ import { prefetchProfileImage } from '../../services/imageCache';
 import { ensureConversationOpen, respondToRequest } from '../../services/chat';
 import { ChatRequest } from '../../types/chat';
 import { PressScale } from '../../components/PressScale';
+import { icebreakerFromKey } from '../../i18n/labels';
 import { useTranslation } from 'react-i18next';
 
 export default function ChatsScreen() {
@@ -192,7 +193,11 @@ export default function ChatsScreen() {
                         {label}
                       </Text>
                       <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
-                        {convo.lastMessage || t('chats.privateChat')}
+                        {(convo.lastMessage === convo.introMessage
+                          ? icebreakerFromKey(convo.introMessageKey)
+                          : undefined) ??
+                          convo.lastMessage ??
+                          t('chats.privateChat')}
                       </Text>
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 6 }}>

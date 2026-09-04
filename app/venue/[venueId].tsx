@@ -428,7 +428,7 @@ export default function VenueScreen() {
         message={hello?.status}
         theme={theme}
         onClose={() => setHello(null)}
-        onSend={async (intro) => {
+        onSend={async (intro, introKey) => {
           if (!hello || !profile || !venueId) throw new Error(t('errors.signInFirst'));
           if (!here) throw new Error(t('errors.checkInHereFirst'));
           await sendChatRequest({
@@ -440,6 +440,7 @@ export default function VenueScreen() {
             senderName: profile.displayName,
             senderAvatarUrl: profile.avatarUrl,
             introMessage: intro,
+            introKey,
           });
           markSent(hello.userId);
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

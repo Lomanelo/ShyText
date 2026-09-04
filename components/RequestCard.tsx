@@ -5,6 +5,7 @@ import { ChatRequest } from '../types/chat';
 import { Avatar } from './Avatar';
 import { AvatarLightbox } from './AvatarLightbox';
 import { PressScale } from './PressScale';
+import { icebreakerFromKey } from '../i18n/labels';
 import { useTranslation } from 'react-i18next';
 
 export function RequestCard({
@@ -22,7 +23,11 @@ export function RequestCard({
 }) {
   const { t } = useTranslation();
   const [zoom, setZoom] = useState(false);
-  const preview = request.introMessage || request.shytextMessage;
+  // Suggested icebreakers translate into the receiver's language; custom text stays as written.
+  const preview =
+    (request.introMessage ? icebreakerFromKey(request.introKey) : undefined) ??
+    request.introMessage ??
+    request.shytextMessage;
 
   return (
     <View style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}>

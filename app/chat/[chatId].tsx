@@ -29,6 +29,7 @@ import { getUserProfile } from '../../services/auth';
 import { rememberImage } from '../../services/imageCache';
 import { blockUser } from '../../services/blocks';
 import { MAX_MESSAGE_LENGTH } from '../../utils/config';
+import { icebreakerFromKey } from '../../i18n/labels';
 import { useTranslation } from 'react-i18next';
 
 type Row = ChatMessage & { pending?: boolean };
@@ -116,11 +117,13 @@ export default function ChatScreen() {
   }, [chatId, user?.uid, t]);
 
   const rows = useMemo<Row[]>(() => {
-    const introText = convo?.introMessage?.trim();
+    const rawIntro = convo?.introMessage?.trim();
+    // Suggested icebreakers carry a key — show them in the viewer's language.
+    const introText = icebreakerFromKey(convo?.introMessageKey) ?? rawIntro;
     const seeded: Row[] = [];
-    if (convo && introText) {
+    if (convo && rawIntro && introText) {
       const alreadyInThread = messages.some(
-        (item) => item.text === introText && (!convo.introSenderId || item.senderId === convo.introSenderId)
+        (item) => item.text === rawIntro && (!convo.introSenderId || item.senderId === convo.introSenderId)
       );
       if (!alreadyInThread) {
         seeded.push({
@@ -203,7 +206,7 @@ export default function ChatScreen() {
                 ]);
               }}
               hitSlop={8}
-              style={{ minWidth: 44, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
             >
               <Ionicons name="ellipsis-horizontal" size={22} color={theme.quiet} />
             </Pressable>

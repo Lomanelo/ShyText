@@ -13,6 +13,8 @@ export interface ChatRequest {
   venueId: string;
   venueName?: string;
   introMessage?: string;
+  /** Icebreaker key ("vibe.index") when the intro was a suggested text — lets the receiver see it translated. */
+  introKey?: string;
   status: ChatRequestStatus;
   createdAt: number;
   conversationId?: string;
@@ -26,6 +28,8 @@ export interface Conversation {
   otherName?: string;
   otherAvatarUrl?: string;
   introMessage?: string;
+  /** Icebreaker key ("vibe.index") — render the intro in the viewer's language. */
+  introMessageKey?: string;
   /** Who wrote the opening ShyText — kept even after lastMessage updates. */
   introSenderId?: string;
   createdAt: number;
