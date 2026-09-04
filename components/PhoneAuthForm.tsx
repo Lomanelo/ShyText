@@ -11,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { router } from 'expo-router';
+import Animated, { Easing, FadeInUp } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as WebBrowser from 'expo-web-browser';
@@ -19,7 +20,7 @@ import { PrimaryButton } from './PrimaryButton';
 import { Wordmark } from './wordmark';
 import { OtpSlots } from './OtpSlots';
 import { PressScale } from './PressScale';
-import { radius, space, type, useTheme } from '../theme';
+import { motion, radius, space, type, useTheme } from '../theme';
 import { usePhoneAuth } from '../hooks/usePhoneAuth';
 import { useTranslation } from 'react-i18next';
 import {
@@ -75,7 +76,11 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
           <Ionicons name="chevron-back" size={22} color={theme.text} />
         </Pressable>
 
-        <View style={styles.hero}>
+        <Animated.View
+          key={auth.step}
+          entering={FadeInUp.duration(motion.reveal).easing(Easing.out(Easing.cubic))}
+          style={styles.hero}
+        >
           <Wordmark theme={theme} />
           <Text style={[type.display, { color: theme.text }]}>
             {auth.step === 'code' ? t('auth.enterCode') : title}
@@ -85,7 +90,7 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
           ) : (
             <Text style={[type.caption, { color: theme.quiet }]}>{body}</Text>
           )}
-        </View>
+        </Animated.View>
 
         {auth.error ? <Text style={{ color: theme.danger }}>{auth.error}</Text> : null}
 

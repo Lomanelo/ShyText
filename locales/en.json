@@ -35,9 +35,12 @@
     "profile": "Profile"
   },
   "welcome": {
-    "beat1": "You're in the room. Off the map.",
-    "beat2": "Shyne when you want to be found.",
-    "beat3": "A ShyText. Their yes. Real talk.",
+    "beat1": "There’s a moment before hello.",
+    "beat1Sub": "ShyText lives there.",
+    "beat2": "Shyne when you’re open.",
+    "beat2Sub": "A quiet signal to the room.",
+    "beat3": "ShyText first. Say it for real.",
+    "beat3Sub": "The rest happens offline.",
     "showMe": "Show me",
     "getStarted": "Get started",
     "haveAccount": "I already have an account"

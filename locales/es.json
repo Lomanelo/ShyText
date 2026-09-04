@@ -35,9 +35,12 @@
     "profile": "Perfil"
   },
   "welcome": {
-    "beat1": "Estás en el sitio. Fuera del mapa.",
-    "beat2": "Haz Shyne cuando quieras aparecer.",
-    "beat3": "Un ShyText. Su sí. Una charla de verdad.",
+    "beat1": "Hay un momento antes del hola.",
+    "beat1Sub": "ShyText vive ahí.",
+    "beat2": "Haz Shyne cuando estés abierto.",
+    "beat2Sub": "Una señal discreta para el lugar.",
+    "beat3": "Primero el ShyText. Dilo de verdad.",
+    "beat3Sub": "El resto pasa en persona.",
     "showMe": "Muéstrame",
     "getStarted": "Empezar",
     "haveAccount": "Ya tengo una cuenta"

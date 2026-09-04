@@ -7,10 +7,11 @@
  * FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
  */
 import '../i18n';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useColorScheme } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 import { useTranslation } from 'react-i18next';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -19,12 +20,17 @@ import { persistUserLanguage } from '../services/auth';
 import { listenNotificationTaps, registerPushToken } from '../services/notifications';
 import { brand, useTheme } from '../theme';
 import { AwayCheckoutHost } from '../components/AwayCheckoutHost';
+import { AnimatedSplash } from '../components/AnimatedSplash';
+
+// Hold the native splash until the animated handoff is on screen.
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function RootLayout() {
   const theme = useTheme();
   const scheme = useColorScheme();
   const { t } = useTranslation();
   const { user, hasProfile } = useAuth();
+  const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
     if (user && hasProfile) {
@@ -69,6 +75,7 @@ export default function RootLayout() {
           <Stack.Screen name="legal/terms" options={{ headerShown: true, title: t('legal.terms') }} />
         </Stack>
         <AwayCheckoutHost />
+        {!splashDone ? <AnimatedSplash onDone={() => setSplashDone(true)} /> : null}
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

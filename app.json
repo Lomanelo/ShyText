@@ -28,7 +28,6 @@
         "UIBackgroundModes": [
           "remote-notification"
         ],
-        "aps-environment": "production",
         "UIDeviceFamily": [
           1
         ]
@@ -107,6 +106,19 @@
             "./assets/sounds/notification.wav"
           ],
           "enableBackgroundRemoteNotifications": true
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/flame-lit.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#FCF3E8",
+          "dark": {
+            "image": "./assets/images/flame-lit.png",
+            "backgroundColor": "#12100E"
+          }
         }
       ],
       "expo-secure-store",

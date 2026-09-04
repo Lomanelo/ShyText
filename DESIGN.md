@@ -12,7 +12,7 @@ Operate
 
 ## World
 
-Disposable-camera / door-stamp at a real venue. Dim-bar scene, not a dating deck and not iOS Settings dressed as an app. System grouped backgrounds and labels. One brand tint: flame `#D05927` from the mark. System type for UI; lowercase **shytext** wordmark. Tabular TTL as fading stamp time. No Georgia, no cream-paper feed, no swipe-to-like, no glass decoration.
+Disposable-camera / door-stamp at a real venue. Dim-bar scene, not a dating deck and not iOS Settings dressed as an app. System grouped backgrounds and labels. One brand tint: flame `#D05927` from the mark. System type for UI; lowercase **shytext** wordmark. Tabular TTL as fading stamp time. No Georgia, no cream-paper feed, no swipe-to-like, no glass decoration. The register is cinematic: copy lands as title cards — a statement, then a quiet echo — brand-moment screens dissolve instead of sliding, venue stills fade to dark at the base like film posters, and the flame breathes.
 
 ## Tokens
 
@@ -22,7 +22,7 @@ Type: iOS text styles — display 34/700, title 22/600, headline 17/600, body 17
 Signature: flame mark + lowercase shytext wordmark; flame tint on actions, live dots, and selected tabs
 Accent: `#D05927`. Surfaces: `systemGroupedBackground` / Material dynamic background. Cards: secondary grouped / surfaceContainer
 Elevation: `boxShadow` 0 10 28 (light) / 0 12 32 (dark)
-Motion: interruptible spring press (0.96), hold fill tracks the finger (~720ms) then a short squash, layout spring when the live dock / you’re-here card / chat bubbles move. Live dots beat. OTP slots pop on fill. Story bars fill left-to-right. Lists skip enter. Honor Reduce Motion (hold becomes tap). Reopen checkout notice drops in from the top, then out.
+Motion: interruptible spring press (0.96), hold fill tracks the finger (~720ms) then a short squash, layout spring when the live dock / you’re-here card / chat bubbles move. Live dots beat. OTP slots pop on fill. Story bars fill left-to-right. Lists skip enter. Honor Reduce Motion (hold becomes tap). Reopen checkout notice drops in from the top, then out. Cinematic layer (`motion.dissolve` 560 / `motion.reveal` 700 / `motion.echo` 320): auth stack cross-fades, title-card lines fade up staggered (statement, then echo), empty states fade in slow, flame breathing loop ~3.2s — all dropped under Reduce Motion.
 
 ## Components
 
@@ -31,7 +31,8 @@ Check-in: hold-to-confirm fill (~720ms) with haptic ticks; Reduce Motion falls b
 Venue cards: matchbook painting by place type (bar, café, park, door) on cream stock — no map crop, no clip-art icons, no geometric stand-ins. Rubber-stamp type label in rust. Distance chip, live as flame dots. Tap opens the place; long-press (~380ms) starts check-in.
 People: only after you check in here; mood chips update live; Other opens a 40-character status; swipe left to send (button remains); Send a ShyText is a bottom sheet, never a silent skip. Reopening more than 100 m from the venue auto-checks you out with a drop-in notice.
 OTP: six tall slots, number pad, SMS autofill. Phone number is display-size type beside a country chip.
-Onboarding: three skippable beats with story bars, then phone
+Launch: static native flame splash (warm paper / near-black) hands off to an identical in-app overlay — one flame breath, wordmark echo, then a push-in dissolve into the first screen; Reduce Motion gets a plain fade
+Onboarding: three skippable cinematic title-card beats (statement + quiet echo, lower-third, breathing flame) with story bars, then phone
 Loading: pulse skeletons, not static blocks
 Timers: tabular-nums; pulse when under 5 minutes
 Tabs: system tab bar, outline idle / fill selected, flame tint, light haptic on tab press

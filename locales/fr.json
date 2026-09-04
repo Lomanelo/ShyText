@@ -35,9 +35,12 @@
     "profile": "Profil"
   },
   "welcome": {
-    "beat1": "Tu es dans la pièce. Hors du radar.",
-    "beat2": "Shyne quand tu veux apparaître.",
-    "beat3": "Un ShyText. Un oui. Une vraie conversation.",
+    "beat1": "Il y a un moment avant le bonjour.",
+    "beat1Sub": "ShyText vit là.",
+    "beat2": "Shyne quand tu le sens.",
+    "beat2Sub": "Un signal discret dans la salle.",
+    "beat3": "Le ShyText d’abord. Dis-le en vrai.",
+    "beat3Sub": "La suite se passe hors ligne.",
     "showMe": "Montre-moi",
     "getStarted": "Commencer",
     "haveAccount": "J’ai déjà un compte"

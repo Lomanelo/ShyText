@@ -35,9 +35,12 @@
     "profile": "Profil"
   },
   "welcome": {
-    "beat1": "Du bist im Raum. Nicht auf der Karte.",
-    "beat2": "Shyne, wenn du gefunden werden willst.",
-    "beat3": "Ein ShyText. Ihr Ja. Echtes Gespräch.",
+    "beat1": "Es gibt einen Moment vor dem Hallo.",
+    "beat1Sub": "ShyText lebt genau dort.",
+    "beat2": "Shyne, wenn du offen bist.",
+    "beat2Sub": "Ein leises Signal an den Raum.",
+    "beat3": "Erst der ShyText. Dann sag’s in echt.",
+    "beat3Sub": "Der Rest passiert offline.",
     "showMe": "Zeig’s mir",
     "getStarted": "Loslegen",
     "haveAccount": "Ich hab schon ein Konto"

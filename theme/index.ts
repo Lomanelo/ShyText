@@ -46,6 +46,10 @@ export const motion = {
   stagger: 50,
   spring: { damping: 18, stiffness: 280, mass: 0.75 },
   layout: { damping: 22, stiffness: 220 },
+  /** Cinematic layer: title-card reveals and cross-dissolves. */
+  dissolve: 560,
+  reveal: 700,
+  echo: 320,
 } as const;
 
 export const shadows = {

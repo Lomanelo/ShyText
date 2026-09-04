@@ -1,24 +1,26 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PRIVACY_POLICY_TEXT } from '../../src/lib/legal';
-import { colors, spacing, typography } from '../../src/styles/theme';
+import { Screen } from '../../components/Screen';
+import { space, type, useTheme } from '../../theme';
 import { useTranslation } from 'react-i18next';
 
 export default function PrivacyScreen() {
+  const theme = useTheme();
   const { t } = useTranslation();
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{t('legal.privacy')}</Text>
-      <Text style={[styles.note, { color: colors.text.secondary }]}>{t('legal.englishOnly')}</Text>
-      <Text style={styles.body}>{PRIVACY_POLICY_TEXT}</Text>
-      <View style={{ height: 40 }} />
-    </ScrollView>
+    <Screen theme={theme} inset={false}>
+      <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
+        <Text style={[type.caption, { color: theme.muted }]}>{t('legal.englishOnly')}</Text>
+        <Text selectable style={[type.body, styles.body, { color: theme.text }]}>
+          {PRIVACY_POLICY_TEXT}
+        </Text>
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.xl },
-  title: { fontSize: 28, fontWeight: '700', color: colors.text.primary, marginBottom: spacing.sm },
-  note: { fontSize: typography.fontSize.md, marginBottom: spacing.lg },
-  body: { color: colors.text.primary, fontSize: typography.fontSize.md, lineHeight: 22 },
+  content: { padding: space[16], gap: space[12] },
+  body: { fontSize: 15, lineHeight: 22 },
 });

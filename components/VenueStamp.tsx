@@ -59,6 +59,8 @@ export function VenueStamp({
       ) : (
         <Image source={STILLS[kind]} style={styles.still} contentFit="cover" cachePolicy="memory-disk" transition={0} />
       )}
+      {/* Film-poster scrim: the still fades to dark at the base so type sits in the scene. */}
+      {!compact ? <View style={styles.scrim} pointerEvents="none" /> : null}
       {!compact ? (
         <View style={styles.stamp} accessibilityElementsHidden>
           <Text style={styles.stampText}>{placeKindLabel(kind)}</Text>
@@ -74,6 +76,15 @@ const FILL = { position: 'absolute' as const, top: 0, right: 0, bottom: 0, left:
 const styles = StyleSheet.create({
   well: { overflow: 'hidden', backgroundColor: '#FCF3E8' },
   still: { ...FILL, width: '100%', height: '100%' },
+  scrim: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '55%',
+    experimental_backgroundImage:
+      'linear-gradient(to top, rgba(16, 10, 8, 0.55) 0%, rgba(16, 10, 8, 0.0) 100%)',
+  },
   stamp: {
     position: 'absolute',
     left: 12,

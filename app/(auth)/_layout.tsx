@@ -8,6 +8,8 @@ export default function AuthLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: theme.bg },
+        // Cinematic: auth screens dissolve into each other instead of sliding.
+        animation: 'fade',
       }}
     />
   );
