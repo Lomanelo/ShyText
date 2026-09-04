@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -19,17 +20,15 @@ import { Screen } from '../../components/Screen';
 import { ReportModal } from '../../components/ReportModal';
 import { PressScale } from '../../components/PressScale';
 import { Avatar } from '../../components/Avatar';
-import { CountdownBadge } from '../../components/CountdownBadge';
-import { radius, type, useTheme } from '../../theme';
+import { type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { ChatMessage, Conversation } from '../../types/chat';
-import { closeConversation, listenConversation, listenMessages, sendMessage } from '../../services/chat';
+import { closeConversation, ensureConversationOpen, listenConversation, listenMessages, sendMessage } from '../../services/chat';
 import { setOpenChatId } from '../../services/openChat';
 import { getUserProfile } from '../../services/auth';
 import { rememberImage } from '../../services/imageCache';
 import { blockUser } from '../../services/blocks';
 import { MAX_MESSAGE_LENGTH } from '../../utils/config';
-import { chatSendUntil, isChatSendingOpen } from '../../utils/chatTime';
 import { useTranslation } from 'react-i18next';
 
 type Row = ChatMessage & { pending?: boolean };
@@ -46,6 +45,7 @@ export default function ChatScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const list = useRef<FlatList<Row>>(null);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pending, setPending] = useState<Row[]>([]);
   const [convo, setConvo] = useState<Conversation | null>(null);
@@ -55,13 +55,33 @@ export default function ChatScreen() {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState(false);
-  const sendingOpen = convo ? isChatSendingOpen(convo) : false;
+  const canSend = Boolean(convo);
 
   useEffect(() => {
     if (!chatId) return;
     setOpenChatId(chatId);
     return () => setOpenChatId(null);
   }, [chatId]);
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setKeyboardOpen(true)
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardOpen(false)
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!chatId || !convo || convo.status !== 'closed') return;
+    void ensureConversationOpen(chatId).catch(() => undefined);
+  }, [chatId, convo]);
 
   useEffect(() => {
     if (!chatId) return;
@@ -117,7 +137,7 @@ export default function ChatScreen() {
 
   const post = async () => {
     const body = text.trim();
-    if (!chatId || !body || !sendingOpen || !user) return;
+    if (!chatId || !body || !canSend || !user) return;
     const local: Row = {
       id: `pending:${Date.now()}`,
       conversationId: chatId,
@@ -248,13 +268,17 @@ export default function ChatScreen() {
             {error}
           </Text>
         ) : null}
-        {convo && sendingOpen ? (
-          <View style={{ paddingHorizontal: 16, paddingBottom: 8, alignItems: 'center' }}>
-            <CountdownBadge expiresAt={chatSendUntil(convo)} theme={theme} />
-          </View>
-        ) : null}
-        {!convo ? null : sendingOpen ? (
-          <View style={[styles.composer, { backgroundColor: theme.card, marginBottom: Math.max(insets.bottom, 12) }]}>
+        {canSend ? (
+          <View
+            style={[
+              styles.composer,
+              {
+                backgroundColor: theme.card,
+                // Safe-area only when keyboard is closed; KAV already lifts above keyboard.
+                marginBottom: keyboardOpen ? 8 : Math.max(insets.bottom, 12),
+              },
+            ]}
+          >
             <TextInput
               value={text}
               onChangeText={setText}
@@ -281,12 +305,7 @@ export default function ChatScreen() {
               <Ionicons name="arrow-up" size={18} color={text.trim() ? theme.onAccent : theme.quiet} />
             </PressScale>
           </View>
-        ) : (
-          <View style={[styles.irl, { backgroundColor: theme.card, marginBottom: Math.max(insets.bottom, 12) }]}>
-            <Text style={[type.headline, { color: theme.text, textAlign: 'center' }]}>{t('chats.timeToTalk')}</Text>
-            <Text style={[type.body, { color: theme.muted, textAlign: 'center' }]}>{t('chats.closedBody')}</Text>
-          </View>
-        )}
+        ) : null}
       </KeyboardAvoidingView>
       <ReportModal
         visible={report}
@@ -319,12 +338,4 @@ const styles = StyleSheet.create({
   },
   input: { flex: 1, minHeight: 40, fontSize: 17, paddingVertical: 8 },
   send: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  irl: {
-    marginHorizontal: 12,
-    borderRadius: radius.md,
-    borderCurve: 'continuous',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    gap: 6,
-  },
 });

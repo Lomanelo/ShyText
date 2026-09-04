@@ -19,7 +19,6 @@ import { persistUserLanguage } from '../services/auth';
 import { listenNotificationTaps, registerPushToken } from '../services/notifications';
 import { brand, useTheme } from '../theme';
 import { AwayCheckoutHost } from '../components/AwayCheckoutHost';
-import { IncomingPushHost } from '../components/IncomingPushHost';
 
 export default function RootLayout() {
   const theme = useTheme();
@@ -70,7 +69,6 @@ export default function RootLayout() {
           <Stack.Screen name="legal/terms" options={{ headerShown: true, title: t('legal.terms') }} />
         </Stack>
         <AwayCheckoutHost />
-        <IncomingPushHost />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

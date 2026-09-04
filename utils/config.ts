@@ -13,5 +13,5 @@ export const MAX_MESSAGE_LENGTH = 160;
 export const MAX_SHYTEXT_MESSAGE_LENGTH = 120;
 export const MAX_STATUS_LENGTH = 40;
 export const MAX_BIO_LENGTH = 80;
-/** How long a chat stays open for new messages. The thread is kept. */
+/** @deprecated Chat threads no longer expire. Kept only for old docs that still store sendUntil. */
 export const CHAT_SEND_MS = 60 * 60 * 1000;

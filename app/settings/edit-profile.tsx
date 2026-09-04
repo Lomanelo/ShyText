@@ -24,8 +24,8 @@ export default function EditProfileScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
   const navigation = useNavigation();
-  const { profile, refreshProfile } = useAuth();
-  const [name, setName] = useState(profile?.displayName ?? '');
+  const { profile, refreshProfile, user } = useAuth();
+  const [name, setName] = useState(profile?.displayName ?? user?.displayName ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [pickedUri, setPickedUri] = useState<string>();
   const [removed, setRemoved] = useState(false);
@@ -36,11 +36,15 @@ export default function EditProfileScreen() {
   const seeded = useRef(false);
 
   useEffect(() => {
-    if (!profile || seeded.current) return;
-    setName(profile.displayName ?? '');
-    setBio(profile.bio ?? '');
-    seeded.current = true;
-  }, [profile]);
+    if (seeded.current) return;
+    const seedName = profile?.displayName ?? user?.displayName;
+    if (!seedName && profile == null && !user?.displayName) return;
+    if (profile || user?.displayName) {
+      setName(seedName ?? '');
+      setBio(profile?.bio ?? '');
+      seeded.current = true;
+    }
+  }, [profile, user?.displayName]);
 
   const displayUri = removed ? undefined : pickedUri ?? profile?.avatarUrl;
   const trimmedName = name.trim();

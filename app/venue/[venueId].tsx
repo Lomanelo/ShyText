@@ -25,6 +25,7 @@ import { useVenueContacts } from '../../hooks/useVenueContacts';
 import { useLocation } from '../../hooks/useLocation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getVenue } from '../../services/venues';
+import { ensureUserProfile } from '../../services/auth';
 import { ensureConversationOpen, respondToRequest, sendChatRequest } from '../../services/chat';
 import { buildVenueImageUrl } from '../../services/venueImage';
 import { lookupVenueImage, rememberVenueImage } from '../../services/venueImageCache';
@@ -58,7 +59,7 @@ export default function VenueScreen() {
   const navigation = useNavigation();
   const reduce = useReduceMotion();
   const insets = useSafeAreaInsets();
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const current = useCurrentVenue();
   const { refresh } = useLocation();
   const { modeFor, markSent, markAccepted } = useVenueContacts(user?.uid, venueId);
@@ -216,23 +217,30 @@ export default function VenueScreen() {
   }, [here, vibe, statusDraft, mine?.id]);
 
   const checkInNow = async () => {
-    if (!venue || !profile || busy || leaving) return;
+    if (!venue || busy || leaving) return;
     setBusy(true);
     setNotice(null);
     setShyneIntent(true);
     presence.value = 0;
     prompt.value = withTiming(0, { duration: 140, easing: Easing.out(Easing.cubic) });
     try {
+      const restored = await ensureUserProfile().catch(() => null);
+      await refreshProfile();
+      const live = restored ?? profile;
+      const displayName = live?.displayName?.trim() || user?.displayName?.trim() || '';
+      if (!displayName) throw new Error(t('errors.finishProfile'));
+      const avatarUrl = live?.avatarUrl ?? user?.photoURL ?? undefined;
+      const age = live?.age;
       current.beginShyne(venue, {
-        displayName: profile.displayName,
-        avatarUrl: profile.avatarUrl,
-        age: profile.age,
+        displayName,
+        avatarUrl,
+        age,
       });
       const coords = await refresh();
       await current.checkInHere(venue, coords?.latitude, coords?.longitude, {
-        displayName: profile.displayName,
-        avatarUrl: profile.avatarUrl,
-        age: profile.age,
+        displayName,
+        avatarUrl,
+        age,
       });
     } catch (err) {
       setShyneIntent(false);

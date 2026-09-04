@@ -15,10 +15,10 @@ function findGroupId(project, name) {
 
 function withSiriCheckIn(config) {
   config = withInfoPlist(config, (mod) => {
-    mod.modResults.CFBundleSpokenName = 'Shy Text';
+    mod.modResults.CFBundleSpokenName = 'ShyText';
     mod.modResults.INAlternativeAppNames = [
       {
-        INAlternativeAppName: 'Shy Text',
+        INAlternativeAppName: 'ShyText',
         INAlternativeAppNamePronunciationHint: 'shy text',
       },
     ];

@@ -1,56 +1,24 @@
 import * as Notifications from 'expo-notifications';
-import { AppState, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { DEFAULT_NOTIFICATION_PREFS } from '../types/user';
 import { getOpenChatId } from './openChat';
-import { publishPushNotice } from './pushInbox';
 import i18n from '../i18n';
 
 const CHECK_IN_ENDING_ID = 'check-in-ending';
-
-function isAppActive() {
-  return AppState.currentState === 'active';
-}
 
 Notifications.setNotificationHandler({
   handleNotification: async (notification) => {
     const data = notification.request.content.data ?? {};
     const chatId = typeof data.chatId === 'string' ? data.chatId : undefined;
     const kind = typeof data.kind === 'string' ? data.kind : undefined;
+    // Instagram-style: suppress only while already looking at that thread.
     const viewingThisChat = Boolean(chatId) && chatId === getOpenChatId();
-
-    // App already open: never show the lock-screen “open the app” banner.
-    // In-app toast handles copy that fits an open session.
-    if (isAppActive()) {
-      if (!(kind === 'chats' && viewingThisChat)) {
-        const title = notification.request.content.title ?? '';
-        const body = i18n.t(
-          kind === 'accepted'
-            ? 'push.acceptedBodyOpen'
-            : kind === 'chats'
-              ? 'push.chatBodyOpen'
-              : 'push.openToReadOpen'
-        );
-        publishPushNotice({
-          title,
-          body,
-          chatId,
-          route: chatId ? `/chat/${chatId}` : '/(tabs)/chats',
-        });
-      }
-      return {
-        shouldShowBanner: false,
-        shouldShowList: false,
-        shouldPlaySound: false,
-        shouldSetBadge: false,
-        shouldShowAlert: false,
-      };
-    }
-
     const show = !(kind === 'chats' && viewingThisChat);
+
     return {
       shouldShowBanner: show,
       shouldShowList: show,
@@ -65,8 +33,12 @@ export type PushKind = 'shytexts' | 'accepted' | 'chats';
 
 type PushPayload = {
   titleKey: 'push.shytextTitle' | 'push.acceptedTitle' | 'push.chatTitle';
-  bodyKey: 'push.openToRead' | 'push.acceptedBody' | 'push.chatBody';
+  /** Localized body key for requests / accept. Chat messages use bodyText instead. */
+  bodyKey?: 'push.openToRead' | 'push.acceptedBody' | 'push.chatBody';
+  /** Raw message preview for ongoing chat notifications (Instagram-style). */
+  bodyText?: string;
   titleParams?: Record<string, string>;
+  bodyParams?: Record<string, string>;
   data?: Record<string, string>;
 };
 
@@ -106,6 +78,9 @@ export async function notifyUser(userId: string, payload: PushPayload, kind: Pus
     if (!token) return;
     const lang = typeof data?.language === 'string' ? data.language : 'en';
     const t = i18n.getFixedT(lang);
+    const body =
+      payload.bodyText?.trim() ||
+      (payload.bodyKey ? t(payload.bodyKey, payload.bodyParams) : t('push.openToRead'));
     await fetch('https://exp.host/--/api/v2/push/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -114,7 +89,7 @@ export async function notifyUser(userId: string, payload: PushPayload, kind: Pus
         sound: 'default',
         channelId: kind === 'chats' ? 'chat' : 'default',
         title: t(payload.titleKey, payload.titleParams),
-        body: t(payload.bodyKey),
+        body,
         data: { kind, ...(payload.data ?? {}) },
       }),
     });

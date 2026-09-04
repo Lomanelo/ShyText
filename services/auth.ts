@@ -1,6 +1,7 @@
 import {
   PhoneAuthProvider,
   deleteUser,
+  reauthenticateWithCredential,
   signInWithCredential,
   signOut as firebaseSignOut,
   updateProfile,
@@ -28,6 +29,34 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const snap = await getDoc(doc(db, 'users', uid));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as UserProfile;
+}
+
+/**
+ * If Auth is signed in but the Firestore profile was wiped (e.g. failed
+ * account delete), recreate a minimal profile from Auth so the app works again.
+ */
+export async function ensureUserProfile(): Promise<UserProfile | null> {
+  const user = auth.currentUser;
+  if (!user) return null;
+  const existing = await getUserProfile(user.uid);
+  if (existing?.displayName?.trim()) return existing;
+
+  const displayName = (user.displayName || existing?.displayName || '').trim();
+  if (!displayName) return existing;
+
+  await upsertUserProfile({
+    id: user.uid,
+    displayName,
+    avatarUrl: user.photoURL || existing?.avatarUrl || undefined,
+  });
+  return (await getUserProfile(user.uid)) ?? {
+    id: user.uid,
+    displayName,
+    avatarUrl: user.photoURL || undefined,
+    createdAt: Date.now(),
+    status: 'active',
+    stats: { shytextsPosted: 0, chatsStarted: 0 },
+  };
 }
 
 export function sanitizeAge(value?: number): number | undefined {
@@ -104,6 +133,27 @@ export async function confirmPhoneVerification(verificationId: string, code: str
   return signInWithCredential(auth, credential);
 }
 
+/** Current user's E.164 phone, or null if missing. */
+export function currentUserPhoneNumber(): string | null {
+  return auth.currentUser?.phoneNumber ?? null;
+}
+
+/** Send SMS OTP to the signed-in account phone (for delete / sensitive actions). */
+export async function sendAccountPhoneVerification(verifier: ApplicationVerifier) {
+  const user = auth.currentUser;
+  const phone = user?.phoneNumber;
+  if (!user || !phone) throw new Error(i18n.t('errors.noPhoneOnAccount'));
+  return sendPhoneVerification(phone, verifier);
+}
+
+/** Prove possession of the account phone, then allow sensitive ops like deleteUser. */
+export async function reauthenticateWithPhoneCode(verificationId: string, code: string) {
+  const user = auth.currentUser;
+  if (!user) throw new Error(i18n.t('errors.signInFirst'));
+  const credential = PhoneAuthProvider.credential(verificationId, code);
+  await reauthenticateWithCredential(user, credential);
+}
+
 export async function completeProfile(
   displayName: string,
   avatarUrl?: string,
@@ -140,7 +190,25 @@ export async function updateOwnProfile(input: {
   if (input.avatarUrl !== undefined) payload.avatarUrl = input.avatarUrl;
   if (input.notificationPrefs) payload.notificationPrefs = input.notificationPrefs;
   if (Object.keys(payload).length) {
-    await updateDoc(doc(db, 'users', user.uid), payload);
+    const refDoc = doc(db, 'users', user.uid);
+    const existing = await getDoc(refDoc);
+    if (existing.exists()) {
+      await updateDoc(refDoc, payload);
+    } else {
+      await setDoc(refDoc, {
+        displayName: input.displayName?.trim() || user.displayName || i18n.t('common.someone'),
+        avatarUrl: input.avatarUrl ?? user.photoURL ?? null,
+        bio: input.bio?.trim() || null,
+        age: null,
+        createdAt: Date.now(),
+        serverCreatedAt: serverTimestamp(),
+        status: 'active',
+        stats: { shytextsPosted: 0, chatsStarted: 0 },
+        notificationPrefs: input.notificationPrefs ?? DEFAULT_NOTIFICATION_PREFS,
+        language: i18n.language,
+        ...payload,
+      });
+    }
   }
   if (input.displayName != null || input.avatarUrl !== undefined) {
     await updateProfile(user, {
@@ -165,6 +233,9 @@ export async function deleteOwnAccount() {
   const user = auth.currentUser;
   if (!user) throw new Error(i18n.t('errors.signInFirst'));
   const uid = user.uid;
+  const profileSnap = await getDoc(doc(db, 'users', uid)).catch(() => null);
+  const profileData = profileSnap?.exists() ? profileSnap.data() : null;
+
   await expireMyCheckIns(uid).catch(() => undefined);
   await syncCheckInEndingNotice(null).catch(() => undefined);
   try {
@@ -172,11 +243,18 @@ export async function deleteOwnAccount() {
   } catch {
     // No photo stored.
   }
-  await deleteDoc(doc(db, 'users', uid));
+
+  // Wipe Firestore only after we can still roll it back if Auth delete fails.
+  if (profileSnap?.exists()) {
+    await deleteDoc(doc(db, 'users', uid));
+  }
   await AsyncStorage.clear().catch(() => undefined);
   try {
     await deleteUser(user);
   } catch (err) {
+    if (profileData) {
+      await setDoc(doc(db, 'users', uid), profileData).catch(() => undefined);
+    }
     if (err instanceof FirebaseError && err.code === 'auth/requires-recent-login') {
       throw new Error(i18n.t('errors.recentLogin'));
     }

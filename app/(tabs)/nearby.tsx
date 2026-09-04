@@ -13,6 +13,7 @@ import { radius, space, type, useTheme } from '../../theme';
 import { useLocation } from '../../hooks/useLocation';
 import { useAuth } from '../../hooks/useAuth';
 import { useCurrentVenue } from '../../hooks/useCurrentVenue';
+import { ensureUserProfile } from '../../services/auth';
 import { candidateListKey, getPlacesProvider, isPlacesConfigured } from '../../services/places';
 import {
   countActiveCheckIns,
@@ -76,7 +77,7 @@ export default function NearbyScreen() {
   const theme = useTheme();
   const { t } = useTranslation();
   const { coords, status, error: locationError, busy, refresh } = useLocation();
-  const { profile } = useAuth();
+  const { profile, refreshProfile, user } = useAuth();
   const current = useCurrentVenue();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(false);
@@ -171,16 +172,22 @@ export default function NearbyScreen() {
         });
         return;
       }
-      if (!profile) {
+      const restored = await ensureUserProfile().catch(() => null);
+      await refreshProfile();
+      const liveProfile = restored ?? profile;
+      if (!liveProfile?.displayName?.trim() && !user?.displayName?.trim()) {
         setError(t('errors.finishProfile'));
         return;
       }
+      const displayName = liveProfile?.displayName?.trim() || user?.displayName?.trim() || '';
+      const avatarUrl = liveProfile?.avatarUrl ?? user?.photoURL ?? undefined;
+      const age = liveProfile?.age;
 
       // Paint the venue fully Shyned; finish check-in with the last known fix (no GPS wait).
       current.beginShyne(withImage, {
-        displayName: profile.displayName,
-        avatarUrl: profile.avatarUrl,
-        age: profile.age,
+        displayName,
+        avatarUrl,
+        age,
       });
       router.push({
         pathname: '/venue/[venueId]',
@@ -188,9 +195,9 @@ export default function NearbyScreen() {
       });
       void current
         .checkInHere(withImage, coords?.latitude, coords?.longitude, {
-          displayName: profile.displayName,
-          avatarUrl: profile.avatarUrl,
-          age: profile.age,
+          displayName,
+          avatarUrl,
+          age,
         })
         .catch((err) => {
           const message = err instanceof Error ? err.message : t('errors.couldNotCheckIn');

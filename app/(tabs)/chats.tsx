@@ -8,14 +8,12 @@ import { Screen } from '../../components/Screen';
 import { EmptyState } from '../../components/EmptyState';
 import { Avatar } from '../../components/Avatar';
 import { RequestCard } from '../../components/RequestCard';
-import { CountdownBadge } from '../../components/CountdownBadge';
-import { radius, type, useTheme } from '../../theme';
+import { type, useTheme } from '../../theme';
 import { springLayout, springSlideOutRight } from '../../hooks/usePressScale';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useAuth } from '../../hooks/useAuth';
 import { useChatRequests } from '../../hooks/useChatRequests';
 import { useChats } from '../../hooks/useChats';
-import { chatSendUntil, isChatSendingOpen } from '../../utils/chatTime';
 import { getUserProfile } from '../../services/auth';
 import { prefetchProfileImage } from '../../services/imageCache';
 import { ensureConversationOpen, respondToRequest } from '../../services/chat';
@@ -166,8 +164,6 @@ export default function ChatsScreen() {
             <View style={[styles.group, { backgroundColor: theme.card }]}>
               {conversations.map((convo, index) => {
                 const unread = convo.lastSenderId && convo.lastSenderId !== user?.uid;
-                const ended = convo.status === 'closed';
-                const open = !ended && isChatSendingOpen(convo);
                 const label = names[convo.id] || t('chats.privateChat');
                 return (
                   <PressScale
@@ -182,7 +178,6 @@ export default function ChatsScreen() {
                       index < conversations.length - 1
                         ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }
                         : null,
-                      !open ? { opacity: 0.92 } : null,
                     ]}
                   >
                     <Avatar
@@ -192,43 +187,17 @@ export default function ChatsScreen() {
                       theme={theme}
                       size={48}
                     />
-                    <View style={{ flex: 1, gap: open ? 2 : 6, minWidth: 0 }}>
-                      <Text
-                        style={[type.headline, { color: open ? theme.text : theme.muted }]}
-                        numberOfLines={1}
-                      >
+                    <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+                      <Text style={[type.headline, { color: theme.text }]} numberOfLines={1}>
                         {label}
                       </Text>
-                      {open ? (
-                        <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
-                          {convo.lastMessage}
-                        </Text>
-                      ) : (
-                        <View
-                          style={[styles.wrapChip, { backgroundColor: theme.accentSoft }]}
-                          accessibilityRole="text"
-                          accessibilityLabel={ended ? t('chats.ended') : t('chats.goTalk')}
-                        >
-                          <Ionicons
-                            name={ended ? 'chatbubble-ellipses-outline' : 'walk-outline'}
-                            size={14}
-                            color={theme.accent}
-                          />
-                          <Text style={[styles.wrapChipText, { color: theme.accent }]} numberOfLines={1}>
-                            {ended ? t('chats.ended') : t('chats.goTalk')}
-                          </Text>
-                        </View>
-                      )}
+                      <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
+                        {convo.lastMessage || t('chats.privateChat')}
+                      </Text>
                     </View>
                     <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                      {open ? (
-                        <CountdownBadge expiresAt={chatSendUntil(convo)} theme={theme} />
-                      ) : (
-                        <Text style={[type.caption, { color: theme.quiet, fontWeight: '600' }]}>
-                          {ended ? t('chats.endedShort') : t('chats.wrapped')}
-                        </Text>
-                      )}
-                      {unread && open ? <View style={[styles.dot, { backgroundColor: theme.accent }]} /> : null}
+                      {unread ? <View style={[styles.dot, { backgroundColor: theme.accent }]} /> : null}
+                      <Ionicons name="chevron-forward" size={16} color={theme.quiet} />
                     </View>
                   </PressScale>
                 );
@@ -249,22 +218,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     padding: 14,
-  },
-  wrapChip: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: radius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    maxWidth: '100%',
-  },
-  wrapChipText: {
-    ...type.caption,
-    fontWeight: '700',
-    fontStyle: 'italic',
-    flexShrink: 1,
   },
   dot: { width: 8, height: 8, borderRadius: 4 },
 });

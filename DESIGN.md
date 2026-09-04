@@ -31,7 +31,7 @@ Check-in: hold-to-confirm fill (~720ms) with haptic ticks; Reduce Motion falls b
 Venue cards: matchbook painting by place type (bar, café, park, door) on cream stock — no map crop, no clip-art icons, no geometric stand-ins. Rubber-stamp type label in rust. Distance chip, live as flame dots. Tap opens the place; long-press (~380ms) starts check-in.
 People: only after you check in here; mood chips update live; Other opens a 40-character status; swipe left to send (button remains); Send a ShyText is a bottom sheet, never a silent skip. Reopening more than 100 m from the venue auto-checks you out with a drop-in notice.
 OTP: six tall slots, number pad, SMS autofill. Phone number is display-size type beside a country chip.
-Onboarding: two skippable beats with story bars, then phone
+Onboarding: three skippable beats with story bars, then phone
 Loading: pulse skeletons, not static blocks
 Timers: tabular-nums; pulse when under 5 minutes
 Tabs: system tab bar, outline idle / fill selected, flame tint, light haptic on tab press

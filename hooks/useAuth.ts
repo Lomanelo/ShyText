@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '../services/firebase';
-import { getUserProfile } from '../services/auth';
+import { ensureUserProfile, getUserProfile } from '../services/auth';
 import { prefetchProfileImage } from '../services/imageCache';
 import { UserProfile } from '../types/user';
 
@@ -16,7 +16,8 @@ export function useAuth() {
       try {
         if (next) {
           await next.getIdToken();
-          const loaded = await getUserProfile(next.uid);
+          // Restore a wiped Firestore profile from Auth when possible.
+          const loaded = (await ensureUserProfile().catch(() => null)) ?? (await getUserProfile(next.uid));
           setProfile(loaded);
           prefetchProfileImage([next.uid, loaded?.avatarUrl], loaded?.avatarUrl);
         } else {
@@ -31,18 +32,22 @@ export function useAuth() {
     });
   }, []);
 
+  const refreshProfile = useCallback(async () => {
+    if (!auth.currentUser) return;
+    try {
+      const loaded =
+        (await ensureUserProfile().catch(() => null)) ?? (await getUserProfile(auth.currentUser.uid));
+      setProfile(loaded);
+    } catch {
+      // Keep the in-memory profile if Firestore is briefly unreachable.
+    }
+  }, []);
+
   return {
     user,
     profile,
     loading,
     hasProfile: !!(profile?.displayName || user?.displayName),
-    refreshProfile: async () => {
-      if (!auth.currentUser) return;
-      try {
-        setProfile(await getUserProfile(auth.currentUser.uid));
-      } catch {
-        // Keep the in-memory profile if Firestore is briefly unreachable.
-      }
-    },
+    refreshProfile,
   };
 }

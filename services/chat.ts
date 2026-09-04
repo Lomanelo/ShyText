@@ -16,7 +16,7 @@ import { FirebaseError } from 'firebase/app';
 import { auth, db } from './firebase';
 import { ChatMessage, ChatRequest, Conversation } from '../types/chat';
 import { moderateText } from './moderation';
-import { CHAT_SEND_MS, MAX_REQUESTS_PER_HOUR, REQUEST_REPLY_LOCK_MS } from '../utils/config';
+import { MAX_REQUESTS_PER_HOUR, REQUEST_REPLY_LOCK_MS } from '../utils/config';
 import { isChatSendingOpen } from '../utils/chatTime';
 import { isBlockedEitherWay } from './blocks';
 import { notifyUser } from './notifications';
@@ -40,22 +40,35 @@ function pairKey(ids: string[]) {
 function dedupeConversations(items: Conversation[]) {
   const best = new Map<string, Conversation>();
   for (const item of items) {
-    const key = pairKey(item.participantIds);
+    const key = pairKey(item.participantIds ?? []);
     const prev = best.get(key);
-    if (!prev || item.lastMessageAt > prev.lastMessageAt) best.set(key, item);
+    if (!prev || Number(item.lastMessageAt || 0) > Number(prev.lastMessageAt || 0)) {
+      best.set(key, item);
+    }
   }
-  return [...best.values()].sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+  return [...best.values()].sort((a, b) => Number(b.lastMessageAt || 0) - Number(a.lastMessageAt || 0));
 }
 
-async function findOpenConversation(userId: string, otherId: string): Promise<Conversation | null> {
+/** Any thread between two people (active or left) — Instagram: one DM per pair. */
+export async function findConversationBetween(
+  userId: string,
+  otherId: string
+): Promise<Conversation | null> {
   const snap = await getDocs(
     query(collection(db, 'conversations'), where('participantIds', 'array-contains', userId))
   );
-  const open = snap.docs
+  const matches = snap.docs
     .map((item) => ({ id: item.id, ...item.data() } as Conversation))
-    .filter((item) => item.status === 'active' && item.participantIds.includes(otherId))
-    .sort((a, b) => b.lastMessageAt - a.lastMessageAt);
-  return open[0] ?? null;
+    .filter((item) => item.participantIds?.includes(otherId))
+    .sort((a, b) => Number(b.lastMessageAt || 0) - Number(a.lastMessageAt || 0));
+  return matches[0] ?? null;
+}
+
+async function reactivateConversation(conversationId: string) {
+  await updateDoc(doc(db, 'conversations', conversationId), {
+    status: 'active',
+    lastMessageAt: Date.now(),
+  });
 }
 
 export async function sendChatRequest(input: {
@@ -75,6 +88,12 @@ export async function sendChatRequest(input: {
   if (user.uid === input.receiverId) throw new Error(i18n.t('errors.cannotSelf'));
   if (await isBlockedEitherWay(user.uid, input.receiverId)) {
     throw new Error(i18n.t('errors.cannotContact'));
+  }
+
+  // Already chatting (any venue) → never send another ShyText request.
+  const existingConvo = await findConversationBetween(user.uid, input.receiverId);
+  if (existingConvo) {
+    throw new Error(i18n.t('errors.alreadyChatting'));
   }
 
   const mine = await getActiveCheckIn(user.uid);
@@ -98,12 +117,13 @@ export async function sendChatRequest(input: {
     throw err;
   });
   const existingDocs = existingSnap?.docs ?? [];
+
+  // Block duplicate pending/accepted to this person at any venue.
   if (
     existingDocs.some(
       (item) =>
         (item.data().status === 'pending' || item.data().status === 'accepted') &&
-        item.data().receiverId === input.receiverId &&
-        item.data().venueId === input.venueId
+        item.data().receiverId === input.receiverId
     )
   ) {
     throw new Error(i18n.t('errors.alreadySent'));
@@ -114,32 +134,29 @@ export async function sendChatRequest(input: {
     throw new Error(i18n.t('errors.tooManyHour'));
   }
 
-  // Mutual exclusivity: if they already asked you, accept theirs instead of sending a second request.
-  const inboundRef = doc(db, 'chatRequests', requestDocId(input.receiverId, user.uid, input.venueId));
-  const inboundSnap = await getDoc(inboundRef).catch((err) => {
+  // Mutual exclusivity: if they already asked you (any venue), accept / wait instead of sending.
+  const inboundSnap = await getDocs(
+    query(collection(db, 'chatRequests'), where('receiverId', '==', user.uid))
+  ).catch((err) => {
     if (isDenied(err)) return null;
     throw err;
   });
-  const inboundPending =
-    inboundSnap?.exists() && inboundSnap.data().status === 'pending'
-      ? ({ id: inboundSnap.id, ...inboundSnap.data() } as ChatRequest)
-      : null;
-  const inboundAccepted =
-    inboundSnap?.exists() && inboundSnap.data().status === 'accepted'
-      ? ({ id: inboundSnap.id, ...inboundSnap.data() } as ChatRequest)
-      : null;
+  const inboundFromThem =
+    inboundSnap?.docs
+      .map((item) => ({ id: item.id, ...item.data() } as ChatRequest))
+      .filter((item) => item.senderId === input.receiverId)
+      .sort((a, b) => b.createdAt - a.createdAt)[0] ?? null;
 
-  if (inboundAccepted) {
-    throw new Error(i18n.t('errors.theyAlreadyAccepted'));
+  if (inboundFromThem?.status === 'accepted') {
+    throw new Error(i18n.t('errors.alreadyChatting'));
   }
 
-  if (inboundPending) {
-    const age = Date.now() - inboundPending.createdAt;
+  if (inboundFromThem?.status === 'pending') {
+    const age = Date.now() - inboundFromThem.createdAt;
     if (age < REQUEST_REPLY_LOCK_MS) {
       throw new Error(i18n.t('errors.theyAlreadySent'));
     }
-    // After the lock window, their unanswered note no longer blocks you.
-    await updateDoc(inboundRef, { status: 'cancelled' }).catch(() => undefined);
+    await updateDoc(doc(db, 'chatRequests', inboundFromThem.id), { status: 'cancelled' }).catch(() => undefined);
   }
 
   const ref = doc(db, 'chatRequests', requestDocId(user.uid, input.receiverId, input.venueId));
@@ -175,7 +192,11 @@ export async function sendChatRequest(input: {
   }
   await notifyUser(
     input.receiverId,
-    { titleKey: 'push.shytextTitle', bodyKey: 'push.openToRead', data: { type: 'shytext' } },
+    {
+      titleKey: 'push.shytextTitle',
+      bodyKey: 'push.openToRead',
+      data: { type: 'shytext' },
+    },
     'shytexts'
   ).catch(() => undefined);
 }
@@ -190,7 +211,8 @@ export function listenRequests(userId: string, onChange: (items: ChatRequest[]) 
         .sort((a, b) => b.createdAt - a.createdAt);
       const unique = new Map<string, ChatRequest>();
       for (const item of items) {
-        const key = `${item.senderId}:${item.venueId}`;
+        // One request thread per pair (latest wins), not per venue.
+        const key = item.senderId;
         if (!unique.has(key)) unique.set(key, item);
         prefetchProfileImage([item.senderId, item.senderAvatarUrl], item.senderAvatarUrl);
       }
@@ -220,10 +242,15 @@ export async function respondToRequest(request: ChatRequest, accept: boolean): P
     return null;
   }
 
-  const existing = await findOpenConversation(user.uid, request.senderId);
+  const existing = await findConversationBetween(user.uid, request.senderId);
   const now = Date.now();
   const intro = request.introMessage?.trim() || 'Hi';
   let convoId = existing?.id;
+
+  if (existing?.status === 'closed') {
+    await reactivateConversation(existing.id);
+  }
+
   if (!convoId) {
     const created = await addDoc(collection(db, 'conversations'), {
       participantIds: [request.senderId, request.receiverId],
@@ -234,7 +261,6 @@ export async function respondToRequest(request: ChatRequest, accept: boolean): P
       introMessage: intro,
       introSenderId: request.senderId,
       createdAt: now,
-      sendUntil: now + CHAT_SEND_MS,
       lastMessageAt: now,
       lastMessage: intro,
       lastSenderId: request.senderId,
@@ -254,7 +280,11 @@ export async function respondToRequest(request: ChatRequest, accept: boolean): P
   await updateDoc(doc(db, 'users', user.uid), { 'stats.chatsStarted': increment(1) }).catch(() => undefined);
   await notifyUser(
     request.senderId,
-    { titleKey: 'push.acceptedTitle', bodyKey: 'push.acceptedBody', data: { type: 'accepted', chatId: convoId } },
+    {
+      titleKey: 'push.acceptedTitle',
+      bodyKey: 'push.acceptedBody',
+      data: { type: 'accepted', chatId: convoId },
+    },
     'accepted'
   ).catch(() => undefined);
   return convoId;
@@ -292,7 +322,7 @@ export function listenConversations(userId: string, onChange: (items: Conversati
   );
 }
 
-/** Re-open a left chat so it shows in the list and can receive messages again. */
+/** Re-open a left chat so messaging works again. */
 export async function ensureConversationOpen(conversationId: string): Promise<string> {
   const user = auth.currentUser;
   if (!user) throw new Error(i18n.t('errors.signInFirst'));
@@ -302,12 +332,7 @@ export async function ensureConversationOpen(conversationId: string): Promise<st
   const data = snap.data() as Conversation;
   if (!data.participantIds?.includes(user.uid)) throw new Error(i18n.t('errors.notAllowed'));
   if (data.status === 'closed') {
-    const now = Date.now();
-    await updateDoc(ref, {
-      status: 'active',
-      sendUntil: now + CHAT_SEND_MS,
-      lastMessageAt: Math.max(Number(data.lastMessageAt) || 0, now),
-    });
+    await reactivateConversation(conversationId);
   }
   return conversationId;
 }
@@ -332,33 +357,38 @@ export async function sendMessage(conversationId: string, text: string) {
   const snap = await getDoc(doc(db, 'conversations', conversationId));
   if (!snap.exists()) throw new Error(i18n.t('errors.chatNotFound'));
   const convo = { id: snap.id, ...snap.data() } as Conversation;
-  if (!isChatSendingOpen(convo)) {
-    throw new Error(i18n.t('errors.chatWrapped'));
+  if (convo.status === 'closed') {
+    await reactivateConversation(conversationId);
+  } else if (!isChatSendingOpen(convo)) {
+    throw new Error(i18n.t('errors.chatNotFound'));
   }
   const moderated = moderateText(text);
   if (!moderated.ok) throw new Error(moderated.reason);
+  const body = text.trim();
   await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
     senderId: user.uid,
-    text: text.trim(),
+    text: body,
     createdAt: Date.now(),
     serverCreatedAt: serverTimestamp(),
   });
   await updateDoc(doc(db, 'conversations', conversationId), {
-    lastMessage: text.trim(),
+    lastMessage: body,
     lastMessageAt: Date.now(),
     lastSenderId: user.uid,
+    status: 'active',
   });
   const otherId = convo.participantIds.find((id) => id !== user.uid);
   if (otherId) {
     void (async () => {
       const profile = await getUserProfile(user.uid).catch(() => null);
       const senderName = profile?.displayName?.trim() || user.displayName?.trim() || i18n.t('common.someone');
+      const preview = body.length > 120 ? `${body.slice(0, 117)}…` : body;
       await notifyUser(
         otherId,
         {
           titleKey: 'push.chatTitle',
-          bodyKey: 'push.chatBody',
           titleParams: { name: senderName },
+          bodyText: preview,
           data: { type: 'chat', chatId: conversationId },
         },
         'chats'
