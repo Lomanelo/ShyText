@@ -1,15 +1,13 @@
 /**
- * ShyText App Store cards — cinematic title-card compositor (v2).
+ * ShyText App Store cards — warm-paper compositor (v3).
  *
- * 1290×2796 PNGs (6.7" App Store portrait). Centered composition:
- * story bars, statement + echo, and an iPhone frame (Dynamic Island, soft
- * shadow) that bleeds off the bottom edge, over Higgsfield atmosphere
- * photography. Brand cards (1 and 5) are pure title cards with the wordmark.
+ * 1290×2796 PNGs (6.7" App Store portrait) on the app's own world:
+ * warm paper, flame accents, story bars, statement + echo, and a fully
+ * visible iPhone frame so the screenshot content reads. Bookend cards carry
+ * a printed "postcard" still (Higgsfield) and the flame closer.
  *
- * Drop real iPhone screenshots into store/screens/card-2.png, card-3.png,
- * card-4.png and rerun — they composite into the device automatically.
- *
- * Usage: npm run render   (outputs to store/out/)
+ * Screenshots: store/screens/card-{2..5}.png (JPEG or PNG — bytes are sniffed).
+ * Usage: npm run render   → store/out/
  */
 import { Resvg } from '@resvg/resvg-js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
@@ -23,13 +21,14 @@ mkdirSync(OUT, { recursive: true });
 const W = 1290;
 const H = 2796;
 
-const NIGHT = '#12100E';
-const SCREEN_BG = '#171310';
+// The app's light theme, verbatim.
 const PAPER = '#FCF3E8';
+const INK = '#1C120E';
+const MUTED = '#6B5344';
 const FLAME = '#D05927';
-const SMOKE = '#A89486';
-const LINE = 'rgba(252,243,232,0.14)';
-const BEZEL = '#050403';
+const LINEC = '#E9DCCC';
+const BEZEL = '#141210';
+const STATUS = '#F6F1EA';
 
 function dataUri(path, mime) {
   const buf = readFileSync(path);
@@ -45,9 +44,9 @@ function dataUri(path, mime) {
 
 const flamePng = dataUri(join(ROOT, 'flame-lit.png'), 'image/png');
 
-function bgUri(name) {
-  const path = join(ROOT, 'bg', name);
-  return existsSync(path) ? dataUri(path, 'image/jpeg') : null;
+function assetUri(rel, mime = 'image/jpeg') {
+  const path = join(ROOT, rel);
+  return existsSync(path) ? dataUri(path, mime) : null;
 }
 
 function screenUri(cardId) {
@@ -57,78 +56,89 @@ function screenUri(cardId) {
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
-/** Story bars — centered, quiet, straight from the app's onboarding. */
 function storyBars(lit) {
-  const groupW = 560;
+  const groupW = 520;
   const gap = 12;
   const barW = (groupW - gap * 2) / 3;
   const x0 = (W - groupW) / 2;
   return [0, 1, 2]
     .map((i) => {
       const x = x0 + i * (barW + gap);
-      return `<rect x="${x}" y="168" width="${barW}" height="9" rx="4.5" fill="${i < lit ? FLAME : LINE}"/>`;
+      return `<rect x="${x}" y="150" width="${barW}" height="9" rx="4.5" fill="${i < lit ? FLAME : LINEC}"/>`;
     })
     .join('\n');
 }
 
-function titleBlock({ lines, echo, y, size = 116, lineHeight = 128 }) {
+function titleBlock({ lines, echo, y, size = 104, lineHeight = 114 }) {
   const statement = lines
     .map(
       (line, i) =>
-        `<text x="${W / 2}" y="${y + i * lineHeight}" text-anchor="middle" font-family="Inter" font-weight="800" font-size="${size}" letter-spacing="-3.5" fill="${PAPER}">${esc(line)}</text>`
+        `<text x="${W / 2}" y="${y + i * lineHeight}" text-anchor="middle" font-family="Inter" font-weight="800" font-size="${size}" letter-spacing="-3" fill="${INK}">${esc(line)}</text>`
     )
     .join('\n');
-  const echoY = y + lines.length * lineHeight + 26;
-  const echoText = `<text x="${W / 2}" y="${echoY}" text-anchor="middle" font-family="Inter" font-weight="500" font-size="54" fill="${SMOKE}">${esc(echo)}</text>`;
-  return statement + '\n' + echoText;
+  const echoY = y + lines.length * lineHeight + 18;
+  return (
+    statement +
+    `\n<text x="${W / 2}" y="${echoY}" text-anchor="middle" font-family="Inter" font-weight="500" font-size="50" fill="${MUTED}">${esc(echo)}</text>`
+  );
 }
 
-/**
- * iPhone frame, bleeding off the bottom of the card. Real screenshot slides
- * into the screen when present; otherwise a quiet dark screen with a ghost flame.
- */
+/** Fully visible iPhone: nothing important gets cut. */
 function device(cardId) {
-  const outerW = 1010;
-  const inset = 22;
+  const outerW = 930;
+  const inset = 20;
   const screenW = outerW - inset * 2;
   const screenH = Math.round((screenW * 2796) / 1290);
   const outerH = screenH + inset * 2;
   const x = (W - outerW) / 2;
-  const y = 1150;
-  const rOuter = 158;
-  const rScreen = 136;
+  const y = 700;
+  const rOuter = 142;
+  const rScreen = 122;
   const screenX = x + inset;
   const screenY = y + inset;
+  const statusH = 132;
 
   const shot = screenUri(cardId);
-  // Screenshots start at the app header (no status bar), so give the island
-  // a real status-bar zone and slide the capture down beneath it.
-  const statusH = 150;
   const screenContent = shot
-    ? `<rect x="${screenX}" y="${screenY}" width="${screenW}" height="${statusH + rScreen}" fill="#F5F2EF" clip-path="url(#screen-${cardId})"/>
-       <image href="${shot}" x="${screenX}" y="${screenY + statusH}" width="${screenW}" height="${screenH}" preserveAspectRatio="xMidYMid slice" clip-path="url(#screen-${cardId})"/>`
-    : `<image href="${flamePng}" x="${W / 2 - 100}" y="${screenY + 560}" width="200" height="200" opacity="0.18"/>`;
+    ? `<rect x="${screenX}" y="${screenY}" width="${screenW}" height="${statusH + rScreen}" fill="${STATUS}" clip-path="url(#screen-${cardId})"/>
+       <image href="${shot}" x="${screenX}" y="${screenY + statusH}" width="${screenW}" height="${screenH - statusH}" preserveAspectRatio="xMidYMin slice" clip-path="url(#screen-${cardId})"/>`
+    : `<rect x="${screenX}" y="${screenY}" width="${screenW}" height="${screenH}" fill="${STATUS}" clip-path="url(#screen-${cardId})"/>
+       <image href="${flamePng}" x="${W / 2 - 90}" y="${screenY + screenH / 2 - 90}" width="180" height="180" opacity="0.2"/>`;
 
-  // Dynamic Island only makes sense over a real screenshot-less screen too — it sells the frame.
-  const islandW = 302;
-  const island = `<rect x="${(W - islandW) / 2}" y="${screenY + 30}" width="${islandW}" height="84" rx="42" fill="${BEZEL}"/>`;
+  const islandW = 276;
+  const island = `<rect x="${(W - islandW) / 2}" y="${screenY + 26}" width="${islandW}" height="76" rx="38" fill="${BEZEL}"/>`;
 
   return `
     <clipPath id="screen-${cardId}"><rect x="${screenX}" y="${screenY}" width="${screenW}" height="${screenH}" rx="${rScreen}"/></clipPath>
-    <rect x="${x - 40}" y="${y + 60}" width="${outerW + 80}" height="${outerH}" rx="${rOuter + 30}" fill="#000000" opacity="0.55" filter="url(#soft)"/>
+    <rect x="${x - 30}" y="${y + 44}" width="${outerW + 60}" height="${outerH}" rx="${rOuter + 24}" fill="#3A281C" opacity="0.35" filter="url(#soft)"/>
     <rect x="${x}" y="${y}" width="${outerW}" height="${outerH}" rx="${rOuter}" fill="${BEZEL}"/>
-    <rect x="${screenX}" y="${screenY}" width="${screenW}" height="${screenH}" rx="${rScreen}" fill="${SCREEN_BG}"/>
     ${screenContent}
     ${island}
-    <rect x="${x + 3}" y="${y + 3}" width="${outerW - 6}" height="${outerH - 6}" rx="${rOuter - 3}" fill="none" stroke="rgba(252,243,232,0.10)" stroke-width="2.5"/>
+    <rect x="${x + 3}" y="${y + 3}" width="${outerW - 6}" height="${outerH - 6}" rx="${rOuter - 3}" fill="none" stroke="rgba(28,18,14,0.18)" stroke-width="2.5"/>
+  `;
+}
+
+/** Photo printed on the paper like a postcard from the venue. */
+function postcard(rel, y) {
+  const uri = assetUri(rel);
+  if (!uri) return '';
+  const cardW = 1010;
+  const cardH = 700;
+  const x = (W - cardW) / 2;
+  const r = 44;
+  return `
+    <clipPath id="postcard"><rect x="${x}" y="${y}" width="${cardW}" height="${cardH}" rx="${r}"/></clipPath>
+    <rect x="${x - 24}" y="${y + 34}" width="${cardW + 48}" height="${cardH}" rx="${r + 18}" fill="#3A281C" opacity="0.30" filter="url(#soft)"/>
+    <rect x="${x - 16}" y="${y - 16}" width="${cardW + 32}" height="${cardH + 32}" rx="${r + 14}" fill="#FFFFFF"/>
+    <image href="${uri}" x="${x}" y="${y}" width="${cardW}" height="${cardH}" preserveAspectRatio="xMidYMid slice" clip-path="url(#postcard)"/>
   `;
 }
 
 function wordmarkCentered(y) {
-  const flameSize = 76;
-  const textSize = 60;
-  const gapX = 18;
-  const textW = textSize * 0.56 * 7; // ~ visual width of "shytext"
+  const flameSize = 72;
+  const textSize = 58;
+  const gapX = 16;
+  const textW = textSize * 0.56 * 7;
   const total = flameSize + gapX + textW;
   const x0 = (W - total) / 2;
   return `
@@ -138,51 +148,32 @@ function wordmarkCentered(y) {
 }
 
 function card(spec) {
-  const bgImage = spec.bg ? bgUri(spec.bg) : null;
-  const photo = bgImage
-    ? `<image href="${bgImage}" x="0" y="0" width="${W}" height="${H}" preserveAspectRatio="xMidYMid slice" opacity="0.5"/>`
-    : '';
-  const heroFlame = spec.bigFlame
-    ? `<image href="${flamePng}" x="${(W - 520) / 2}" y="1250" width="520" height="520"/>`
-    : '';
-
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
-    <linearGradient id="scrimTop" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="${NIGHT}" stop-opacity="0.95"/>
-      <stop offset="0.42" stop-color="${NIGHT}" stop-opacity="0.62"/>
-      <stop offset="1" stop-color="${NIGHT}" stop-opacity="0.18"/>
-    </linearGradient>
-    <linearGradient id="scrimBottom" x1="0" y1="1" x2="0" y2="0">
-      <stop offset="0" stop-color="${NIGHT}" stop-opacity="0.9"/>
-      <stop offset="1" stop-color="${NIGHT}" stop-opacity="0"/>
-    </linearGradient>
-    <radialGradient id="emberGlow" cx="0.5" cy="0.62" r="0.62">
-      <stop offset="0" stop-color="${FLAME}" stop-opacity="0.15"/>
+    <radialGradient id="emberGlow" cx="0.5" cy="0.06" r="0.75">
+      <stop offset="0" stop-color="${FLAME}" stop-opacity="0.12"/>
       <stop offset="1" stop-color="${FLAME}" stop-opacity="0"/>
     </radialGradient>
     <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
-      <feGaussianBlur stdDeviation="46"/>
+      <feGaussianBlur stdDeviation="40"/>
     </filter>
     <filter id="grain">
       <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/>
-      <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 0.95  0 0 0 0 0.9  0 0 0 0.05 0"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.2  0 0 0 0 0.12  0 0 0 0 0.08  0 0 0 0.04 0"/>
     </filter>
   </defs>
 
-  <rect width="${W}" height="${H}" fill="${NIGHT}"/>
-  ${photo}
-  <rect width="${W}" height="${H * 0.58}" fill="url(#scrimTop)"/>
-  <rect y="${H * 0.55}" width="${W}" height="${H * 0.45}" fill="url(#scrimBottom)"/>
+  <rect width="${W}" height="${H}" fill="${PAPER}"/>
   <rect width="${W}" height="${H}" fill="url(#emberGlow)"/>
 
   ${storyBars(spec.lit)}
   ${titleBlock(spec)}
   ${spec.device ? device(spec.id) : ''}
-  ${heroFlame}
+  ${spec.postcard ? postcard(spec.postcard, spec.postcardY ?? 1450) : ''}
+  ${spec.bigFlame ? `<image href="${flamePng}" x="${(W - 480) / 2}" y="1330" width="480" height="480"/>` : ''}
   ${spec.wordmark ? wordmarkCentered(H - 170) : ''}
 
-  <rect width="${W}" height="${H}" filter="url(#grain)" opacity="0.55"/>
+  <rect width="${W}" height="${H}" filter="url(#grain)" opacity="0.5"/>
 </svg>`;
 }
 
@@ -192,9 +183,10 @@ const CARDS = [
     lit: 1,
     lines: ['There’s a moment', 'before hello.'],
     echo: 'ShyText lives there.',
-    y: 960,
-    bg: 'bar.jpg',
+    y: 620,
     device: false,
+    postcard: 'bg/terrace.jpg',
+    postcardY: 1330,
     bigFlame: false,
     wordmark: true,
   },
@@ -203,10 +195,8 @@ const CARDS = [
     lit: 2,
     lines: ['Shyne when', 'you’re open.'],
     echo: 'A quiet signal to the room.',
-    y: 500,
-    bg: 'cafe.jpg',
+    y: 380,
     device: true,
-    bigFlame: false,
     wordmark: false,
   },
   {
@@ -214,10 +204,8 @@ const CARDS = [
     lit: 2,
     lines: ['See who’s', 'open here.'],
     echo: 'Nobody shows up by accident.',
-    y: 500,
-    bg: 'bar.jpg',
+    y: 380,
     device: true,
-    bigFlame: false,
     wordmark: false,
   },
   {
@@ -225,10 +213,8 @@ const CARDS = [
     lit: 3,
     lines: ['One note.', 'One person.'],
     echo: 'No feed. No swiping. No map.',
-    y: 500,
-    bg: 'library.jpg',
+    y: 380,
     device: true,
-    bigFlame: false,
     wordmark: false,
   },
   {
@@ -236,10 +222,8 @@ const CARDS = [
     lit: 3,
     lines: ['They accept.', 'You chat.'],
     echo: 'The rest happens offline.',
-    y: 500,
-    bg: 'cafe.jpg',
+    y: 380,
     device: true,
-    bigFlame: false,
     wordmark: false,
   },
   {
@@ -248,7 +232,6 @@ const CARDS = [
     lines: ['Never on a map.'],
     echo: 'A venue name — never a pin.',
     y: 900,
-    bg: null,
     device: false,
     bigFlame: true,
     wordmark: true,
