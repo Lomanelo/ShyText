@@ -10,13 +10,16 @@
  * Usage: npm run render   → store/out/
  */
 import { Resvg } from '@resvg/resvg-js';
+import sharp from 'sharp';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const OUT = join(ROOT, 'out');
+const OUT_65 = join(OUT, '6.5-inch');
 mkdirSync(OUT, { recursive: true });
+mkdirSync(OUT_65, { recursive: true });
 
 const W = 1290;
 const H = 2796;
@@ -252,5 +255,9 @@ for (const spec of CARDS) {
   const png = resvg.render().asPng();
   const file = join(OUT, `appstore-card-${spec.id}.png`);
   writeFileSync(file, png);
-  console.log('rendered', file, `${Math.round(png.length / 1024)}kb`);
+
+  // App Store Connect 6.5" slot wants exactly 1284×2778 — 0.2% rescale, invisible.
+  const file65 = join(OUT_65, `appstore-card-${spec.id}.png`);
+  await sharp(png).resize(1284, 2778, { fit: 'fill' }).png().toFile(file65);
+  console.log('rendered', file, `+ 6.5" variant`);
 }
