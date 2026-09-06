@@ -3,7 +3,7 @@
     "name": "ShyText",
     "slug": "myshytext",
     "owner": "rahimrady",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "com.rahimrady.myshytext",
@@ -11,6 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.rahimrady.myshytext",
+      "buildNumber": "30",
       "requireFullScreen": true,
       "infoPlist": {
         "CFBundleAllowMixedLocalizations": true,
