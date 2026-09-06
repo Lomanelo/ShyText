@@ -181,14 +181,6 @@ export default function ChatScreen() {
               onPress={() => {
                 Alert.alert(otherName, undefined, [
                   { text: t('common.report'), onPress: () => setReport(true) },
-                  {
-                    text: t('common.leave'),
-                    style: 'destructive',
-                    onPress: async () => {
-                      if (chatId) await closeConversation(chatId);
-                      router.back();
-                    },
-                  },
                   ...(otherId && user
                     ? [
                         {

@@ -6,7 +6,7 @@ export function Wordmark({ theme, size = 22 }: { theme: Theme; size?: number }) 
   return (
     <View style={styles.row}>
       <FlameMark size={size} />
-      <Text style={[styles.word, { color: theme.accent, fontSize: Math.round(size * 0.72) }]}>shytext</Text>
+      <Text style={[styles.word, { color: theme.accent, fontSize: Math.round(size * 0.72) }]}>ShyText</Text>
     </View>
   );
 }

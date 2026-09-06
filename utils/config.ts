@@ -4,6 +4,8 @@ export function isDevToolsEnabled(): boolean {
 
 export const CHECK_IN_MS = 60 * 60 * 1000;
 export const DEFAULT_SHYTEXT_MINUTES = 30;
+/** Production Places proxy (Serper). Override with EXPO_PUBLIC_PLACES_PROXY_URL. */
+export const DEFAULT_PLACES_PROXY_URL = 'https://shytextapi.netlify.app/api/places';
 export const MAX_ACTIVE_SHYTEXTS = 1;
 export const MAX_SHYTEXTS_PER_HOUR = 10;
 export const MAX_REQUESTS_PER_HOUR = 20;

@@ -1,6 +1,6 @@
 import { Venue, VenueCandidate, PlacesProvider, PlacesRequestError } from '../types/venue';
 import { distanceBetween, pickClosest } from '../utils/geo';
-import { isDevToolsEnabled } from '../utils/config';
+import { isDevToolsEnabled, DEFAULT_PLACES_PROXY_URL } from '../utils/config';
 import { DEMO_VENUES } from './mockData';
 import i18n from '../i18n';
 import { languageTagOf } from '../i18n/languages';
@@ -117,12 +117,16 @@ class PlacesProxyProvider implements PlacesProvider {
   }
 }
 
+export function placesProxyUrl() {
+  return process.env.EXPO_PUBLIC_PLACES_PROXY_URL?.trim() || DEFAULT_PLACES_PROXY_URL;
+}
+
 export function isPlacesConfigured() {
-  return Boolean(process.env.EXPO_PUBLIC_PLACES_PROXY_URL?.trim());
+  return Boolean(placesProxyUrl());
 }
 
 export function getPlacesProvider(): PlacesProvider {
-  const endpoint = process.env.EXPO_PUBLIC_PLACES_PROXY_URL?.trim();
+  const endpoint = placesProxyUrl();
   if (endpoint) return new PlacesProxyProvider(endpoint);
   if (isDevToolsEnabled()) return new DemoPlacesProvider();
   return {

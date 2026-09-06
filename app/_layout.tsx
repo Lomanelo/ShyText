@@ -1,6 +1,6 @@
 /**
  * THESIS: A ShyText is a directed note to one person checked in at the same venue — not a dating deck, people map, or paper-cream feed.
- * OWN-WORLD: Dim-bar / disposable-camera. System grouped surfaces, flame #D05927, lowercase shytext wordmark, tabular TTL.
+ * OWN-WORLD: Dim-bar / disposable-camera. System grouped surfaces, flame #D05927, ShyText wordmark, tabular TTL.
  * STORY: Invisible until you check in. Hold a place. Send a ShyText. Chat only if they accept.
  * FIRST VIEWPORT: Nearby large title, live venues, hold-to-check-in hint, live stamp if you’re visible.
  * FORM: Native Operate / HIG. Assigned BeReal disposable-camera world, seed 0441a7e4. Signature: hold-to-check-in.

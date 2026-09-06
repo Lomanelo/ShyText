@@ -1,3 +1,5 @@
+import { DEFAULT_PLACES_PROXY_URL } from '../utils/config';
+
 export type VenueImageTarget = {
   latitude?: number | null;
   longitude?: number | null;
@@ -17,21 +19,19 @@ function clampDimension(value: number) {
   return Math.min(640, Math.max(1, Math.round(value)));
 }
 
+function placesOrigin() {
+  const places = process.env.EXPO_PUBLIC_PLACES_PROXY_URL?.trim() || DEFAULT_PLACES_PROXY_URL;
+  try {
+    return new URL(places).origin;
+  } catch {
+    return 'https://shytextapi.netlify.app';
+  }
+}
+
 export function venueImageProxyBase(): string | null {
   const dedicated = process.env.EXPO_PUBLIC_VENUE_IMAGE_PROXY_URL?.trim();
   if (dedicated) return dedicated.replace(/\/$/, '');
-
-  const places = process.env.EXPO_PUBLIC_PLACES_PROXY_URL?.trim();
-  if (places) {
-    try {
-      return `${new URL(places).origin}/api/venue-image`;
-    } catch {
-      return null;
-    }
-  }
-
-  const apiBase = process.env.EXPO_PUBLIC_API_BASE?.trim() || 'https://shytext.com';
-  return `${apiBase.replace(/\/$/, '')}/api/venue-image`;
+  return `${placesOrigin()}/api/venue-image`;
 }
 
 export function isVenueImageConfigured() {

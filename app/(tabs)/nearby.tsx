@@ -224,7 +224,7 @@ export default function NearbyScreen() {
   return (
     <Screen theme={theme} inset={false}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, !loading && venues.length === 0 ? styles.contentEmpty : null]}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load(query || undefined, true)} tintColor={theme.accent} />}
@@ -283,7 +283,9 @@ export default function NearbyScreen() {
         {!loading && venues.length === 0 ? (
           <EmptyState
             theme={theme}
-            icon="location-outline"
+            art={rateLimited || !placesReady ? undefined : 'venues'}
+            fill={!(rateLimited || !placesReady)}
+            icon={rateLimited || !placesReady ? 'location-outline' : undefined}
             title={rateLimited ? t('nearby.rateLimitedTitle') : placesReady ? t('nearby.emptyTitle') : t('nearby.searchOffline')}
             body={
               rateLimited
@@ -332,6 +334,7 @@ export default function NearbyScreen() {
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: space[16], paddingBottom: space[32], gap: space[12] },
+  contentEmpty: { flexGrow: 1, justifyContent: 'center' },
   searchWrap: {
     borderRadius: radius.pill,
     borderCurve: 'continuous',

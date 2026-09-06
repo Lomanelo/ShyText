@@ -36,6 +36,8 @@ function createAuth(): Auth {
 }
 
 export const auth = createAuth();
+// Prefer the device language for Firebase Auth SMS / emails.
+auth.useDeviceLanguage();
 export const db = getFirestore(app);
 export const storage = getStorage(app);
 export default app;

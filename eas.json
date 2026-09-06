@@ -15,7 +15,9 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_DEV_MODE": "true"
+        "EXPO_PUBLIC_DEV_MODE": "true",
+        "EXPO_PUBLIC_PLACES_PROXY_URL": "https://shytextapi.netlify.app/api/places",
+        "EXPO_PUBLIC_API_BASE": "https://shytextapi.netlify.app"
       },
       "ios": {
         "resourceClass": "m-medium"
@@ -27,7 +29,9 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_DEV_MODE": "false"
+        "EXPO_PUBLIC_DEV_MODE": "false",
+        "EXPO_PUBLIC_PLACES_PROXY_URL": "https://shytextapi.netlify.app/api/places",
+        "EXPO_PUBLIC_API_BASE": "https://shytextapi.netlify.app"
       },
       "ios": {
         "resourceClass": "m-medium"

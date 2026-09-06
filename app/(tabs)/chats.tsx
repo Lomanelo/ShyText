@@ -122,7 +122,10 @@ export default function ChatsScreen() {
 
   return (
     <Screen theme={theme} inset={false}>
-      <ScrollView contentContainerStyle={styles.content} contentInsetAdjustmentBehavior="automatic">
+      <ScrollView
+        contentContainerStyle={[styles.content, empty ? styles.contentEmpty : null]}
+        contentInsetAdjustmentBehavior="automatic"
+      >
         {error ? (
           <Text selectable style={[type.body, { color: theme.danger }]}>
             {error}
@@ -132,6 +135,8 @@ export default function ChatsScreen() {
         {empty ? (
           <EmptyState
             theme={theme}
+            art="chats"
+            fill
             title={t('chats.emptyTitle')}
             body={t('chats.emptyBody')}
             action={{ label: t('tabs.nearby'), onPress: () => router.push('/(tabs)/nearby') }}
@@ -217,6 +222,7 @@ export default function ChatsScreen() {
 
 const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 32, gap: 16 },
+  contentEmpty: { flexGrow: 1, justifyContent: 'center' },
   group: { borderRadius: 16, borderCurve: 'continuous', overflow: 'hidden' },
   card: {
     flexDirection: 'row',

@@ -330,7 +330,12 @@ export default function VenueScreen() {
               {showPeopleSkeleton ? (
                 <Skeleton theme={theme} />
               ) : waitingForPeople ? null : others.length === 0 ? (
-                <EmptyState theme={theme} title={t('venue.justYou')} />
+                <EmptyState
+                  theme={theme}
+                  art="alone"
+                  title={t('venue.justYou')}
+                  body={t('venue.justYouBody')}
+                />
               ) : (
                 others.map((person, index) => {
                   const contactMode = modeFor(person.userId);

@@ -116,6 +116,7 @@
     "shyInToSeeBody": "Haz Shyne para aparecer y ver quién está en este lugar.",
     "shyInToSeeHint": "Desliza la llama abajo",
     "justYou": "Solo tú",
+    "justYouBody": "Estás en Shyne. Cuando alguien más también lo haga, aparecerá aquí.",
     "demoPerson": "Esta es una persona de demostración. Haz Shyne tú para enviar un ShyText de verdad.",
     "sent": "En camino",
     "sendTo": "¿Enviar un ShyText a {{name}}?",
