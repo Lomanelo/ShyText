@@ -6,3 +6,5 @@ store/
 .expo/
 *.log
 agent-transcripts/
+# Marketing media is published from shytext.com/public/marketing — never ship in the binary
+app/Videos/

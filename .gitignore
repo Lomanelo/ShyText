@@ -35,3 +35,6 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# Marketing reels / stills live in shytext.com (public/marketing), not the app
+app/Videos/
