@@ -17,6 +17,11 @@ service cloud.firestore {
       allow create: if isSelf(userId);
       allow update: if isSelf(userId);
       allow delete: if isSelf(userId);
+
+      // Owner-only facts (gender, birthday, email, city, nationality).
+      match /private/{docId} {
+        allow read, write: if isSelf(userId);
+      }
     }
 
     match /venues/{venueId} {

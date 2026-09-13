@@ -60,6 +60,7 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="how-it-works" options={{ headerShown: false, presentation: 'modal' }} />
           <Stack.Screen name="venue/[venueId]" options={{ headerShown: true, title: t('common.venue') }} />
           <Stack.Screen name="shytext/create" options={{ headerShown: true, title: t('common.checkIn') }} />
           <Stack.Screen name="shytext/[shytextId]" options={{ headerShown: true, title: 'ShyText' }} />

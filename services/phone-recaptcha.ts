@@ -7,7 +7,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 const RECAPTCHA_URL =
   process.env.EXPO_PUBLIC_PHONE_RECAPTCHA_URL ||
-  'https://myshytext.firebaseapp.com/phone-recaptcha.html';
+  'https://auth.shytext.com/phone-recaptcha.html';
 
 type Verifier = ApplicationVerifier & { _reset: () => void };
 

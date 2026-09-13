@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.rahimrady.myshytext",
-      "buildNumber": "30",
+      "buildNumber": "31",
       "requireFullScreen": true,
       "infoPlist": {
         "CFBundleAllowMixedLocalizations": true,

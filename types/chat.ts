@@ -39,6 +39,12 @@ export interface Conversation {
   status: 'active' | 'closed';
   /** Epoch ms. After this, the thread stays but sending stops. */
   sendUntil?: number;
+  /** User ids who pinned this chat to the top of their list. */
+  pinnedBy?: string[];
+  /** Per-user "deleted at" timestamps. Hidden until a newer message arrives. */
+  deletedAt?: Record<string, number>;
+  /** Per-user last-read timestamps for unread dots and badges. */
+  lastReadAt?: Record<string, number>;
 }
 
 export interface ChatMessage {

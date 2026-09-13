@@ -24,6 +24,7 @@ import {
 import { buildVenueImageUrl } from '../../services/venueImage';
 import { rememberVenueImage } from '../../services/venueImageCache';
 import { isPendingShyne, setPendingShyneError } from '../../services/pendingShyne';
+import { HOW_IT_WORKS_SEEN_KEY } from '../../utils/walkthrough';
 import { PlacesRequestError, Venue, VenueCandidate } from '../../types/venue';
 import { distanceBetween, pickClosest } from '../../utils/geo';
 import { useTranslation } from 'react-i18next';
@@ -137,6 +138,15 @@ export default function NearbyScreen() {
   useEffect(() => {
     AsyncStorage.getItem(SHY_IN_HINT_KEY).then((seen) => {
       if (!seen) setShyInHint(true);
+    });
+  }, []);
+
+  // One-time walkthrough for accounts that predate it (new users see it after setup).
+  useEffect(() => {
+    void AsyncStorage.getItem(HOW_IT_WORKS_SEEN_KEY).then((seen) => {
+      if (seen) return;
+      void AsyncStorage.setItem(HOW_IT_WORKS_SEEN_KEY, '1');
+      router.push('/how-it-works');
     });
   }, []);
 
@@ -320,7 +330,6 @@ export default function NearbyScreen() {
                 distance={venue.distanceMeters}
                 lit={isHere}
                 shyInLoading={checkingInId === key && !isHere}
-                expiresAt={isHere ? liveCheckIn?.expiresAt : undefined}
                 onPress={() => openVenue(venue)}
                 onShyIn={isHere ? undefined : () => checkInAtVenue(venue)}
               />

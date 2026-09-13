@@ -95,16 +95,17 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
         {auth.error ? <Text style={{ color: theme.danger }}>{auth.error}</Text> : null}
 
         {auth.step === 'phone' ? (
-          <View style={styles.phoneRow}>
+          <View style={[styles.phoneCard, { backgroundColor: theme.card }]}>
             <PressScale
               accessibilityRole="button"
               accessibilityLabel={t('auth.countryCode')}
               onPress={() => setPickerOpen(true)}
-              style={[styles.codeBtn, { backgroundColor: theme.card }]}
+              style={styles.codeBtn}
             >
               <Text style={[styles.codeText, { color: theme.text }]}>{callingCode}</Text>
               <Ionicons name="chevron-down" size={14} color={theme.muted} />
             </PressScale>
+            <View style={[styles.phoneDivider, { backgroundColor: theme.border }]} />
             <TextInput
               value={national}
               onChangeText={(value) => {
@@ -120,6 +121,7 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
               autoComplete="tel"
               textContentType="telephoneNumber"
               autoCorrect={false}
+              autoFocus
               returnKeyType="done"
               placeholder={t('auth.phone')}
               placeholderTextColor={theme.quiet}
@@ -255,17 +257,34 @@ const styles = StyleSheet.create({
   back: { position: 'absolute', top: 8, left: space[16], zIndex: 2, width: 44, height: 44, justifyContent: 'center' },
   hero: { gap: space[8], marginBottom: space[16] },
   phoneRow: { flexDirection: 'row', alignItems: 'center', gap: space[12] },
+  phoneCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    paddingHorizontal: space[4],
+    minHeight: 64,
+    overflow: 'hidden',
+  },
   codeBtn: {
     borderRadius: radius.md,
     borderCurve: 'continuous',
     paddingHorizontal: space[12],
-    minHeight: 44,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
+  phoneDivider: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', marginVertical: 14 },
   codeText: { fontSize: 17, fontWeight: '700' },
-  national: { flex: 1, minHeight: 52, fontSize: 34, fontWeight: '700', letterSpacing: 0.3 },
+  national: {
+    flex: 1,
+    minHeight: 52,
+    fontSize: 28,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    paddingHorizontal: space[12],
+  },
   dock: { gap: space[8], paddingBottom: space[8] },
   footer: { alignItems: 'center', paddingTop: space[4], minHeight: 44, justifyContent: 'center' },
   picker: { flex: 1, paddingHorizontal: space[16], paddingTop: space[8], gap: space[12] },

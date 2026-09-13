@@ -13,9 +13,11 @@ import { Skeleton } from '../../components/Skeleton';
 import { ChatRequestModal } from '../../components/ChatRequestModal';
 import { ReportModal } from '../../components/ReportModal';
 import { ShyInFlame } from '../../components/shy-in-flame';
-import { CountdownBadge } from '../../components/CountdownBadge';
+import { FlameMark } from '../../components/flame-mark';
 import { VenueStamp } from '../../components/VenueStamp';
 import { PressScale } from '../../components/PressScale';
+import { Ionicons } from '@expo/vector-icons';
+import { openDirections } from '../../utils/directions';
 import { cardShadow, radius, space, type, useTheme } from '../../theme';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useAuth } from '../../hooks/useAuth';
@@ -264,6 +266,21 @@ export default function VenueScreen() {
           </View>
         ) : null}
 
+        {venue?.latitude != null && venue?.longitude != null ? (
+          <View style={styles.content}>
+            <PressScale
+              accessibilityRole="button"
+              accessibilityLabel={t('venue.directionsA11y', { name: venue.name })}
+              onPress={() => void openDirections(venue)}
+              style={[styles.directions, { backgroundColor: theme.card }, cardShadow(theme)]}
+            >
+              <Ionicons name="navigate" size={18} color={theme.accent} />
+              <Text style={[type.headline, { color: theme.text }]}>{t('venue.directions')}</Text>
+              <Ionicons name="chevron-forward" size={16} color={theme.quiet} style={{ marginLeft: 'auto' }} />
+            </PressScale>
+          </View>
+        ) : null}
+
         <View style={styles.content}>
           {showPresence ? (
             <Animated.View
@@ -272,8 +289,12 @@ export default function VenueScreen() {
             >
               {mine ? (
                 <View style={[styles.own, cardShadow(theme), { backgroundColor: theme.card }]}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <CountdownBadge expiresAt={mine.expiresAt} theme={theme} />
+                  <View style={styles.shyningRow}>
+                    <FlameMark size={16} variant="lit" />
+                    <Text style={[type.caption, { color: theme.accent, fontWeight: '700' }]}>
+                      {t('venue.shyningHere')}
+                    </Text>
+                    <Text style={[type.caption, { color: theme.quiet }]}>{t('venue.staysWhileActive')}</Text>
                   </View>
                   <View style={styles.chips}>
                     {SHYTEXT_VIBES.map((item) => (
@@ -419,7 +440,6 @@ export default function VenueScreen() {
             theme={theme}
             lit={here || leaving}
             loading={busy || leaving}
-            expiresAt={here || leaving ? mine?.expiresAt : undefined}
             onShyIn={here || leaving ? undefined : checkInNow}
             onShyOut={here || leaving ? shyOutNow : undefined}
           />
@@ -473,6 +493,16 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   content: { paddingHorizontal: space[16], gap: space[12] },
+  directions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 52,
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
+    paddingHorizontal: space[16],
+  },
+  shyningRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   presenceBlock: { gap: space[12] },
   own: { borderRadius: radius.lg, borderCurve: 'continuous', padding: space[16], gap: space[12] },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

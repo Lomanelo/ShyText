@@ -12,7 +12,7 @@ import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'fire
 import { deleteObject, getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db, storage } from './firebase';
-import { DEFAULT_NOTIFICATION_PREFS, NotificationPrefs, UserProfile } from '../types/user';
+import { DEFAULT_NOTIFICATION_PREFS, NotificationPrefs, PrivateProfile, UserProfile } from '../types/user';
 import { MAX_BIO_LENGTH } from '../utils/config';
 import { expireMyCheckIns } from './venues';
 import { syncCheckInEndingNotice } from './notifications';
@@ -158,7 +158,8 @@ export async function completeProfile(
   displayName: string,
   avatarUrl?: string,
   bio?: string,
-  age?: number
+  age?: number,
+  privateDetails?: PrivateProfile
 ) {
   const user = auth.currentUser;
   if (!user) throw new Error(i18n.t('errors.notSignedIn'));
@@ -167,7 +168,39 @@ export async function completeProfile(
   if (bio != null) {
     await updateDoc(doc(db, 'users', user.uid), { bio });
   }
+  if (privateDetails) {
+    await savePrivateProfile(privateDetails);
+  }
   await persistUserLanguage();
+}
+
+/** Owner-only facts (gender, birthday, email, city, country, nationality). */
+export async function savePrivateProfile(details: PrivateProfile) {
+  const user = auth.currentUser;
+  if (!user) throw new Error(i18n.t('errors.notSignedIn'));
+  const clean = Object.fromEntries(
+    Object.entries({ ...details, updatedAt: Date.now() }).filter(([, value]) => value !== undefined)
+  );
+  await setDoc(doc(db, 'users', user.uid, 'private', 'profile'), clean, { merge: true });
+}
+
+export async function getOwnPrivateProfile(): Promise<PrivateProfile | null> {
+  const user = auth.currentUser;
+  if (!user) return null;
+  const snap = await getDoc(doc(db, 'users', user.uid, 'private', 'profile')).catch(() => null);
+  return snap?.exists() ? (snap.data() as PrivateProfile) : null;
+}
+
+/** Age from an ISO birth date, or undefined when out of the allowed range. */
+export function ageFromBirthDate(iso: string): number | undefined {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return undefined;
+  const today = new Date();
+  let age = today.getFullYear() - y;
+  const beforeBirthday =
+    today.getMonth() + 1 < m || (today.getMonth() + 1 === m && today.getDate() < d);
+  if (beforeBirthday) age -= 1;
+  return sanitizeAge(age);
 }
 
 export async function updateOwnProfile(input: {
@@ -244,6 +277,7 @@ export async function deleteOwnAccount() {
     // No photo stored.
   }
 
+  await deleteDoc(doc(db, 'users', uid, 'private', 'profile')).catch(() => undefined);
   // Wipe Firestore only after we can still roll it back if Auth delete fails.
   if (profileSnap?.exists()) {
     await deleteDoc(doc(db, 'users', uid));

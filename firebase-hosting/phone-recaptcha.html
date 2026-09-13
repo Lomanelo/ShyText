@@ -3,14 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#FCF3E8" />
   <title>ShyText</title>
   <style>
     :root { color-scheme: light; }
     html, body { height: 100%; margin: 0; }
     body {
-      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
       background: #FCF3E8;
-      color: #993818;
+      color: #1C120E;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -21,27 +22,61 @@
       background: #fff;
       border-radius: 24px;
       padding: 28px 24px 32px;
-      box-shadow: 0 12px 40px rgba(153, 56, 24, 0.08);
+      box-shadow: 0 12px 40px rgba(28, 18, 14, 0.08);
     }
-    h1 { font-family: Georgia, serif; font-size: 28px; font-weight: 400; margin: 0 0 8px; }
-    p { margin: 0 0 20px; line-height: 1.45; color: #8A5A3C; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+    .brand img {
+      width: 28px;
+      height: 28px;
+      display: block;
+    }
+    .brand span {
+      color: #D05927;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      margin: 0 0 8px;
+      color: #1C120E;
+    }
+    p { margin: 0 0 20px; line-height: 1.45; color: #6B5344; font-size: 16px; }
     #recaptcha-cont { min-height: 78px; }
-    .error { color: #B42318; margin-top: 12px; display: none; }
+    .error { color: #B42318; margin-top: 12px; display: none; font-size: 14px; }
+    .footer {
+      margin-top: 18px;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #8A735F;
+    }
   </style>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 </head>
 <body>
   <div class="card">
+    <div class="brand">
+      <img src="/flame-lit.png" alt="" width="28" height="28" />
+      <span>ShyText</span>
+    </div>
     <h1>Quick check</h1>
-    <p>Confirm you’re not a bot, then we’ll text you a code.</p>
+    <p>Confirm you’re human, then we’ll text you a ShyText code.</p>
     <div id="recaptcha-cont"></div>
     <p class="error" id="error"></p>
+    <p class="footer">This check keeps sign-in safe. You’ll return to the app automatically.</p>
   </div>
   <script>
     var firebaseConfig = {
       apiKey: 'AIzaSyAVnkBhxkzWdh2fLXsBMRDcRGYbY2KnBeE',
-      authDomain: 'myshytext.firebaseapp.com',
+      authDomain: 'auth.shytext.com',
       projectId: 'myshytext'
     };
     var params = new URLSearchParams(location.search);

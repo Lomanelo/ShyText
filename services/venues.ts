@@ -14,7 +14,13 @@ import {
 import { FirebaseError } from 'firebase/app';
 import { auth, db } from './firebase';
 import { CheckIn, Venue, VenueCandidate } from '../types/venue';
-import { DEFAULT_SHYTEXT_MINUTES, MAX_STATUS_LENGTH, isDevToolsEnabled } from '../utils/config';
+import {
+  DEFAULT_SHYTEXT_MINUTES,
+  MAX_STATUS_LENGTH,
+  SHYNE_EXTEND_SLACK_MS,
+  SHYNE_IDLE_WINDOW_MS,
+  isDevToolsEnabled,
+} from '../utils/config';
 import { isWithinCheckInRadius } from '../utils/geo';
 import { PADDYS_CORNER_ID } from './places';
 import { DEMO_VENUES, seedCheckIns } from './mockData';
@@ -266,6 +272,23 @@ export async function checkInToVenue(
     },
     venue: internal,
   };
+}
+
+/**
+ * Activity heartbeat: opening the app while Shyned extends the check-in to a
+ * fresh 30-minute window. Going quiet lets it expire on its own.
+ */
+export async function extendMyCheckIn(): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  const now = Date.now();
+  const snap = await getDoc(checkInRef(user.uid)).catch(() => null);
+  if (!snap?.exists()) return;
+  const expiresAt = Number(snap.data().expiresAt);
+  if (!Number.isFinite(expiresAt) || expiresAt <= now) return;
+  const target = now + SHYNE_IDLE_WINDOW_MS;
+  if (expiresAt >= target - SHYNE_EXTEND_SLACK_MS) return;
+  await updateDoc(checkInRef(user.uid), { expiresAt: target }).catch(() => undefined);
 }
 
 export async function updateCheckInVibe(vibe: ShyTextVibe, status?: string | null) {

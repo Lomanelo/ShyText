@@ -1,5 +1,7 @@
 import {
   addDoc,
+  arrayRemove,
+  arrayUnion,
   collection,
   doc,
   getDoc,
@@ -47,6 +49,50 @@ function dedupeConversations(items: Conversation[]) {
     }
   }
   return [...best.values()].sort((a, b) => Number(b.lastMessageAt || 0) - Number(a.lastMessageAt || 0));
+}
+
+/** WhatsApp-style: deleted chats stay hidden until a newer message arrives. */
+export function isConversationHiddenFor(convo: Conversation, userId: string) {
+  const deletedAt = convo.deletedAt?.[userId];
+  return typeof deletedAt === 'number' && Number(convo.lastMessageAt || 0) <= deletedAt;
+}
+
+export function isConversationPinnedBy(convo: Conversation, userId: string) {
+  return Boolean(convo.pinnedBy?.includes(userId));
+}
+
+/** Unread = the other person spoke after my last read. */
+export function isConversationUnread(convo: Conversation, userId: string) {
+  if (!convo.lastSenderId || convo.lastSenderId === userId) return false;
+  const readAt = convo.lastReadAt?.[userId] ?? 0;
+  return Number(convo.lastMessageAt || 0) > readAt;
+}
+
+export async function setConversationPinned(conversationId: string, pinned: boolean) {
+  const user = auth.currentUser;
+  if (!user) throw new Error(i18n.t('errors.signInFirst'));
+  await updateDoc(doc(db, 'conversations', conversationId), {
+    pinnedBy: pinned ? arrayUnion(user.uid) : arrayRemove(user.uid),
+  });
+}
+
+/** Hide the chat from my list only. The other person keeps it. */
+export async function deleteConversationForMe(conversationId: string) {
+  const user = auth.currentUser;
+  if (!user) throw new Error(i18n.t('errors.signInFirst'));
+  await updateDoc(doc(db, 'conversations', conversationId), {
+    [`deletedAt.${user.uid}`]: Date.now(),
+    pinnedBy: arrayRemove(user.uid),
+  });
+}
+
+/** Stamp "I've seen this thread" for unread dots and badges. */
+export async function markConversationRead(conversationId: string) {
+  const user = auth.currentUser;
+  if (!user) return;
+  await updateDoc(doc(db, 'conversations', conversationId), {
+    [`lastReadAt.${user.uid}`]: Date.now(),
+  }).catch(() => undefined);
 }
 
 /** Any thread between two people (active or left) — Instagram: one DM per pair. */
@@ -317,8 +363,13 @@ export function listenConversations(userId: string, onChange: (items: Conversati
     (snap) => {
       const items = snap.docs
         .map((item) => ({ id: item.id, ...item.data() } as Conversation))
+        .filter((item) => !isConversationHiddenFor(item, userId))
         .sort((a, b) => Number(b.lastMessageAt || 0) - Number(a.lastMessageAt || 0));
-      const unique = dedupeConversations(items);
+      const unique = dedupeConversations(items).sort((a, b) => {
+        const pinDiff = Number(isConversationPinnedBy(b, userId)) - Number(isConversationPinnedBy(a, userId));
+        if (pinDiff !== 0) return pinDiff;
+        return Number(b.lastMessageAt || 0) - Number(a.lastMessageAt || 0);
+      });
       for (const item of unique) {
         prefetchProfileImage([item.otherAvatarUrl], item.otherAvatarUrl);
       }

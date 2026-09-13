@@ -47,7 +47,26 @@ Set `EXPO_PUBLIC_DEV_MODE=true` in `.env` for demo venues (Paddy's Corner) and s
 npx firebase deploy --only firestore:rules,firestore:indexes
 ```
 
-6. Phone auth uses a reCAPTCHA page at `https://myshytext.firebaseapp.com/phone-recaptcha.html`. Deploy it with `npx firebase deploy --only hosting --project myshytext`.
+6. Phone auth uses a reCAPTCHA page at `https://auth.shytext.com/phone-recaptcha.html` (falls back to `myshytext.firebaseapp.com` until DNS is live). Deploy with `npx firebase deploy --only hosting --project myshytext`.
+
+### Custom auth domain (`auth.shytext.com`)
+
+Firebase does not let you rewrite the SMS sentence. The Expo reCAPTCHA flow uses your Auth domain in the text, so `auth.shytext.com` is what makes the message look clean.
+
+Already done in Firebase:
+- Hosting custom domain registered: `auth.shytext.com`
+- Auth authorized domains include `auth.shytext.com` and `shytext.com`
+- App defaults `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` and recaptcha URL to `auth.shytext.com`
+
+**You still need one DNS record** at your domain registrar / DNS host for `shytext.com`:
+
+| Type | Host / Name | Value / Points to |
+| --- | --- | --- |
+| CNAME | `auth` | `myshytext.web.app` |
+
+Do not proxy/orange-cloud it on Cloudflare (DNS only), or SSL may fail. After DNS propagates (often minutes, up to 24h), Firebase will mint SSL and SMS will say `auth.shytext.com` instead of `myshytext.firebaseapp.com`.
+
+Leave the apex `shytext.com` on your marketing host — only the `auth` subdomain goes to Firebase.
 
 ## 4. Environment variables
 

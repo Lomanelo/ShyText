@@ -1,11 +1,13 @@
 import { useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { Venue } from '../types/venue';
 import { cardShadow, radius, space, Theme, type } from '../theme';
-import { formatDistance } from '../utils/geo';
+import { CHECK_IN_RADIUS_METERS, formatDistance } from '../utils/geo';
 import { buildVenueImageUrl } from '../services/venueImage';
 import { rememberVenueImage } from '../services/venueImageCache';
+import { openDirections } from '../utils/directions';
 import { VenueStamp } from './VenueStamp';
 import { LiveDots } from './LiveDots';
 import { PressScale } from './PressScale';
@@ -20,7 +22,6 @@ export function VenueCard({
   onShyIn,
   lit = false,
   shyInLoading = false,
-  expiresAt,
 }: {
   venue: Venue;
   distance?: number;
@@ -30,12 +31,18 @@ export function VenueCard({
   onShyIn?: () => void | Promise<void>;
   lit?: boolean;
   shyInLoading?: boolean;
-  expiresAt?: number | null;
 }) {
   const { t } = useTranslation();
   const live = (venue.activeCount ?? 0) >= 1;
   const meters = distance ?? venue.distanceMeters;
   const howFar = formatDistance(meters);
+  // Too far to Shyne (with GPS slack) — offer directions instead of a slider that would only error.
+  const tooFar =
+    !lit &&
+    meters != null &&
+    meters > CHECK_IN_RADIUS_METERS * 1.5 &&
+    venue.latitude != null &&
+    venue.longitude != null;
   // Same size as venue hero proxy fallback so URLs match when imageUrl is absent.
   const imageUrl = buildVenueImageUrl(venue);
   const meta = [howFar, venue.category].filter(Boolean).join(' · ');
@@ -75,16 +82,32 @@ export function VenueCard({
       </PressScale>
 
       <View style={styles.slide}>
-        <ShyInFlame
-          variant="inline"
-          venueName={venue.name}
-          theme={theme}
-          lit={lit}
-          loading={shyInLoading}
-          expiresAt={lit ? expiresAt : undefined}
-          onShyIn={lit ? undefined : onShyIn}
-          onPress={lit ? onPress : undefined}
-        />
+        {tooFar ? (
+          <PressScale
+            accessibilityRole="button"
+            accessibilityLabel={t('venue.directionsA11y', { name: venue.name })}
+            onPress={() => void openDirections(venue)}
+            style={[styles.directions, { backgroundColor: theme.bg, borderColor: theme.border }]}
+          >
+            <Ionicons name="navigate" size={16} color={theme.accent} />
+            <Text style={[type.headline, { color: theme.text, fontSize: 15 }]} numberOfLines={1}>
+              {t('venue.directions')}
+            </Text>
+            <Text style={[type.caption, { color: theme.quiet }]} numberOfLines={1}>
+              {t('venue.tooFarHint')}
+            </Text>
+          </PressScale>
+        ) : (
+          <ShyInFlame
+            variant="inline"
+            venueName={venue.name}
+            theme={theme}
+            lit={lit}
+            loading={shyInLoading}
+            onShyIn={lit ? undefined : onShyIn}
+            onPress={lit ? onPress : undefined}
+          />
+        )}
       </View>
     </View>
   );
@@ -118,5 +141,15 @@ const styles = StyleSheet.create({
   },
   slide: {
     width: '100%',
+  },
+  directions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 48,
+    borderRadius: radius.pill,
+    borderCurve: 'continuous',
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: space[16],
   },
 });

@@ -21,6 +21,24 @@ export interface UserStats {
   chatsStarted: number;
 }
 
+export type Gender = 'male' | 'female';
+
+/**
+ * Owner-only document at users/{uid}/private/profile.
+ * Never rendered to other users — only the handle and photo are public.
+ */
+export interface PrivateProfile {
+  gender?: Gender;
+  /** ISO date (YYYY-MM-DD). Age shown publicly is derived once at save time. */
+  birthDate?: string;
+  email?: string;
+  city?: string;
+  /** Country of residence. */
+  country?: string;
+  nationality?: string;
+  updatedAt?: number;
+}
+
 export interface UserProfile {
   id: string;
   displayName: string;

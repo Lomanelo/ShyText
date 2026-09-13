@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 'AIzaSyAVnkBhxkzWdh2fLXsBMRDcRGYbY2KnBeE',
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || 'myshytext.firebaseapp.com',
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || 'auth.shytext.com',
   projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'myshytext',
   storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || 'myshytext.firebasestorage.app',
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '680911194317',

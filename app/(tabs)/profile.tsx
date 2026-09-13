@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
 import { Avatar } from '../../components/Avatar';
 import { PrimaryButton } from '../../components/PrimaryButton';
@@ -43,13 +44,22 @@ export default function ProfileScreen() {
           </Text>
           {profile?.bio ? <Text style={[type.body, { color: theme.muted, textAlign: 'center' }]}>{profile.bio}</Text> : null}
           {user?.phoneNumber ? (
-            <Text style={[type.caption, { color: theme.quiet }]}>{maskPhone(user.phoneNumber)}</Text>
+            <View style={styles.verifiedRow}>
+              <Text style={[type.caption, { color: theme.quiet }]}>{maskPhone(user.phoneNumber)}</Text>
+              <View style={[styles.verifiedChip, { backgroundColor: theme.accentSoft }]}>
+                <Ionicons name="checkmark-circle" size={13} color={theme.accent} />
+                <Text style={[type.caption, { color: theme.accent, fontWeight: '700' }]}>
+                  {t('profile.verifiedPhone')}
+                </Text>
+              </View>
+            </View>
           ) : null}
           <View style={{ alignSelf: 'stretch', marginTop: 8 }}>
             <PrimaryButton title={t('profile.edit')} theme={theme} variant="secondary" onPress={() => router.push('/settings/edit-profile')} />
           </View>
         </View>
         <Group theme={theme}>
+          <ListRow title={t('profile.howItWorks')} theme={theme} onPress={() => router.push('/how-it-works')} />
           <ListRow title={t('profile.settings')} theme={theme} last onPress={() => router.push('/settings')} />
         </Group>
       </ScrollView>
@@ -60,4 +70,13 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   wrap: { padding: 16, gap: 16, paddingBottom: 32 },
   card: { borderRadius: 16, borderCurve: 'continuous', padding: 22, alignItems: 'center', gap: 8 },
+  verifiedRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  verifiedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
 });

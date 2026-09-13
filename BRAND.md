@@ -76,7 +76,7 @@ Identical original character in every frame. Do not change the hoodie color, do 
 
 Flick is a **cartoon character, not a person**. Do **not** train a Soul. Soul is for human identity photos.
 
-1. Upload `assets/images/Mascot.png` via Higgsfield `media_upload` → confirm.
+1. Upload `lo/images/Mascot.png` via Higgsfield `media_upload` → confirm.
 2. Save as a **Reference Element** (`show_reference_elements`, create) named `flick-mascot`.
 3. Every still: `generate_image` with that element as the character reference (Nano Banana Pro / GPT Image 2 / Seedream — whatever `models_explore` recommends for “consistent 2D mascot + scene”).
 4. First production job after this file: a **turnaround + expression sheet** (Higgsfield workflow `character-sheet`, preset `anime-2d`, custom render: flat vector, black line, no gradient). Front, 3/4, side, back, plus phone-down / phone-up / pocket-hand.

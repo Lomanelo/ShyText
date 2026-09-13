@@ -9,6 +9,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
+  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -16,7 +17,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { brand, cardShadow, radius, Theme, type } from '../theme';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useTranslation } from 'react-i18next';
-import { timeLeft } from '../utils/dates';
 import { PressScale } from './PressScale';
 import { flameSource } from './flame-mark';
 
@@ -47,7 +47,6 @@ function LitStrip({
   venueName,
   trackH,
   mark,
-  expiresAt,
   onPress,
   onShyOut,
   accessory,
@@ -58,7 +57,6 @@ function LitStrip({
   venueName: string;
   trackH: number;
   mark: number;
-  expiresAt?: number | null;
   onPress?: () => void;
   onShyOut?: () => void;
   accessory?: ReactNode;
@@ -67,13 +65,7 @@ function LitStrip({
 }) {
   const { t } = useTranslation();
   const reduce = useReduceMotion();
-  const [, setTick] = useState(0);
   const breathe = useSharedValue(1);
-
-  useEffect(() => {
-    const id = setInterval(() => setTick((n) => n + 1), 30_000);
-    return () => clearInterval(id);
-  }, []);
 
   useEffect(() => {
     if (reduce || disabled) {
@@ -91,10 +83,8 @@ function LitStrip({
     transform: [{ scale: breathe.value }],
   }));
 
-  const remaining = expiresAt ? timeLeft(expiresAt) : null;
-  const status = remaining
-    ? t('venue.timeLeftLabel', { time: remaining })
-    : t('venue.shydIn');
+  // Activity-based Shyne: no countdown pressure — you stay lit while you stay active.
+  const status = t('venue.shyningHere');
   const a11y = t('venue.shydInA11y', { name: venueName });
 
   const body = (
@@ -171,7 +161,6 @@ export function ShyInFlame({
   lit = false,
   loading = false,
   disabled = false,
-  expiresAt,
   onShyIn,
   onShyOut,
   onPress,
@@ -183,7 +172,6 @@ export function ShyInFlame({
   lit?: boolean;
   loading?: boolean;
   disabled?: boolean;
-  expiresAt?: number | null;
   onShyIn?: () => void | Promise<void>;
   onShyOut?: () => void;
   onPress?: () => void;
@@ -214,6 +202,8 @@ export function ShyInFlame({
   const active = useSharedValue(0);
   const stripFade = useSharedValue(lit ? 1 : 0);
   const trackFade = useSharedValue(lit ? 0 : 1);
+  /** Periodic "try me" nudge so the slide affordance is unmissable. */
+  const nudge = useSharedValue(0);
 
   useEffect(() => {
     AccessibilityInfo.isScreenReaderEnabled().then(setReader);
@@ -224,6 +214,24 @@ export function ShyInFlame({
   const simple = reduce || reader;
   const showLit = lit || ignited || extinguishing;
   const locked = disabled || loading || !onShyIn || extinguishing;
+
+  useEffect(() => {
+    if (simple || showLit || locked) {
+      nudge.value = 0;
+      return;
+    }
+    nudge.value = withRepeat(
+      withSequence(
+        withTiming(0, { duration: 2400 }),
+        withTiming(9, { duration: 380, easing: Easing.inOut(Easing.quad) }),
+        withTiming(0, { duration: 460, easing: Easing.inOut(Easing.quad) })
+      ),
+      -1
+    );
+    return () => {
+      nudge.value = 0;
+    };
+  }, [simple, showLit, locked, nudge]);
 
   const resetSlider = useCallback(() => {
     committed.value = 0;
@@ -402,7 +410,7 @@ export function ShyInFlame({
 
   const thumbStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateX: slide.value },
+      { translateX: slide.value + (active.value || slide.value > 0 ? 0 : nudge.value) },
       {
         scale: (active.value ? 0.97 : 1) * grow.value,
       },
@@ -471,6 +479,8 @@ export function ShyInFlame({
             {
               height: trackH,
               backgroundColor: theme.bg,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: theme.border,
               opacity: variant === 'card' ? 0.92 : 1,
             },
           ]}
@@ -480,10 +490,11 @@ export function ShyInFlame({
             style={[styles.fill, { backgroundColor: theme.accent }, fillStyle]}
           />
           <Animated.View pointerEvents="none" style={[styles.hintWrap, hintStyle]}>
-            <Text style={[styles.hint, { color: theme.quiet, fontSize: hideName ? 14 : 15 }]} numberOfLines={1}>
+            <Text style={[styles.hint, { color: theme.muted, fontSize: hideName ? 14 : 15 }]} numberOfLines={1}>
               {loading ? t('common.shyingIn') : t('nearby.slideHint')}
             </Text>
-            <Ionicons name="chevron-forward" size={14} color={theme.quiet} style={{ opacity: 0.6 }} />
+            <Ionicons name="chevron-forward" size={15} color={theme.muted} />
+            <Ionicons name="chevron-forward" size={15} color={theme.muted} style={{ opacity: 0.45, marginLeft: -8 }} />
           </Animated.View>
           <GestureDetector gesture={simple ? tap : pan}>
             <Animated.View
@@ -539,7 +550,6 @@ export function ShyInFlame({
           venueName={venueName}
           trackH={trackH}
           mark={mark}
-          expiresAt={expiresAt}
           onPress={onPress}
           onShyOut={onShyOut}
           accessory={accessory}

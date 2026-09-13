@@ -23,7 +23,14 @@ import { Avatar } from '../../components/Avatar';
 import { type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { ChatMessage, Conversation } from '../../types/chat';
-import { closeConversation, ensureConversationOpen, listenConversation, listenMessages, sendMessage } from '../../services/chat';
+import {
+  closeConversation,
+  ensureConversationOpen,
+  listenConversation,
+  listenMessages,
+  markConversationRead,
+  sendMessage,
+} from '../../services/chat';
 import { setOpenChatId } from '../../services/openChat';
 import { getUserProfile } from '../../services/auth';
 import { rememberImage } from '../../services/imageCache';
@@ -63,6 +70,14 @@ export default function ChatScreen() {
     setOpenChatId(chatId);
     return () => setOpenChatId(null);
   }, [chatId]);
+
+  // Reading the thread clears the unread dot and badge counts.
+  useEffect(() => {
+    if (!chatId || !convo) return;
+    if (convo.lastSenderId && convo.lastSenderId !== user?.uid) {
+      void markConversationRead(chatId);
+    }
+  }, [chatId, convo?.lastMessageAt, convo?.lastSenderId, user?.uid]);
 
   useEffect(() => {
     const show = Keyboard.addListener(
