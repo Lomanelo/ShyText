@@ -1,0 +1,8 @@
+# Keep EAS upload lean (store screenshots + local tooling are not needed in the binary)
+store/
+.cursor/
+.agents/
+.impeccable/
+.expo/
+*.log
+agent-transcripts/

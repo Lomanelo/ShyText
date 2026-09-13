@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
-import { getUserProfile, sendPhoneVerification, confirmPhoneVerification } from '../services/auth';
+import { getUserProfile, confirmPhoneVerification } from '../services/auth';
 import { createBrowserRecaptchaVerifier } from '../services/phone-recaptcha';
+import { sendPhoneCodeNativeFirst } from '../services/phone-native';
 
 import i18n from '../i18n';
 
@@ -65,7 +66,7 @@ export function usePhoneAuth() {
     setLoading(true);
     setError(null);
     try {
-      const id = await sendPhoneVerification(phone, createBrowserRecaptchaVerifier());
+      const id = await sendPhoneCodeNativeFirst(phone, createBrowserRecaptchaVerifier());
       setVerificationId(id);
       setE164(phone);
       setStep('code');

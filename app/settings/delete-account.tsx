@@ -20,9 +20,9 @@ import {
   currentUserPhoneNumber,
   deleteOwnAccount,
   reauthenticateWithPhoneCode,
-  sendAccountPhoneVerification,
 } from '../../services/auth';
 import { createBrowserRecaptchaVerifier } from '../../services/phone-recaptcha';
+import { sendPhoneCodeNativeFirst } from '../../services/phone-native';
 import { authErrorMessage } from '../../hooks/usePhoneAuth';
 import { useTranslation } from 'react-i18next';
 
@@ -65,7 +65,7 @@ export default function DeleteAccountScreen() {
     setBusy(true);
     setError(null);
     try {
-      const id = await sendAccountPhoneVerification(createBrowserRecaptchaVerifier());
+      const id = await sendPhoneCodeNativeFirst(phone, createBrowserRecaptchaVerifier());
       setVerificationId(id);
       setStep('code');
       setCode('');

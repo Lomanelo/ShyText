@@ -47,26 +47,30 @@ Set `EXPO_PUBLIC_DEV_MODE=true` in `.env` for demo venues (Paddy's Corner) and s
 npx firebase deploy --only firestore:rules,firestore:indexes
 ```
 
-6. Phone auth uses a reCAPTCHA page at `https://auth.shytext.com/phone-recaptcha.html` (falls back to `myshytext.firebaseapp.com` until DNS is live). Deploy with `npx firebase deploy --only hosting --project myshytext`.
+6. Phone auth uses native Firebase Auth (`@react-native-firebase/auth`) so iOS can verify via **silent APNs** and SMS can show **ShyText** (App Store name). Browser reCAPTCHA at `https://auth.shytext.com/phone-recaptcha.html` remains a fallback. Deploy hosting with `npx firebase deploy --only hosting --project myshytext`.
 
 ### Custom auth domain (`auth.shytext.com`)
 
-Firebase does not let you rewrite the SMS sentence. The Expo reCAPTCHA flow uses your Auth domain in the text, so `auth.shytext.com` is what makes the message look clean.
+Used for the reCAPTCHA fallback URL and Auth authorized domains.
 
 Already done in Firebase:
-- Hosting custom domain registered: `auth.shytext.com`
+- Hosting custom domain: `auth.shytext.com` (A → `199.36.158.100`, TXT `hosting-site=myshytext`)
 - Auth authorized domains include `auth.shytext.com` and `shytext.com`
-- App defaults `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` and recaptcha URL to `auth.shytext.com`
+- Native iOS/Android apps registered (`GoogleService-Info.plist`, `google-services.json`)
 
-**You still need one DNS record** at your domain registrar / DNS host for `shytext.com`:
+### APNs for “ShyText” in SMS (required)
 
-| Type | Host / Name | Value / Points to |
-| --- | --- | --- |
-| CNAME | `auth` | `myshytext.web.app` |
+If SMS says `myshytext.firebaseapp.com`, Firebase used **reCAPTCHA**, not silent APNs. A new app binary alone does **not** fix this.
 
-Do not proxy/orange-cloud it on Cloudflare (DNS only), or SSL may fail. After DNS propagates (often minutes, up to 24h), Firebase will mint SSL and SMS will say `auth.shytext.com` instead of `myshytext.firebaseapp.com`.
+Without an APNs auth key uploaded to Firebase, iOS always falls back to reCAPTCHA and `%APP_NAME%` becomes `myshytext.firebaseapp.com` (custom auth domain does not change that).
 
-Leave the apex `shytext.com` on your marketing host — only the `auth` subdomain goes to Firebase.
+1. Apple Developer → Keys → create (or reuse) an **Apple Push Notifications service (APNs)** `.p8` key.
+2. Firebase Console → Project settings → **Cloud Messaging** → your iOS app → **APNs authentication key** → Upload (`.p8` + Key ID + Team ID `5ZFG6BQDFL`).
+3. Test on a **physical device** with Background App Refresh on (Simulator always uses reCAPTCHA).
+4. You should **not** get a Safari/reCAPTCHA sheet when requesting the code. If you do, APNs still isn’t working.
+5. Ship a native build that includes `@react-native-firebase/auth` (already required). After the APNs key is uploaded, you usually do **not** need another rebuild — just retry phone login.
+
+Leave the apex `shytext.com` on your marketing host — only `auth` goes to Firebase Hosting.
 
 ## 4. Environment variables
 

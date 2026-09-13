@@ -11,7 +11,8 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.rahimrady.myshytext",
-      "buildNumber": "31",
+      "buildNumber": "32",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "requireFullScreen": true,
       "infoPlist": {
         "CFBundleAllowMixedLocalizations": true,
@@ -19,7 +20,8 @@
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
-              "com.rahimrady.myshytext"
+              "com.rahimrady.myshytext",
+              "com.googleusercontent.apps.680911194317-g3amhmkgvie7gdmdcalkn14p46ralg1h"
             ]
           }
         ],
@@ -36,6 +38,7 @@
     },
     "android": {
       "package": "com.rahimrady.myshytext",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#FCF3E8"
@@ -125,7 +128,17 @@
       "expo-secure-store",
       "expo-dev-client",
       "./plugins/with-siri-check-in",
-      "expo-image"
+      "expo-image",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "dynamic"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false

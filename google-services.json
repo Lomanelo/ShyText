@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "680911194317",
+    "firebase_url": "https://myshytext-default-rtdb.firebaseio.com",
+    "project_id": "myshytext",
+    "storage_bucket": "myshytext.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:680911194317:android:23f83aa1096dbaa77cc184",
+        "android_client_info": {
+          "package_name": "com.rahimrady.myshytext"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "680911194317-p9h15n8unj1dosd684i6qaina3n2rdam.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAsNYk7NBo1JylP9A3uJoqyRlnqnBKCVZU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "680911194317-p9h15n8unj1dosd684i6qaina3n2rdam.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "680911194317-g3amhmkgvie7gdmdcalkn14p46ralg1h.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.rahimrady.myshytext"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
