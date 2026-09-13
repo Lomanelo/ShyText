@@ -1,4 +1,4 @@
-import type { Config, Context } from '@netlify/functions';
+﻿import type { Config, Context } from '@netlify/functions';
 
 const FIREBASE_API_KEY = 'AIzaSyAVnkBhxkzWdh2fLXsBMRDcRGYbY2KnBeE';
 const DATABASE_URL = 'https://myshytext-default-rtdb.firebaseio.com';
@@ -67,7 +67,7 @@ async function handleNotify(user: AuthedUser, payload: any) {
 
 async function handleReport(user: AuthedUser, payload: any) {
   const secret = Netlify.env.get('FIREBASE_DATABASE_SECRET');
-  const inbox = Netlify.env.get('REPORT_INBOX') || 'shytext.info@gmail.com';
+  const inbox = Netlify.env.get('REPORT_INBOX') || 'hello@shytext.com';
   const report = {
     reporterId: user.uid,
     targetType: payload.targetType,

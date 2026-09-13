@@ -1,6 +1,6 @@
-export const PRIVACY_POLICY_TEXT = `Last updated: August 31, 2026
+﻿export const PRIVACY_POLICY_TEXT = `Last updated: August 31, 2026
 
-ShyText is a venue check-in app operated by an independent developer (shytext.info@gmail.com). It helps people check into a place they are in, send a short ShyText to someone else checked in there, and chat privately if they accept. It is not a dating app and does not show a public social feed.
+ShyText is a venue check-in app operated by an independent developer (hello@shytext.com). It helps people check into a place they are in, send a short ShyText to someone else checked in there, and chat privately if they accept. It is not a dating app and does not show a public social feed.
 
 1. Data we collect
 - Account: mobile phone number (for sign-in and verification only — other people never see it), first name, optional profile photo.
@@ -23,13 +23,13 @@ Data is stored in Firebase (Google): Authentication, Realtime Database, and Stor
 Notes expire after 60 minutes. Presence expires after 60 minutes. Account deletion removes your profile, notes, presence, conversations you started or joined, push token, and avatar. We may keep reports for safety review.
 
 6. Your rights
-You can access, correct, or delete your account in the app (You → Account Settings → Delete Account). You may also email shytext.info@gmail.com. GDPR and CCPA rights apply where those laws do.
+You can access, correct, or delete your account in the app (You → Account Settings → Delete Account). You may also email hello@shytext.com. GDPR and CCPA rights apply where those laws do.
 
 7. Children
 ShyText is 17+. We do not knowingly collect data from anyone under 17.
 
 8. Contact
-shytext.info@gmail.com`;
+hello@shytext.com`;
 
 export const TERMS_OF_SERVICE_TEXT = `Last updated: August 31, 2026
 
@@ -45,7 +45,7 @@ You must be at least 17. Accounts are created with a mobile phone number and SMS
 Do not harass, threaten, impersonate, spam, solicit sex, share others' private information, or use the app for illegal activity. We may remove content and accounts that break these rules.
 
 4. Safety
-You can block and report users. We review reports at shytext.info@gmail.com. We are not responsible for other users' conduct, including if you choose to meet in person. Meet in public and use your judgment.
+You can block and report users. We review reports at hello@shytext.com. We are not responsible for other users' conduct, including if you choose to meet in person. Meet in public and use your judgment.
 
 5. Content
 You own your notes and messages. You grant us a limited license to host and deliver them so the product works. Notes expire. Do not post anything you do not have the right to share.
@@ -57,4 +57,4 @@ Location is optional. Denying it does not lock you out — use manual place entr
 The service is provided as-is. We do not guarantee that someone will be at a venue or that a note will receive a reply.
 
 8. Contact
-shytext.info@gmail.com`;
+hello@shytext.com`;

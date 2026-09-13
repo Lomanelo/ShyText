@@ -1,4 +1,4 @@
-# App Store / Play review notes
+﻿# App Store / Play review notes
 
 Use this when submitting via EAS / App Store Connect.
 
@@ -20,7 +20,7 @@ ShyText is a **Social Networking** venue check-in. People check into a place, se
 - Content filter: `src/lib/moderation.ts` on notes and messages
 - Report: note cards, chat header flag, reports stored + emailed via `/api/report`
 - Block: chat lock icon; blocked authors are hidden from Here
-- Contact: shytext.info@gmail.com and Help & Support in You
+- Contact: hello@shytext.com and Help & Support in You
 
 ## Demo for reviewers
 
