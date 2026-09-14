@@ -30,6 +30,7 @@ import { recordVenueShyText } from './venueHeat';
 import { moderateText } from './moderation';
 import { prefetchProfileImage } from './imageCache';
 import { rememberVenueImage } from './venueImageCache';
+import { notifyUser } from './notifications';
 import i18n from '../i18n';
 
 function isInternalVenueId(id: string) {
@@ -257,6 +258,15 @@ export async function checkInToVenue(
     latitude: internal.latitude,
     longitude: internal.longitude,
   }).catch(() => undefined);
+
+  // Best-effort: tell others already lit here that someone new just Shyned.
+  void notifyPeersOfNewShyne({
+    venueId: internal.id,
+    venueName: internal.name,
+    arriverId: user.uid,
+    arriverName: extras?.displayName ?? undefined,
+  });
+
   return {
     checkIn: {
       id: ref.id,
@@ -272,6 +282,51 @@ export async function checkInToVenue(
     },
     venue: internal,
   };
+}
+
+/** Push everyone still Shyned at this venue (except the arriver + blocks). */
+async function notifyPeersOfNewShyne(input: {
+  venueId: string;
+  venueName: string;
+  arriverId: string;
+  arriverName?: string;
+}) {
+  try {
+    const snap = await getDocs(query(collection(db, 'checkins'), where('venueId', '==', input.venueId)));
+    const now = Date.now();
+    const name = input.arriverName?.trim() || i18n.t('common.someone');
+    const peers = snap.docs
+      .map((item) => mapCheckIn(item.id, item.data()))
+      .filter(
+        (item) =>
+          item.userId !== input.arriverId &&
+          !item.userId.startsWith('seed-') &&
+          isLiveCheckIn(item, now)
+      );
+
+    await Promise.all(
+      peers.map(async (peer) => {
+        try {
+          if (await isBlockedEitherWay(input.arriverId, peer.userId)) return;
+          await notifyUser(
+            peer.userId,
+            {
+              titleKey: 'push.coShyneTitle',
+              bodyKey: 'push.coShyneBody',
+              titleParams: { name },
+              bodyParams: { name, venue: input.venueName },
+              data: { venueId: input.venueId },
+            },
+            'coShyne'
+          );
+        } catch {
+          // One peer failing must not block the rest.
+        }
+      })
+    );
+  } catch {
+    // Push is best-effort.
+  }
 }
 
 /**

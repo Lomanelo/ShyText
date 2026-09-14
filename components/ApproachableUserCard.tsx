@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
@@ -10,6 +10,7 @@ import { cardShadow, radius, space, Theme, type } from '../theme';
 import { remainingCompact } from '../utils/dates';
 import { prefetchProfileImage } from '../services/imageCache';
 import { Avatar } from './Avatar';
+import { AvatarLightbox } from './AvatarLightbox';
 import { PressScale } from './PressScale';
 import { CheckIn } from '../types/venue';
 import type { VenueContactMode } from '../hooks/useVenueContacts';
@@ -32,6 +33,7 @@ export function ApproachableUserCard({
   onReport: () => void;
 }) {
   const { t } = useTranslation();
+  const [zoom, setZoom] = useState(false);
   const name = person.age
     ? `${person.displayName ?? t('common.someone')}, ${person.age}`
     : person.displayName ?? t('common.someone');
@@ -95,7 +97,14 @@ export function ApproachableUserCard({
     >
       <View style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}>
         <View style={styles.top}>
-          <Avatar name={person.displayName} uri={person.avatarUrl} userId={person.userId} theme={theme} size={56} />
+          <Pressable
+            onPress={() => setZoom(true)}
+            accessibilityRole="imagebutton"
+            accessibilityLabel={t('a11y.viewPhoto', { name: person.displayName ?? t('common.someone') })}
+            hitSlop={4}
+          >
+            <Avatar name={person.displayName} uri={person.avatarUrl} userId={person.userId} theme={theme} size={56} />
+          </Pressable>
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={[type.headline, { color: theme.text }]}>{name}</Text>
             <Text style={[type.caption, { color: theme.accent, fontWeight: '600', fontVariant: ['tabular-nums'] }]}>
@@ -147,6 +156,15 @@ export function ApproachableUserCard({
           </Pressable>
         </View>
       </View>
+
+      <AvatarLightbox
+        visible={zoom}
+        name={person.displayName}
+        uri={person.avatarUrl}
+        userId={person.userId}
+        theme={theme}
+        onClose={() => setZoom(false)}
+      />
     </Swipeable>
   );
 }

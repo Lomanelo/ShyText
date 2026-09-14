@@ -194,7 +194,9 @@
     "deleteChat": "Delete chat",
     "deleteChatTitle": "Delete this chat?",
     "deleteChatBody": "It disappears from your list. If they message you again, it comes back.",
-    "rowOptionsHint": "Long press to pin or delete"
+    "rowOptionsHint": "Long press to pin or delete",
+    "accountDeleted": "Account deleted",
+    "accountDeletedBody": "This account is gone. You can still read the chat."
   },
   "profile": {
     "edit": "Edit profile",
@@ -232,6 +234,8 @@
     "newChatSub": "When someone texts you and you’re not in that chat",
     "checkInEnding": "Shyne ending",
     "checkInEndingSub": "About 5 minutes before you go quiet",
+    "coShyne": "Someone Shynes here",
+    "coShyneSub": "When another person lights up at your venue",
     "deleteTitle": "Delete account",
     "deleteBody": "This permanently removes your photo, name, bio, and profile. Any active Shyne ends immediately. Chats you already started stay with the other person, but your profile will no longer appear.",
     "deleteBody2": "You will need to sign in with your phone number again to create a new account.",
@@ -279,6 +283,8 @@
     "chatBody": "{{message}}",
     "endingTitle": "Shyne ending",
     "endingBody": "Open ShyText in the next 5 minutes to stay visible.",
+    "coShyneTitle": "{{name}} just Shyned in too",
+    "coShyneBody": "You’re both lit at {{venue}} — still time to say hi.",
     "openToReadOpen": "Tap to view it.",
     "acceptedBodyOpen": "Tap to open the chat.",
     "chatBodyOpen": "Tap to read it."

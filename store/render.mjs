@@ -29,9 +29,11 @@ const PAPER = '#FCF3E8';
 const INK = '#1C120E';
 const MUTED = '#6B5344';
 const FLAME = '#D05927';
-const LINEC = '#E9DCCC';
+/** Story-bar track — ink wash readable on warm paper (old LINEC vanished). */
+const BAR_TRACK = '#C9B5A3';
 const BEZEL = '#141210';
 const STATUS = '#F6F1EA';
+const CARD_COUNT = 6;
 
 function dataUri(path, mime) {
   const buf = readFileSync(path);
@@ -59,17 +61,34 @@ function screenUri(cardId) {
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
 
-function storyBars(lit) {
-  const groupW = 520;
-  const gap = 12;
-  const barW = (groupW - gap * 2) / 3;
-  const x0 = (W - groupW) / 2;
-  return [0, 1, 2]
-    .map((i) => {
-      const x = x0 + i * (barW + gap);
-      return `<rect x="${x}" y="150" width="${barW}" height="9" rx="4.5" fill="${i < lit ? FLAME : LINEC}"/>`;
-    })
-    .join('\n');
+/**
+ * Instagram / in-app story bars: thin near-edge tracks with flame fills.
+ * Matches `app/(auth)/welcome.tsx` StoryBar (track + left-origin fill),
+ * scaled for App Store canvas — one segment per card.
+ */
+function storyBars(current /* 1-indexed */) {
+  const count = CARD_COUNT;
+  const side = 72;
+  const gap = 10;
+  const groupW = W - side * 2;
+  const barW = (groupW - gap * (count - 1)) / count;
+  const y = 172;
+  const h = 10;
+  const rx = 5;
+  const x0 = side;
+
+  return Array.from({ length: count }, (_, i) => {
+    const x = x0 + i * (barW + gap);
+    // Same rule as welcome: completed + current fully lit.
+    const lit = i < current;
+    return `
+      <rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="${rx}" fill="${BAR_TRACK}"/>
+      ${
+        lit
+          ? `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="${rx}" fill="${FLAME}"/>`
+          : ''
+      }`;
+  }).join('\n');
 }
 
 function titleBlock({ lines, echo, y, size = 104, lineHeight = 114 }) {
@@ -204,7 +223,7 @@ const CARDS = [
   },
   {
     id: 3,
-    lit: 2,
+    lit: 3,
     lines: ['See who’s', 'open here.'],
     echo: 'Nobody shows up by accident.',
     y: 380,
@@ -213,7 +232,7 @@ const CARDS = [
   },
   {
     id: 4,
-    lit: 3,
+    lit: 4,
     lines: ['One note.', 'One person.'],
     echo: 'No feed. No swiping. No map.',
     y: 380,
@@ -222,7 +241,7 @@ const CARDS = [
   },
   {
     id: 5,
-    lit: 3,
+    lit: 5,
     lines: ['They accept.', 'You chat.'],
     echo: 'The rest happens offline.',
     y: 380,
@@ -231,7 +250,7 @@ const CARDS = [
   },
   {
     id: 6,
-    lit: 3,
+    lit: 6,
     lines: ['Never on a map.'],
     echo: 'A venue name — never a pin.',
     y: 900,

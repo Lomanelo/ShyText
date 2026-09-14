@@ -194,7 +194,9 @@
     "deleteChat": "Excluir conversa",
     "deleteChatTitle": "Excluir esta conversa?",
     "deleteChatBody": "Ela some da sua lista. Se te escreverem de novo, ela volta.",
-    "rowOptionsHint": "Segure para fixar ou excluir"
+    "rowOptionsHint": "Segure para fixar ou excluir",
+    "accountDeleted": "Conta excluída",
+    "accountDeletedBody": "Esta conta não existe mais. Você ainda pode ler o chat."
   },
   "profile": {
     "edit": "Editar perfil",
@@ -232,6 +234,8 @@
     "newChatSub": "Quando alguém te escreve e você não está nesse chat",
     "checkInEnding": "Shyne acabando",
     "checkInEndingSub": "Uns 5 minutos antes de você ficar em silêncio",
+    "coShyne": "Alguém faz Shyne aqui",
+    "coShyneSub": "Quando outra pessoa acende no seu lugar",
     "deleteTitle": "Excluir conta",
     "deleteBody": "Isso remove para sempre sua foto, nome, bio e perfil. Qualquer Shyne ativo termina na hora. Os chats que você já começou ficam com a outra pessoa, mas seu perfil não aparece mais.",
     "deleteBody2": "Você vai precisar entrar de novo com seu número para criar uma conta nova.",
@@ -279,6 +283,8 @@
     "chatBody": "{{message}}",
     "endingTitle": "Shyne acabando",
     "endingBody": "Abra o ShyText nos próximos 5 minutos para continuar visível.",
+    "coShyneTitle": "{{name}} também acabou de fazer Shyne",
+    "coShyneBody": "Vocês dois estão acesos em {{venue}} — ainda dá tempo de dizer oi.",
     "openToReadOpen": "Toque para ver.",
     "acceptedBodyOpen": "Toque para abrir o chat.",
     "chatBodyOpen": "Toque para ler."

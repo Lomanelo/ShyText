@@ -20,6 +20,7 @@ import { Screen } from '../../components/Screen';
 import { ReportModal } from '../../components/ReportModal';
 import { PressScale } from '../../components/PressScale';
 import { Avatar } from '../../components/Avatar';
+import { AvatarLightbox } from '../../components/AvatarLightbox';
 import { type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { ChatMessage, Conversation } from '../../types/chat';
@@ -60,10 +61,17 @@ export default function ChatScreen() {
   const [otherName, setOtherName] = useState(t('common.chat'));
   const [otherAvatar, setOtherAvatar] = useState<string>();
   const [otherId, setOtherId] = useState<string>();
+  const [otherDeleted, setOtherDeleted] = useState(false);
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [report, setReport] = useState(false);
-  const canSend = Boolean(convo);
+  const [zoom, setZoom] = useState(false);
+  const canSend = Boolean(convo) && !otherDeleted;
+
+  const openZoom = () => {
+    if (otherDeleted) return;
+    setZoom(true);
+  };
 
   useEffect(() => {
     if (!chatId) return;
@@ -105,18 +113,35 @@ export default function ChatScreen() {
       setConvo(next);
       const other = next?.participantIds.find((id) => id !== user?.uid);
       setOtherId(other);
-      if (next?.otherName) setOtherName(next.otherName);
-      if (next?.otherAvatarUrl) {
-        rememberImage([next.otherAvatarUrl], next.otherAvatarUrl);
-        setOtherAvatar(next.otherAvatarUrl);
+      if (!other) {
+        setOtherDeleted(false);
+        return;
       }
-      if (other) {
-        const profile = await getUserProfile(other).catch(() => null);
-        setOtherName(profile?.displayName ?? next?.otherName ?? t('common.someone'));
-        if (profile?.avatarUrl) {
-          rememberImage([other, profile.avatarUrl], profile.avatarUrl);
-          setOtherAvatar(profile.avatarUrl);
+      const profile = await getUserProfile(other).catch(() => undefined);
+      if (profile === undefined) {
+        // Offline / transient — keep denormalized snapshot.
+        setOtherDeleted(false);
+        setOtherName(next?.otherName || t('common.someone'));
+        if (next?.otherAvatarUrl) {
+          rememberImage([other, next.otherAvatarUrl], next.otherAvatarUrl);
+          setOtherAvatar(next.otherAvatarUrl);
         }
+        return;
+      }
+      if (!profile) {
+        setOtherDeleted(true);
+        setOtherName(t('chats.accountDeleted'));
+        setOtherAvatar(undefined);
+        return;
+      }
+      setOtherDeleted(false);
+      setOtherName(profile.displayName || next?.otherName || t('common.someone'));
+      const avatarUrl = profile.avatarUrl || next?.otherAvatarUrl || undefined;
+      if (avatarUrl) {
+        rememberImage([other, avatarUrl], avatarUrl);
+        setOtherAvatar(avatarUrl);
+      } else {
+        setOtherAvatar(undefined);
       }
     });
     const unsubMessages = listenMessages(chatId, (next) => {
@@ -183,12 +208,28 @@ export default function ChatScreen() {
       <Stack.Screen
         options={{
           headerTitle: () => (
-            <View style={styles.head}>
-              <Avatar name={otherName} uri={otherAvatar} userId={otherId} theme={theme} size={28} />
-              <Text style={[type.headline, { color: theme.text }]} numberOfLines={1}>
+            <Pressable
+              onPress={openZoom}
+              disabled={otherDeleted}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={t('a11y.viewPhoto', { name: otherName })}
+              style={styles.head}
+              hitSlop={4}
+            >
+              <Avatar
+                name={otherName}
+                uri={otherDeleted ? undefined : otherAvatar}
+                userId={otherDeleted ? undefined : otherId}
+                theme={theme}
+                size={28}
+              />
+              <Text
+                style={[type.headline, { color: otherDeleted ? theme.muted : theme.text }]}
+                numberOfLines={1}
+              >
                 {otherName}
               </Text>
-            </View>
+            </Pressable>
           ),
           headerRight: () => (
             <Pressable
@@ -253,7 +294,23 @@ export default function ChatScreen() {
                 >
                   {!mine ? (
                     <View style={{ width: 28, marginRight: 6 }}>
-                      {stacked ? null : <Avatar name={otherName} uri={otherAvatar} userId={otherId} theme={theme} size={28} />}
+                      {stacked ? null : (
+                        <Pressable
+                          onPress={openZoom}
+                          disabled={otherDeleted}
+                          accessibilityRole="imagebutton"
+                          accessibilityLabel={t('a11y.viewPhoto', { name: otherName })}
+                          hitSlop={4}
+                        >
+                          <Avatar
+                            name={otherName}
+                            uri={otherDeleted ? undefined : otherAvatar}
+                            userId={otherDeleted ? undefined : otherId}
+                            theme={theme}
+                            size={28}
+                          />
+                        </Pressable>
+                      )}
                     </View>
                   ) : null}
                   <View
@@ -278,7 +335,22 @@ export default function ChatScreen() {
             {error}
           </Text>
         ) : null}
-        {canSend ? (
+        {otherDeleted ? (
+          <Text
+            style={[
+              type.caption,
+              {
+                color: theme.quiet,
+                textAlign: 'center',
+                paddingHorizontal: 24,
+                paddingVertical: 12,
+                marginBottom: Math.max(insets.bottom, 12),
+              },
+            ]}
+          >
+            {t('chats.accountDeletedBody')}
+          </Text>
+        ) : canSend ? (
           <View
             style={[
               styles.composer,
@@ -324,6 +396,16 @@ export default function ChatScreen() {
         targetType={otherId ? 'user' : 'message'}
         targetId={otherId ?? chatId ?? ''}
       />
+      {!otherDeleted ? (
+        <AvatarLightbox
+          visible={zoom}
+          name={otherName}
+          uri={otherAvatar}
+          userId={otherId}
+          theme={theme}
+          onClose={() => setZoom(false)}
+        />
+      ) : null}
     </Screen>
   );
 }

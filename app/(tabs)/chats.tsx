@@ -38,6 +38,7 @@ export default function ChatsScreen() {
   const { conversations } = useChats(user?.uid);
   const [names, setNames] = useState<Record<string, string>>({});
   const [avatars, setAvatars] = useState<Record<string, string>>({});
+  const [deletedPeers, setDeletedPeers] = useState<Record<string, true>>({});
   const [hidden, setHidden] = useState<Record<string, true>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,25 +55,39 @@ export default function ChatsScreen() {
     (async () => {
       const nextNames: Record<string, string> = {};
       const nextAvatars: Record<string, string> = {};
+      const nextDeleted: Record<string, true> = {};
       for (const convo of conversations) {
-        if (convo.otherName) nextNames[convo.id] = convo.otherName;
-        if (convo.otherAvatarUrl) {
-          nextAvatars[convo.id] = convo.otherAvatarUrl;
-          prefetchProfileImage([convo.otherAvatarUrl], convo.otherAvatarUrl);
-        }
         const other = convo.participantIds.find((id) => id !== user.uid);
         if (!other) continue;
-        const profile = await getUserProfile(other).catch(() => null);
+        let profile: Awaited<ReturnType<typeof getUserProfile>> | undefined;
+        try {
+          profile = await getUserProfile(other);
+        } catch {
+          // Offline / transient — keep denormalized label, don't claim deleted.
+          nextNames[convo.id] = convo.otherName || t('common.someone');
+          if (convo.otherAvatarUrl) {
+            nextAvatars[convo.id] = convo.otherAvatarUrl;
+            prefetchProfileImage([other, convo.otherAvatarUrl], convo.otherAvatarUrl);
+          }
+          continue;
+        }
         if (cancelled) return;
-        nextNames[convo.id] = profile?.displayName ?? nextNames[convo.id] ?? t('common.someone');
-        if (profile?.avatarUrl) {
-          nextAvatars[convo.id] = profile.avatarUrl;
-          prefetchProfileImage([other, profile.avatarUrl], profile.avatarUrl);
+        if (!profile) {
+          nextNames[convo.id] = t('chats.accountDeleted');
+          nextDeleted[convo.id] = true;
+          continue;
+        }
+        nextNames[convo.id] = profile.displayName || convo.otherName || t('common.someone');
+        const avatarUrl = profile.avatarUrl || convo.otherAvatarUrl;
+        if (avatarUrl) {
+          nextAvatars[convo.id] = avatarUrl;
+          prefetchProfileImage([other, avatarUrl], avatarUrl);
         }
       }
       if (!cancelled) {
         setNames(nextNames);
         setAvatars(nextAvatars);
+        setDeletedPeers(nextDeleted);
       }
     })();
     return () => {
@@ -215,7 +230,9 @@ export default function ChatsScreen() {
               {conversations.map((convo, index) => {
                 const unread = user ? isConversationUnread(convo, user.uid) : false;
                 const pinned = user ? isConversationPinnedBy(convo, user.uid) : false;
+                const peerGone = Boolean(deletedPeers[convo.id]);
                 const label = names[convo.id] || t('chats.privateChat');
+                const otherId = convo.participantIds.find((id) => id !== user?.uid);
                 return (
                   <PressScale
                     key={convo.id}
@@ -235,15 +252,18 @@ export default function ChatsScreen() {
                   >
                     <Avatar
                       name={label}
-                      uri={avatars[convo.id]}
-                      userId={convo.participantIds.find((id) => id !== user?.uid)}
+                      uri={peerGone ? undefined : avatars[convo.id]}
+                      userId={peerGone ? undefined : otherId}
                       theme={theme}
                       size={48}
                     />
                     <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <Text
-                          style={[type.headline, { color: theme.text, flexShrink: 1 }]}
+                          style={[
+                            type.headline,
+                            { color: peerGone ? theme.muted : theme.text, flexShrink: 1 },
+                          ]}
                           numberOfLines={1}
                         >
                           {label}

@@ -194,7 +194,9 @@
     "deleteChat": "Chat löschen",
     "deleteChatTitle": "Diesen Chat löschen?",
     "deleteChatBody": "Er verschwindet aus deiner Liste. Schreibt die Person wieder, kommt er zurück.",
-    "rowOptionsHint": "Lange drücken zum Anpinnen oder Löschen"
+    "rowOptionsHint": "Lange drücken zum Anpinnen oder Löschen",
+    "accountDeleted": "Konto gelöscht",
+    "accountDeletedBody": "Dieses Konto gibt es nicht mehr. Du kannst den Chat weiter lesen."
   },
   "profile": {
     "edit": "Profil bearbeiten",
@@ -232,6 +234,8 @@
     "newChatSub": "Wenn dir jemand schreibt und du nicht in dem Chat bist",
     "checkInEnding": "Shyne endet",
     "checkInEndingSub": "Etwa 5 Minuten, bevor du still wirst",
+    "coShyne": "Jemand macht Shyne hier",
+    "coShyneSub": "Wenn eine andere Person an deinem Ort aufleuchtet",
     "deleteTitle": "Konto löschen",
     "deleteBody": "Das entfernt dauerhaft dein Foto, deinen Namen, deine Bio und dein Profil. Jedes aktive Shyne endet sofort. Chats, die ihr schon gestartet habt, bleiben bei der anderen Person, aber dein Profil erscheint nicht mehr.",
     "deleteBody2": "Du musst dich mit deiner Nummer neu anmelden, um ein neues Konto zu erstellen.",
@@ -279,6 +283,8 @@
     "chatBody": "{{message}}",
     "endingTitle": "Shyne endet",
     "endingBody": "Öffne ShyText in den nächsten 5 Minuten, um sichtbar zu bleiben.",
+    "coShyneTitle": "{{name}} hat auch gerade Shyne gemacht",
+    "coShyneBody": "Ihr seid beide an {{venue}} — noch Zeit fürs Hallo.",
     "openToReadOpen": "Tippen zum Ansehen.",
     "acceptedBodyOpen": "Tippen, um den Chat zu öffnen.",
     "chatBodyOpen": "Tippen zum Lesen."

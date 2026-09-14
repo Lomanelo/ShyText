@@ -69,6 +69,13 @@ export default function NotificationSettingsScreen() {
             value={prefs.checkInEnding}
             onValueChange={(value) => void setPref('checkInEnding', value)}
             theme={theme}
+          />
+          <SwitchRow
+            title={t('settings.coShyne')}
+            subtitle={t('settings.coShyneSub')}
+            value={prefs.coShyne}
+            onValueChange={(value) => void setPref('coShyne', value)}
+            theme={theme}
             last
           />
         </Group>

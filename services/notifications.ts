@@ -29,12 +29,12 @@ Notifications.setNotificationHandler({
   },
 });
 
-export type PushKind = 'shytexts' | 'accepted' | 'chats';
+export type PushKind = 'shytexts' | 'accepted' | 'chats' | 'coShyne';
 
 type PushPayload = {
-  titleKey: 'push.shytextTitle' | 'push.acceptedTitle' | 'push.chatTitle';
-  /** Localized body key for requests / accept. Chat messages use bodyText instead. */
-  bodyKey?: 'push.openToRead' | 'push.acceptedBody' | 'push.chatBody';
+  titleKey: 'push.shytextTitle' | 'push.acceptedTitle' | 'push.chatTitle' | 'push.coShyneTitle';
+  /** Localized body key for requests / accept / co-shyne. Chat messages use bodyText instead. */
+  bodyKey?: 'push.openToRead' | 'push.acceptedBody' | 'push.chatBody' | 'push.coShyneBody';
   /** Raw message preview for ongoing chat notifications (Instagram-style). */
   bodyText?: string;
   titleParams?: Record<string, string>;
@@ -110,6 +110,11 @@ export function listenNotificationTaps() {
     const chatId = data.chatId;
     if (typeof chatId === 'string' && chatId.length > 0) {
       router.push(`/chat/${chatId}`);
+      return;
+    }
+    const venueId = data.venueId;
+    if (data.kind === 'coShyne' && typeof venueId === 'string' && venueId.length > 0) {
+      router.push(`/venue/${venueId}`);
       return;
     }
     if (data.kind === 'shytexts' || data.kind === 'accepted') {

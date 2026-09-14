@@ -7,6 +7,8 @@ export type NotificationPrefs = {
   accepted: boolean;
   chats: boolean;
   checkInEnding: boolean;
+  /** Someone else Shynes while you’re already lit at the same venue. */
+  coShyne: boolean;
 };
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
@@ -14,6 +16,7 @@ export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
   accepted: true,
   chats: true,
   checkInEnding: true,
+  coShyne: true,
 };
 
 export interface UserStats {
