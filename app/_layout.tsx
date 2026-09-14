@@ -67,7 +67,10 @@ export default function RootLayout() {
           <Stack.Screen name="chat/[chatId]" options={{ headerShown: true, title: t('common.chat') }} />
           <Stack.Screen name="requests/index" options={{ headerShown: false }} />
           <Stack.Screen name="settings/index" options={{ headerShown: true, title: t('settings.title') }} />
-          <Stack.Screen name="settings/edit-profile" options={{ headerShown: true, title: t('profile.edit') }} />
+          <Stack.Screen
+            name="settings/edit-profile"
+            options={{ headerShown: true, title: t('profile.edit'), headerBackButtonMenuEnabled: false }}
+          />
           <Stack.Screen name="settings/notifications" options={{ headerShown: true, title: t('settings.notifications') }} />
           <Stack.Screen name="settings/privacy" options={{ headerShown: true, title: t('settings.privacy') }} />
           <Stack.Screen name="settings/blocked-users" options={{ headerShown: true, title: t('settings.blocked') }} />

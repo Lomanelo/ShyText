@@ -28,7 +28,13 @@ export function notificationPrefsOf(profile?: UserProfile | null): NotificationP
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   const snap = await getDoc(doc(db, 'users', uid));
   if (!snap.exists()) return null;
-  return { id: snap.id, ...snap.data() } as UserProfile;
+  const data = snap.data();
+  const bioRaw = data.bio;
+  const bio =
+    bioRaw == null || bioRaw === ''
+      ? undefined
+      : String(bioRaw).trim() || undefined;
+  return { id: snap.id, ...data, bio } as UserProfile;
 }
 
 /**

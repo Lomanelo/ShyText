@@ -35,9 +35,11 @@ export function useAuth() {
   const refreshProfile = useCallback(async () => {
     if (!auth.currentUser) return;
     try {
+      // Prefer a direct read so we keep fields like bio after edit.
       const loaded =
-        (await ensureUserProfile().catch(() => null)) ?? (await getUserProfile(auth.currentUser.uid));
-      setProfile(loaded);
+        (await getUserProfile(auth.currentUser.uid)) ??
+        (await ensureUserProfile().catch(() => null));
+      if (loaded) setProfile(loaded);
     } catch {
       // Keep the in-memory profile if Firestore is briefly unreachable.
     }

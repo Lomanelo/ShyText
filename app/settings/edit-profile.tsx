@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -9,7 +9,8 @@ import {
   Text,
   TextInput,
 } from 'react-native';
-import { Stack, router, useNavigation } from 'expo-router';
+import { Stack, router, useFocusEffect, useNavigation } from 'expo-router';
+import { usePreventRemove } from 'expo-router/react-navigation';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
 import { Screen } from '../../components/Screen';
@@ -25,52 +26,74 @@ export default function EditProfileScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
   const { profile, refreshProfile, user } = useAuth();
-  const [name, setName] = useState(profile?.displayName ?? user?.displayName ?? '');
-  const [bio, setBio] = useState(profile?.bio ?? '');
+  const [name, setName] = useState('');
+  const [bio, setBio] = useState('');
   const [pickedUri, setPickedUri] = useState<string>();
   const [removed, setRemoved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Flip after a successful save so usePreventRemove unlocks before router.back(). */
+  const [leaveAllowed, setLeaveAllowed] = useState(false);
   const bioRef = useRef<TextInput>(null);
-  const saved = useRef(false);
-  const seeded = useRef(false);
+  /** True after the form has been filled from Firestore (not Auth-only). */
+  const hydrated = useRef(false);
 
-  useEffect(() => {
-    if (seeded.current) return;
-    const seedName = profile?.displayName ?? user?.displayName;
-    if (!seedName && profile == null && !user?.displayName) return;
-    if (profile || user?.displayName) {
-      setName(seedName ?? '');
-      setBio(profile?.bio ?? '');
-      seeded.current = true;
-    }
+  const hydrateFromProfile = useCallback(() => {
+    if (!profile) return;
+    setName(profile.displayName?.trim() || user?.displayName || '');
+    setBio(profile.bio?.trim() || '');
+    setPickedUri(undefined);
+    setRemoved(false);
+    setLeaveAllowed(false);
+    hydrated.current = true;
   }, [profile, user?.displayName]);
 
   const displayUri = removed ? undefined : pickedUri ?? profile?.avatarUrl;
   const trimmedName = name.trim();
   const trimmedBio = bio.trim();
+  const profileName = profile?.displayName?.trim() || '';
+  const profileBio = profile?.bio?.trim() || '';
   const dirty =
-    trimmedName !== (profile?.displayName ?? '') ||
-    trimmedBio !== (profile?.bio ?? '') ||
+    trimmedName !== profileName ||
+    trimmedBio !== profileBio ||
     Boolean(pickedUri) ||
     removed;
   const canSave = dirty && trimmedName.length >= 2 && !busy;
+  const blockLeave = dirty && !busy && !leaveAllowed;
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
 
+  // Wait for the Firestore profile — never lock in empty bio from Auth-only seed.
   useEffect(() => {
-    const unsub = navigation.addListener('beforeRemove', (event) => {
-      if (!dirty || busy || saved.current) return;
-      event.preventDefault();
-      Alert.alert(t('profile.discardTitle'), t('profile.discardBody'), [
-        { text: t('profile.keepEditing'), style: 'cancel' },
-        {
-          text: t('profile.discard'),
-          style: 'destructive',
-          onPress: () => navigation.dispatch(event.data.action),
-        },
-      ]);
-    });
-    return unsub;
-  }, [busy, dirty, navigation]);
+    if (!profile || hydrated.current) return;
+    hydrateFromProfile();
+  }, [profile, hydrateFromProfile]);
+
+  // Re-entering the screen reloads saved values; skip if the user has local edits.
+  useFocusEffect(
+    useCallback(() => {
+      if (!profile || dirtyRef.current) return;
+      hydrateFromProfile();
+    }, [profile, hydrateFromProfile])
+  );
+
+  // Native-stack safe discard guard (replaces beforeRemove + preventDefault).
+  usePreventRemove(blockLeave, ({ data }) => {
+    Alert.alert(t('profile.discardTitle'), t('profile.discardBody'), [
+      { text: t('profile.keepEditing'), style: 'cancel' },
+      {
+        text: t('profile.discard'),
+        style: 'destructive',
+        onPress: () => navigation.dispatch(data.action),
+      },
+    ]);
+  });
+
+  // Leave only after the guard has unlocked on the next render.
+  useEffect(() => {
+    if (!leaveAllowed) return;
+    router.back();
+  }, [leaveAllowed]);
 
   const pickPhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -96,7 +119,16 @@ export default function EditProfileScreen() {
     Alert.alert(t('profile.photoTitle'), undefined, [
       { text: t('profile.choosePhoto'), onPress: () => void pickPhoto() },
       ...(hasPhoto
-        ? [{ text: t('profile.remove'), style: 'destructive' as const, onPress: () => { setPickedUri(undefined); setRemoved(true); } }]
+        ? [
+            {
+              text: t('profile.remove'),
+              style: 'destructive' as const,
+              onPress: () => {
+                setPickedUri(undefined);
+                setRemoved(true);
+              },
+            },
+          ]
         : []),
       { text: t('common.cancel'), style: 'cancel' },
     ]);
@@ -115,9 +147,10 @@ export default function EditProfileScreen() {
       }
       await updateOwnProfile({ displayName: trimmedName, bio: trimmedBio || null });
       await refreshProfile();
-      saved.current = true;
+      setPickedUri(undefined);
+      setRemoved(false);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+      setLeaveAllowed(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       setError(
@@ -135,6 +168,8 @@ export default function EditProfileScreen() {
       <Stack.Screen
         options={{
           title: t('profile.edit'),
+          // Required with usePreventRemove so iOS back-menu can't skip the guard.
+          headerBackButtonMenuEnabled: false,
           headerRight: () => (
             <Pressable
               accessibilityRole="button"
