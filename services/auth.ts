@@ -34,7 +34,9 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
     bioRaw == null || bioRaw === ''
       ? undefined
       : String(bioRaw).trim() || undefined;
-  return { id: snap.id, ...data, bio } as UserProfile;
+  // Never surface push tokens to callers — even legacy public fields.
+  const { expoPushToken: _strip, ...rest } = data;
+  return { id: snap.id, ...rest, bio } as UserProfile;
 }
 
 /**
@@ -284,6 +286,7 @@ export async function deleteOwnAccount() {
   }
 
   await deleteDoc(doc(db, 'users', uid, 'private', 'profile')).catch(() => undefined);
+  await deleteDoc(doc(db, 'users', uid, 'private', 'device')).catch(() => undefined);
   // Wipe Firestore only after we can still roll it back if Auth delete fails.
   if (profileSnap?.exists()) {
     await deleteDoc(doc(db, 'users', uid));

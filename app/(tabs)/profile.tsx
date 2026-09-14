@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
@@ -9,6 +9,7 @@ import { Group, ListRow } from '../../components/ListRow';
 import { cardShadow, type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
 import { maskPhone } from '../../utils/phone';
+import { SUPPORT_EMAIL } from '../../utils/support';
 import { useTranslation } from 'react-i18next';
 
 export default function ProfileScreen() {
@@ -60,6 +61,15 @@ export default function ProfileScreen() {
         </View>
         <Group theme={theme}>
           <ListRow title={t('profile.howItWorks')} theme={theme} onPress={() => router.push('/how-it-works')} />
+          <ListRow
+            title={t('settings.helpSupport')}
+            theme={theme}
+            onPress={() =>
+              void Linking.openURL(
+                `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('ShyText support')}`
+              )
+            }
+          />
           <ListRow title={t('profile.settings')} theme={theme} last onPress={() => router.push('/settings')} />
         </Group>
       </ScrollView>

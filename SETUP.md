@@ -90,14 +90,25 @@ Client (`.env` / EAS env):
 Server / Netlify secrets (never ship in the app):
 
 - `SERPER_API_KEY` (Serper Maps + Images; server only — https://serper.dev)
+- `FIREBASE_SERVICE_ACCOUNT` (JSON service account — Firestore read for `/api/notify` private push tokens)
+- `FIREBASE_WEB_API_KEY` (verify Firebase ID tokens in Netlify functions; can match client web key)
+- `RESEND_API_KEY` (email reports from `/api/report` to `REPORT_INBOX`)
+- `REPORT_INBOX` (default `hello@shytext.com`)
+- `REPORT_FROM` (optional Resend from address)
 - `GOOGLE_MAPS_API_KEY` (legacy; unused once Serper is set)
 - `APPLE_MAPS_TEAM_ID` (optional legacy; no longer used for discovery)
 - `APPLE_MAPS_KEY_ID`
 - `APPLE_MAPS_PRIVATE_KEY` (Maps `.p8` key contents; `\n` escaped is fine)
 
+Client also needs:
+
+- `EXPO_PUBLIC_API_BASE` (example: `https://shytextapi.netlify.app`) for `/api/notify` and `/api/report`
+
 ## 5. Firestore collections
 
-- `users`
+- `users` (public profile — no push token)
+- `users/{uid}/private/profile` (owner-only PII)
+- `users/{uid}/private/device` (owner-only Expo push token)
 - `venues`
 - `checkins`
 - `shytexts`
@@ -177,12 +188,12 @@ Preview APK: `--profile preview`.
 
 ## 11. Known limitations
 
-- Push is best-effort from the client. A Cloud Function is the right next step.
-- Rate limits (1 active ShyText, 10/hour, 20 hellos/hour) are enforced in the client SDK plus rules; a function can harden this further.
-- Demo check-in distance bypass is development/preview only.
 - Chat is text only.
 - Venue coordinates may be stored for proximity checks; they are never shown as another user's location.
-- Old Realtime Database data is not used by this MVP.
+- Rate limits are enforced in the client SDK plus rules; a function can harden this further.
+- Demo check-in distance bypass is development/preview only.
+- Report email requires `RESEND_API_KEY` on Netlify; reports always land in Firestore regardless.
+- Push requires `FIREBASE_SERVICE_ACCOUNT` on Netlify so `/api/notify` can read `users/{uid}/private/device`.
 
 ## 12. MVP test
 

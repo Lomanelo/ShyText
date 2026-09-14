@@ -2,10 +2,11 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { router } from 'expo-router';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { deleteField, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { DEFAULT_NOTIFICATION_PREFS } from '../types/user';
 import { getOpenChatId } from './openChat';
+import { authedPost } from './api';
 import i18n from '../i18n';
 
 const CHECK_IN_ENDING_ID = 'check-in-ending';
@@ -60,41 +61,52 @@ export async function registerPushToken() {
   if (!projectId) return;
   const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
   const user = auth.currentUser;
-  if (user && token) {
-    await updateDoc(doc(db, 'users', user.uid), {
+  if (!user || !token) return;
+
+  // Owner-only device doc — never readable by other clients.
+  await setDoc(
+    doc(db, 'users', user.uid, 'private', 'device'),
+    {
       expoPushToken: token,
       language: i18n.language,
-    }).catch(() => undefined);
-  }
+      updatedAt: Date.now(),
+    },
+    { merge: true }
+  ).catch(() => undefined);
+
+  // Strip legacy public token + keep language for localization prefs.
+  await updateDoc(doc(db, 'users', user.uid), {
+    language: i18n.language,
+    expoPushToken: deleteField(),
+  }).catch(() => undefined);
 }
 
+/**
+ * Ask the Netlify notify endpoint to push the recipient.
+ * Title/body are localized here using the recipient's public language + prefs.
+ * The push token stays on the server / private device doc.
+ */
 export async function notifyUser(userId: string, payload: PushPayload, kind: PushKind = 'shytexts') {
   try {
     const snap = await getDoc(doc(db, 'users', userId));
     const data = snap.data();
     const prefs = { ...DEFAULT_NOTIFICATION_PREFS, ...data?.notificationPrefs };
     if (!prefs[kind]) return;
-    const token = data?.expoPushToken;
-    if (!token) return;
     const lang = typeof data?.language === 'string' ? data.language : 'en';
     const t = i18n.getFixedT(lang);
     const body =
       payload.bodyText?.trim() ||
       (payload.bodyKey ? t(payload.bodyKey, payload.bodyParams) : t('push.openToRead'));
-    await fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        to: token,
-        sound: 'default',
-        channelId: kind === 'chats' ? 'chat' : 'default',
-        title: t(payload.titleKey, payload.titleParams),
-        body,
-        data: { kind, ...(payload.data ?? {}) },
-      }),
+    const title = t(payload.titleKey, payload.titleParams);
+    await authedPost('/api/notify', {
+      recipientId: userId,
+      title,
+      body,
+      channelId: kind === 'chats' ? 'chat' : 'default',
+      data: { kind, ...(payload.data ?? {}) },
     });
   } catch {
-    // Push is best-effort in MVP.
+    // Push is best-effort.
   }
 }
 

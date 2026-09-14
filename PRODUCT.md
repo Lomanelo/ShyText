@@ -24,7 +24,7 @@ Expo SDK 57, Expo Router, EAS development/preview/production clients (`com.rahim
 
 ## Capabilities and Constraints
 
-Auth: mobile phone number + SMS verification only. Venue list from Apple Maps Server API via a server proxy. One active check-in per user. Both sender and receiver must have a live check-in at the same venue to send a ShyText. Vibes: Chat, Drink, Coffee, Play, Study, Network, Flirt, Other. Optional ShyText line max 120. Default check-in 30 minutes (15m / 30m / 1h). Chat survives expiry. Block/report exist. No Shy Mode, swipe-to-like, followers, or background location. Demo venues and seed people are off unless EXPO_PUBLIC_DEV_MODE is explicitly true.
+Auth: mobile phone number + SMS verification only. Venue list from Serper Maps via a Netlify proxy. One active Shyne (check-in) per user with a rolling 30-minute idle window. Both sender and receiver must be Shyned at the same venue to send a ShyText. Vibes: Chat, Drink, Coffee, Play, Study, Network, Flirt, Other. Optional ShyText line max 120. Chat survives expiry. Block/report + Help & Support (hello@shytext.com) exist. No Shy Mode, swipe-to-like, followers, or background location. Demo venues and seed people are off unless EXPO_PUBLIC_DEV_MODE is explicitly true.
 
 ## Brand Commitments
 

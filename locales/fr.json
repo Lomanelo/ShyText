@@ -28,12 +28,17 @@
     "them": "cette personne",
     "chat": "Chat",
     "venue": "Lieu",
-    "signOut": "Se déconnecter"
+    "signOut": "Se déconnecter",
+    "offline": "Tu es hors ligne"
   },
   "tabs": {
     "nearby": "Autour",
     "chats": "Chats",
     "profile": "Profil"
+  },
+  "suspended": {
+    "title": "Compte suspendu",
+    "body": "Ce compte ne peut plus utiliser ShyText pour le moment. Écris-nous si tu penses que c’est une erreur."
   },
   "welcome": {
     "beat1": "Il y a un moment avant le bonjour.",
@@ -226,6 +231,8 @@
     "nobodyBlocked": "Personne n’est bloqué",
     "unblock": "Débloquer",
     "lockScreenFooter": "Les bannières sur l’écran verrouillé n’incluent jamais la note.",
+    "helpSupport": "Aide et support",
+    "supportHint": "Questions ou sécurité — {{email}}",
     "newShyText": "Nouveau ShyText",
     "newShyTextSub": "Quelqu’un t’a envoyé une note ici",
     "theyAccepted": "C’est accepté",

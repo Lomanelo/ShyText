@@ -1,16 +1,24 @@
 ﻿import type { Config, Context } from '@netlify/functions';
-
-const FIREBASE_API_KEY = 'AIzaSyAVnkBhxkzWdh2fLXsBMRDcRGYbY2KnBeE';
-const DATABASE_URL = 'https://myshytext-default-rtdb.firebaseio.com';
+import { firestoreAdminConfigured, getFirestoreDoc } from './_shared/firestoreAdmin';
 
 type AuthedUser = { uid: string; email?: string };
+
+function firebaseWebApiKey() {
+  return (
+    Netlify.env.get('FIREBASE_WEB_API_KEY') ||
+    Netlify.env.get('EXPO_PUBLIC_FIREBASE_API_KEY') ||
+    ''
+  );
+}
 
 async function verifyIdToken(request: Request): Promise<AuthedUser | null> {
   const header = request.headers.get('authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : '';
   if (!token) return null;
+  const apiKey = firebaseWebApiKey();
+  if (!apiKey) return null;
   const response = await fetch(
-    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
+    `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -18,7 +26,7 @@ async function verifyIdToken(request: Request): Promise<AuthedUser | null> {
     }
   );
   if (!response.ok) return null;
-  const data = await response.json();
+  const data = (await response.json()) as { users?: Array<{ localId?: string; email?: string }> };
   const user = data.users?.[0];
   if (!user?.localId) return null;
   return { uid: user.localId, email: user.email };
@@ -31,64 +39,98 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function handleNotify(user: AuthedUser, payload: any) {
-  const recipientId = payload.recipientId;
+async function handleNotify(user: AuthedUser, payload: Record<string, unknown>) {
+  const recipientId = typeof payload.recipientId === 'string' ? payload.recipientId : '';
   if (!recipientId || recipientId === user.uid) {
     return json({ error: 'Invalid recipient' }, 400);
   }
-
-  const secret = Netlify.env.get('FIREBASE_DATABASE_SECRET');
-  if (!secret) {
-    return json({ ok: true, skipped: 'missing_database_secret' });
+  if (!firestoreAdminConfigured()) {
+    return json({ ok: true, skipped: 'missing_service_account' });
   }
 
-  const tokenRes = await fetch(
-    `${DATABASE_URL}/pushTokens/${recipientId}.json?auth=${secret}`
-  );
-  const tokenData = await tokenRes.json();
-  const expoPushToken = tokenData?.expoPushToken;
+  const device = await getFirestoreDoc(`users/${recipientId}/private/device`);
+  const expoPushToken =
+    typeof device?.expoPushToken === 'string' ? device.expoPushToken : undefined;
   if (!expoPushToken) {
-    return json({ ok: true, skipped: 'no_token' });
+    // Legacy public-field fallback while clients migrate.
+    const profile = await getFirestoreDoc(`users/${recipientId}`);
+    const legacy = typeof profile?.expoPushToken === 'string' ? profile.expoPushToken : undefined;
+    if (!legacy) return json({ ok: true, skipped: 'no_token' });
+    return sendExpo(legacy, payload);
   }
+  return sendExpo(expoPushToken, payload);
+}
+
+async function sendExpo(expoPushToken: string, payload: Record<string, unknown>) {
+  const title = typeof payload.title === 'string' ? payload.title : 'ShyText';
+  const body = typeof payload.body === 'string' ? payload.body : '';
+  const channelId = typeof payload.channelId === 'string' ? payload.channelId : 'default';
+  const data =
+    payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)
+      ? (payload.data as Record<string, string>)
+      : {};
 
   const pushRes = await fetch('https://exp.host/--/api/v2/push/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({
       to: expoPushToken,
-      title: payload.title || 'ShyText',
-      body: payload.body || 'New message',
+      title,
+      body,
       sound: 'default',
-      data: { type: 'chat', chatId: payload.chatId, senderId: user.uid },
+      channelId,
+      data,
     }),
   });
   return json({ ok: pushRes.ok });
 }
 
-async function handleReport(user: AuthedUser, payload: any) {
-  const secret = Netlify.env.get('FIREBASE_DATABASE_SECRET');
+async function handleReport(user: AuthedUser, payload: Record<string, unknown>) {
   const inbox = Netlify.env.get('REPORT_INBOX') || 'hello@shytext.com';
   const report = {
     reporterId: user.uid,
-    targetType: payload.targetType,
-    targetId: payload.targetId,
-    reason: payload.reason,
-    details: payload.details || '',
-    venueId: payload.venueId || null,
-    conversationId: payload.conversationId || null,
+    targetType: payload.targetType ?? null,
+    targetId: payload.targetId ?? null,
+    reason: payload.reason ?? null,
+    details: payload.details ?? '',
+    venueId: payload.venueId ?? null,
+    conversationId: payload.conversationId ?? null,
     createdAt: Date.now(),
-    notifyInbox: inbox,
   };
 
-  if (secret) {
-    await fetch(`${DATABASE_URL}/reports.json?auth=${secret}`, {
+  const resendKey = Netlify.env.get('RESEND_API_KEY');
+  if (resendKey) {
+    const from = Netlify.env.get('REPORT_FROM') || 'ShyText Reports <onboarding@resend.dev>';
+    const mail = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(report),
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from,
+        to: [inbox],
+        subject: `ShyText report: ${String(report.reason || 'other')}`,
+        text: [
+          `Reporter: ${report.reporterId}`,
+          `Target: ${report.targetType} / ${report.targetId}`,
+          `Reason: ${report.reason}`,
+          `Details: ${report.details || '(none)'}`,
+          `Venue: ${report.venueId || '(none)'}`,
+          `Conversation: ${report.conversationId || '(none)'}`,
+          `At: ${new Date(report.createdAt).toISOString()}`,
+        ].join('\n'),
+      }),
     });
+    if (!mail.ok) {
+      const errText = await mail.text().catch(() => '');
+      return json({ ok: false, emailed: false, error: errText || `mail_${mail.status}` }, 502);
+    }
+    return json({ ok: true, emailed: true });
   }
 
-  return json({ ok: true });
+  // No mail provider configured — still acknowledge; Firestore is the system of record.
+  return json({ ok: true, emailed: false, skipped: 'missing_resend_api_key', inbox });
 }
 
 export default async (req: Request, _context: Context) => {
@@ -105,7 +147,7 @@ export default async (req: Request, _context: Context) => {
   }
 
   const url = new URL(req.url);
-  const payload = await req.json().catch(() => ({}));
+  const payload = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
   if (url.pathname.endsWith('/notify')) {
     return handleNotify(user, payload);

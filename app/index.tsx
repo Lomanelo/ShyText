@@ -5,7 +5,7 @@ import { useTheme } from '../theme';
 
 export default function Index() {
   const theme = useTheme();
-  const { user, loading, hasProfile } = useAuth();
+  const { user, loading, hasProfile, profile } = useAuth();
 
   if (loading) {
     return (
@@ -16,6 +16,7 @@ export default function Index() {
   }
 
   if (!user) return <Redirect href="/(auth)/welcome" />;
+  if (profile?.status === 'suspended') return <Redirect href="/suspended" />;
   if (!hasProfile) return <Redirect href="/(auth)/profile-setup" />;
   return <Redirect href="/(tabs)/nearby" />;
 }

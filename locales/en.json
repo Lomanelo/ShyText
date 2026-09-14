@@ -28,12 +28,17 @@
     "them": "them",
     "chat": "Chat",
     "venue": "Venue",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "offline": "You’re offline"
   },
   "tabs": {
     "nearby": "Nearby",
     "chats": "Chats",
     "profile": "Profile"
+  },
+  "suspended": {
+    "title": "Account suspended",
+    "body": "This account can’t use ShyText right now. Email us if you think that’s a mistake."
   },
   "welcome": {
     "beat1": "There’s a moment before hello.",
@@ -226,6 +231,8 @@
     "nobodyBlocked": "Nobody blocked",
     "unblock": "Unblock",
     "lockScreenFooter": "Lock-screen banners never include the note itself.",
+    "helpSupport": "Help & Support",
+    "supportHint": "Questions or safety issues — email {{email}}",
     "newShyText": "New ShyText",
     "newShyTextSub": "Someone sent you a note at this venue",
     "theyAccepted": "They accepted",

@@ -28,12 +28,17 @@
     "them": "die Person",
     "chat": "Chat",
     "venue": "Ort",
-    "signOut": "Abmelden"
+    "signOut": "Abmelden",
+    "offline": "Du bist offline"
   },
   "tabs": {
     "nearby": "In der Nähe",
     "chats": "Chats",
     "profile": "Profil"
+  },
+  "suspended": {
+    "title": "Konto gesperrt",
+    "body": "Dieses Konto kann ShyText gerade nicht nutzen. Schreib uns, wenn das ein Fehler ist."
   },
   "welcome": {
     "beat1": "Es gibt einen Moment vor dem Hallo.",
@@ -226,6 +231,8 @@
     "nobodyBlocked": "Niemand blockiert",
     "unblock": "Entblocken",
     "lockScreenFooter": "Sperrbildschirm-Banner enthalten nie die Notiz selbst.",
+    "helpSupport": "Hilfe & Support",
+    "supportHint": "Fragen oder Sicherheit — {{email}}",
     "newShyText": "Neuer ShyText",
     "newShyTextSub": "Jemand hat dir hier eine Notiz geschickt",
     "theyAccepted": "Angenommen",

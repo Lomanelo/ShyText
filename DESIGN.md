@@ -37,7 +37,7 @@ Loading: pulse skeletons, not static blocks
 Timers: tabular-nums; pulse when under 5 minutes
 Tabs: system tab bar, outline idle / fill selected, flame tint, light haptic on tab press
 Empty states: title + optional body + optional CTA
-Settings: grouped inset rows with chevron. Edit profile is one screen — photo (library, square crop, replace, remove), name, bio with count, header Save. Notifications are three switches. Delete account is a confirm-then-wipe row in Settings.
+Settings: grouped inset rows with chevron. Edit profile is one screen — photo (library, square crop, replace, remove), name, bio with count, header Save. Notifications are five switches (ShyText, accepted, chats, Shyne ending, co-Shyne). Help & Support opens mailto:hello@shytext.com. Delete account is a confirm-then-wipe row in Settings.
 Navigation: native stack headers; edge-swipe back stays alive
 Keyboards: phone pad / OTP / search / send; profile fields chain next → done
 Chat: iMessage-style bubbles; pill composer with circular send. Incoming ShyTexts sit at the top of Chats, threads below. One hour to send, then the thread stays with a go-talk-in-person note.

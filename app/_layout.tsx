@@ -21,6 +21,7 @@ import { listenNotificationTaps, registerPushToken } from '../services/notificat
 import { brand, useTheme } from '../theme';
 import { AwayCheckoutHost } from '../components/AwayCheckoutHost';
 import { AnimatedSplash } from '../components/AnimatedSplash';
+import { OfflineBanner } from '../components/OfflineBanner';
 
 // Hold the native splash until the animated handoff is on screen.
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
@@ -77,7 +78,9 @@ export default function RootLayout() {
           <Stack.Screen name="settings/delete-account" options={{ headerShown: true, title: t('settings.deleteAccount') }} />
           <Stack.Screen name="legal/privacy" options={{ headerShown: true, title: t('legal.privacy') }} />
           <Stack.Screen name="legal/terms" options={{ headerShown: true, title: t('legal.terms') }} />
+          <Stack.Screen name="suspended" options={{ headerShown: false, gestureEnabled: false }} />
         </Stack>
+        <OfflineBanner />
         <AwayCheckoutHost />
         {!splashDone ? <AnimatedSplash onDone={() => setSplashDone(true)} /> : null}
       </SafeAreaProvider>

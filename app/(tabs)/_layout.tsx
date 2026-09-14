@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, router } from 'expo-router';
 import { Platform, StyleSheet, View } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,8 +26,14 @@ function TabHeaderBrand() {
 export default function TabsLayout() {
   const theme = useTheme();
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const unread = useUnreadCount(user?.uid);
+
+  useEffect(() => {
+    if (profile?.status === 'suspended') {
+      router.replace('/suspended');
+    }
+  }, [profile?.status]);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
