@@ -2,7 +2,7 @@
 
 This file is the production bible for Instagram posts, carousels, and Reels. The in-app UI system lives in `DESIGN.md`. Do not mix them: the **app** is native iOS grouped chrome; **social** is mascot-led, matchbook, dim-bar.
 
-Canonical mark: flame `#D05927`. Wordmark: lowercase **shytext**. Mascot source: `assets/images/Mascot.png`. App icon: `assets/images/icon.png`.
+Canonical mark: flame `#D05927`. Product wordmark: **ShyText** (app + website). Mascot source: `assets/images/Mascot.png`. App icon: `assets/images/icon.png`.
 
 ---
 
@@ -117,7 +117,7 @@ App UI stays **system** (SF Pro / Roboto). Instagram is allowed to have a voice.
 
 | Role | Font | Why |
 | --- | --- | --- |
-| Wordmark | System / **Inter** 700, lowercase `shytext`, tracking +20 | Matches the app. Never restyle the wordmark. |
+| Wordmark | System / **Inter** 700, `ShyText`, tracking +20 | Matches the app. Never restyle the wordmark. |
 | Hook (slides 1) | **Satoshi Bold** or **Clash Grotesk Bold**, mostly lowercase, 8–12 words max | Quiet, not a circus poster |
 | Body | Satoshi Regular / Inter Regular | Readable at 1080 |
 | Stamp / venue chip | **Barlow Condensed** or **Oswald** Medium, ALL CAPS, tracking +80, rust/tan | Door-stamp, matchbook |
@@ -186,7 +186,7 @@ Teach the product without looking like an App Store preview.
 4. Send a ShyText. `one note. not a swipe.`
 5. They accept → one hour of chat.
 6. Timer ends. `the chat stays. sending stops. go talk.`
-7. End card: flame + `shytext` + `check in. send a note. go talk.`
+7. End card: flame + `ShyText` + `check in. send a note. go talk.`
 
 **Carousel recipe — “not a dating app” (6 slides):**
 
@@ -245,7 +245,7 @@ Same lock, `Night bar #12100E, tungsten practicals, phone screen glow on the cre
 
 **End card:**
 
-Cream field, flame mark from `icon.png` (not a new flame), lowercase shytext in Inter 700 `#D05927`, one line of Satoshi. No tagline stacking.
+Cream field, flame mark from `icon.png` (not a new flame), `ShyText` in Inter 700 `#D05927`, one line of Satoshi. No tagline stacking.
 
 Negative (every job): `no photoreal, no 3D, no extra fingers, no human face on the flame, no dating app UI, no heart icons, no sparkles, no watermark, no text unless specified.`
 

@@ -11,14 +11,14 @@ import { HapticTab } from '../../components/HapticTab';
 import { Wordmark } from '../../components/wordmark';
 
 /**
- * Mobbin social pattern (Instagram / BeReal / YouTube): brand mark + name
- * left in the nav. Logo-alone is for household names; ShyText still needs the word.
+ * Mobbin social nav (Instagram / YouTube / BeReal): compact lockup in headerLeft
+ * under the notch — lit mark + ink word, not a centered title.
  */
 function TabHeaderBrand() {
   const theme = useTheme();
   return (
     <View style={styles.brand}>
-      <Wordmark theme={theme} size={24} />
+      <Wordmark theme={theme} variant="nav" />
     </View>
   );
 }
@@ -40,9 +40,12 @@ export default function TabsLayout() {
         headerShown: true,
         headerShadowVisible: false,
         headerTintColor: brand.accent,
-        headerStyle: { backgroundColor: theme.bg },
-        headerTitle: () => <TabHeaderBrand />,
-        headerTitleAlign: 'left',
+        headerStyle: {
+          backgroundColor: theme.bg,
+        },
+        headerTitle: '',
+        headerLeft: () => <TabHeaderBrand />,
+        headerLeftContainerStyle: styles.headerLeft,
         tabBarActiveTintColor: brand.accent,
         tabBarInactiveTintColor: theme.quiet,
         tabBarButton: (props) => <HapticTab {...props} />,
@@ -94,7 +97,12 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   brand: {
-    paddingLeft: Platform.OS === 'ios' ? 0 : 4,
     justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  headerLeft: {
+    // Match Instagram / YouTube leading inset under the status bar / notch.
+    paddingLeft: Platform.OS === 'ios' ? 12 : 8,
+    marginLeft: 0,
   },
 });
