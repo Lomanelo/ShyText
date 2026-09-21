@@ -18,6 +18,11 @@ export type ShyneLiveActivityProps = {
   shyOutUrl: string;
   /** Deep link when the banner / island itself is tapped. */
   openUrl: string;
+  /**
+   * file:// URI in the App Group widgets directory for the brand flame.
+   * Empty string when unavailable — layout falls back to SF Symbol.
+   */
+  logoUri: string;
 };
 
 export const SHYNE_LIVE_ACTIVITY_NAME = 'ShyneActivity';

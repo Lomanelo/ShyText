@@ -1,5 +1,7 @@
 import { Asset } from 'expo-asset';
 import { Image } from 'expo-image';
+import { Platform } from 'react-native';
+import { ensureShyneLiveLogoUri } from './shyneLiveLogo';
 
 /** Bundled venue category stills — shared with VenueStamp. */
 export const STAMP_MODULES = [
@@ -26,6 +28,7 @@ export const FLAME_MODULES = [
   require('../assets/images/flame-dim.png'),
   require('../assets/images/flame-mark.png'),
   require('../assets/images/flame-white.png'),
+  require('../assets/images/live-activity-flame.png'),
 ] as const;
 
 const LOCAL_MODULES = [...STAMP_MODULES, ...FLAME_MODULES] as const;
@@ -41,6 +44,7 @@ export function warmLocalAssets(): Promise<void> {
     warmPromise = Promise.all([
       Asset.loadAsync([...LOCAL_MODULES]).catch(() => undefined),
       ...LOCAL_MODULES.map((mod) => Image.loadAsync(mod).catch(() => undefined)),
+      Platform.OS === 'ios' ? ensureShyneLiveLogoUri().then(() => undefined) : Promise.resolve(),
     ]).then(() => undefined);
   }
   return warmPromise;

@@ -3,6 +3,7 @@ import * as Linking from 'expo-linking';
 import { addUserInteractionListener, type LiveActivity } from 'expo-widgets';
 import i18n from '../i18n';
 import { SHYNE_IDLE_WINDOW_MS } from '../utils/config';
+import { ensureShyneLiveLogoUri } from './shyneLiveLogo';
 import ShyneLiveActivity from '../widgets/ShyneLiveActivity';
 import {
   SHYNE_LIVE_ACTIVITY_NAME,
@@ -34,7 +35,11 @@ function actionUrl(venueId: string, action: ShyneLiveAction): string {
   });
 }
 
-function buildProps(snap: ShyneLiveActivitySnapshot, status: 'active' | 'ended' = 'active'): ShyneLiveActivityProps {
+function buildProps(
+  snap: ShyneLiveActivitySnapshot,
+  logoUri: string,
+  status: 'active' | 'ended' = 'active'
+): ShyneLiveActivityProps {
   // Progress + countdown must span the *current* idle window, not lifetime since first Shyne.
   const windowStart = Math.max(snap.startedAt, snap.expiresAt - SHYNE_IDLE_WINDOW_MS);
   return {
@@ -51,12 +56,13 @@ function buildProps(snap: ShyneLiveActivitySnapshot, status: 'active' | 'ended' 
     extendUrl: actionUrl(snap.venueId, 'extend'),
     shyOutUrl: actionUrl(snap.venueId, 'shyOut'),
     openUrl: actionUrl(snap.venueId, 'open'),
+    logoUri,
   };
 }
 
-function snapshotKey(snap: ShyneLiveActivitySnapshot | null): string {
+function snapshotKey(snap: ShyneLiveActivitySnapshot | null, logoUri = ''): string {
   if (!snap) return '';
-  return `${snap.venueId}:${snap.expiresAt}:${snap.startedAt}`;
+  return `${snap.venueId}:${snap.expiresAt}:${snap.startedAt}:${logoUri ? 'logo' : 'nologo'}`;
 }
 
 function activeInstances(): LiveActivity<ShyneLiveActivityProps>[] {
@@ -86,7 +92,8 @@ export async function syncShyneLiveActivity(
     return;
   }
 
-  const key = snapshotKey(snap);
+  const logoUri = (await ensureShyneLiveLogoUri()) ?? '';
+  const key = snapshotKey(snap, logoUri);
   if (key && key === lastKey && activeInstances().length > 0) return;
 
   try {
@@ -96,7 +103,7 @@ export async function syncShyneLiveActivity(
       return;
     }
 
-    const props = buildProps(snap);
+    const props = buildProps(snap, logoUri);
     const staleDate = new Date(snap.expiresAt);
     const url = actionUrl(snap.venueId, 'open');
     const existing = activeInstances();
@@ -128,7 +135,8 @@ export async function endAllShyneLiveActivities(
   lastKey = null;
   try {
     const instances = activeInstances();
-    const finalProps = final ? buildProps(final, 'ended') : undefined;
+    const logoUri = (await ensureShyneLiveLogoUri()) ?? '';
+    const finalProps = final ? buildProps(final, logoUri, 'ended') : undefined;
     await Promise.all(instances.map((instance) => instance.end(policy, finalProps, new Date())));
   } catch {
     // ignore
