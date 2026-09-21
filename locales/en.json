@@ -285,7 +285,7 @@
     "deleteAccount": "Delete account",
     "nobodyBlocked": "Nobody blocked",
     "unblock": "Unblock",
-    "lockScreenFooter": "Lock-screen banners never include the note itself.",
+    "lockScreenFooter": "New ShyText banners never include the note itself. Chat alerts may show a short preview.",
     "helpSupport": "Help & Support",
     "supportHint": "Questions or safety issues — email {{email}}",
     "newShyText": "New ShyText",
@@ -316,7 +316,8 @@
     "p4": "Only people who Shyne at the same venue appear — and only after you Shyne too.",
     "p5": "We never show how many silent people are nearby.",
     "p6": "Chats stay private after you Shy Out or your Shyne expires. The thread stays open so you can keep messaging or meet in person when you’re ready.",
-    "p7": "Lock-screen notifications do not include private message text."
+    "p7": "New ShyText request banners never include the note itself. Ongoing chat notifications may show a short message preview on the lock screen.",
+    "p8": "On iOS, while you are Shyned, a Live Activity may show the venue name on the Lock Screen and Dynamic Island until you Shy Out or it expires."
   },
   "legal": {
     "privacy": "Privacy Policy",

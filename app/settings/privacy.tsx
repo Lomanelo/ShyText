@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Screen } from '../../components/Screen';
 import { type, useTheme } from '../../theme';
 
-const KEYS = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'] as const;
+const KEYS = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'] as const;
 
 export default function PrivacyScreen() {
   const theme = useTheme();

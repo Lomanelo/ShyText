@@ -285,7 +285,7 @@
     "deleteAccount": "Supprimer le compte",
     "nobodyBlocked": "Personne n’est bloqué",
     "unblock": "Débloquer",
-    "lockScreenFooter": "Les bannières sur l’écran verrouillé n’incluent jamais la note.",
+    "lockScreenFooter": "Les bannières de nouveau ShyText n’incluent jamais la note. Les alertes de chat peuvent afficher un court aperçu.",
     "helpSupport": "Aide et support",
     "supportHint": "Questions ou sécurité — {{email}}",
     "newShyText": "Nouveau ShyText",
@@ -316,7 +316,8 @@
     "p4": "Seules les personnes qui ont fait Shyne au même lieu apparaissent — et seulement après que tu l’aies fait aussi.",
     "p5": "On ne montre jamais combien de personnes silencieuses sont autour.",
     "p6": "Les chats restent privés après un Shy Out ou l’expiration de ton Shyne. Le fil reste ouvert pour continuer à écrire ou vous voir en personne.",
-    "p7": "Les notifications sur l’écran verrouillé n’incluent pas le texte privé."
+    "p7": "Les bannières de demande ShyText n’incluent jamais la note. Les notifications de chat en cours peuvent afficher un court aperçu du message sur l’écran verrouillé.",
+    "p8": "Sous iOS, pendant un Shyne, une Live Activity peut afficher le nom du lieu sur l’écran verrouillé et le Dynamic Island jusqu’à Shy Out ou expiration."
   },
   "legal": {
     "privacy": "Politique de confidentialité",

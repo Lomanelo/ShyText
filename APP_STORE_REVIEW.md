@@ -29,8 +29,10 @@ ShyText is a **Social Networking** venue check-in. People **Shyne** at a place, 
 - Venue discovery: **Serper** via Netlify `/api/places` (Firebase Auth required + rate limits)
 - Venue images: `/api/venue-image` (Auth required; Image uses `idToken` query)
 - Presence: **Shyne** with a rolling **30-minute** idle window + heartbeat
+- iOS Live Activity: shows **venue name** on Lock Screen / Dynamic Island while Shyned (Extend / Shy Out)
 - Notifications (Settings): New ShyText, They accepted, Chat messages, Shyne ending, Someone Shynes here
-- Push: client calls `/api/notify` (peer-gated); Expo push token on `users/{uid}/private/device`
+- Push: New ShyText banners do **not** include the note; **chat** alerts may show a short message preview
+- Push delivery: client calls `/api/notify` (peer-gated); Expo push token on `users/{uid}/private/device`
 - Auth: **Phone SMS only** (native Firebase Auth + APNs for branded SMS)
 - App Check + Crashlytics: enabled in production native builds
 
@@ -60,6 +62,21 @@ Declare (linked, not used for tracking):
 - Device ID / Push token — App Functionality (notifications)
 - Crash Data — App Functionality (Crashlytics)
 - User Content (messages / notes) — App Functionality
+- Product Interaction — App Functionality (optional: Live Activity / venue name on Lock Screen)
+
+## Pre-submit checklist (ops — confirm before build)
+
+- [x] EAS production env has all `EXPO_PUBLIC_FIREBASE_*` secrets (set from local `.env`; no hardcoded fallbacks)
+- [x] `EXPO_PUBLIC_DEV_MODE=false` on production profile
+- [x] Do **not** set `EXPO_PUBLIC_APP_CHECK_DEBUG_TOKEN` on production (local debug only)
+- [x] Firestore + Storage rules deployed (`shytexts` co-venue read + conversation update lockdown)
+- [ ] Firestore indexes deployed if changed (unchanged this round)
+- [ ] App Check: App Attest / DeviceCheck (iOS) + Play Integrity (Android) enabled; turn **enforcement** on when TestFlight looks healthy
+- [x] Netlify production: `FIREBASE_SERVICE_ACCOUNT`, `FIREBASE_WEB_API_KEY`, `SERPER_API_KEY`, `RESEND_API_KEY` present
+- [ ] APNs Auth key on Firebase for branded SMS (avoid `myshytext.firebaseapp.com` in SMS)
+- [ ] Two Firebase test phones + codes pasted into ASC Review Notes
+- [x] Hosted privacy/terms deployed to Netlify (`public/privacy.html`, `public/terms.html`) — also point ASC at https://shytext.com/privacy if that domain is your canonical URL
+- [ ] Submit **production** EAS profile only (never preview — DEV_MODE is on there)
 
 ## Billing alerts (set before worldwide launch)
 

@@ -126,8 +126,22 @@ service cloud.firestore {
     }
 
     match /shytexts/{shytextId} {
-      allow read: if signedIn();
+      // Author always; others only while live-Shyned at the same venue (stops note scraping).
+      function liveAtShytextVenue() {
+        return signedIn()
+          && exists(/databases/$(database)/documents/checkins/$(request.auth.uid))
+          && get(/databases/$(database)/documents/checkins/$(request.auth.uid)).data.venueId
+            == resource.data.venueId
+          && get(/databases/$(database)/documents/checkins/$(request.auth.uid)).data.expiresAt
+            > request.time.toMillis();
+      }
+      allow read: if signedIn() && (
+        resource.data.authorId == request.auth.uid
+        || resource.data.userId == request.auth.uid
+        || liveAtShytextVenue()
+      );
       allow create: if isSelf(request.resource.data.authorId)
+        && request.resource.data.venueId is string
         && (
           request.resource.data.vibe is string
           || request.resource.data.intent is string
@@ -140,9 +154,17 @@ service cloud.firestore {
             && request.resource.data.message.size() <= 120
           )
         );
-      allow update: if isSelf(resource.data.authorId)
-        || isSelf(resource.data.userId)
-        || (signedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['responseCount']));
+      allow update: if (
+          (isSelf(resource.data.authorId) || isSelf(resource.data.userId))
+          && request.resource.data.authorId == resource.data.authorId
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.venueId == resource.data.venueId
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'responseCount', 'expiresAt'])
+        )
+        || (signedIn()
+          && liveAtShytextVenue()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['responseCount']));
       allow delete: if false;
     }
 
@@ -187,7 +209,22 @@ service cloud.firestore {
       }
       allow read: if isParticipant(resource.data.participantIds);
       allow create: if signedIn() && request.auth.uid in request.resource.data.participantIds;
-      allow update: if isParticipant(resource.data.participantIds);
+      // Participants may touch thread metadata only — never rewrite the pair.
+      allow update: if isParticipant(resource.data.participantIds)
+        && request.resource.data.participantIds == resource.data.participantIds
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'status',
+            'lastMessage',
+            'lastMessageAt',
+            'lastSenderId',
+            'pinnedBy',
+            'deletedAt',
+            'lastReadAt',
+            'introMessage',
+            'introMessageKey',
+            'introSenderId'
+          ]);
       allow delete: if false;
 
       match /messages/{messageId} {

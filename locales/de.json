@@ -285,7 +285,7 @@
     "deleteAccount": "Konto löschen",
     "nobodyBlocked": "Niemand blockiert",
     "unblock": "Entblocken",
-    "lockScreenFooter": "Sperrbildschirm-Banner enthalten nie die Notiz selbst.",
+    "lockScreenFooter": "Neue ShyText-Banner enthalten nie die Notiz selbst. Chat-Hinweise können eine kurze Vorschau zeigen.",
     "helpSupport": "Hilfe & Support",
     "supportHint": "Fragen oder Sicherheit — {{email}}",
     "newShyText": "Neuer ShyText",
@@ -316,7 +316,8 @@
     "p4": "Nur Leute, die am selben Ort Shyne gemacht haben, erscheinen — und erst, nachdem du auch Shyne gemacht hast.",
     "p5": "Wir zeigen nie, wie viele stille Leute in der Nähe sind.",
     "p6": "Chats bleiben privat nach Shy Out oder Ablauf deines Shyne. Der Thread bleibt offen zum Schreiben oder Treffen.",
-    "p7": "Mitteilungen auf dem Sperrbildschirm enthalten keinen privaten Nachrichtentext."
+    "p7": "Neue ShyText-Anfrage-Banner enthalten nie die Notiz selbst. Laufende Chat-Benachrichtigungen können eine kurze Nachrichtenvorschau auf dem Sperrbildschirm zeigen.",
+    "p8": "Unter iOS kann während eines Shyne eine Live Activity den Ortsnamen auf dem Sperrbildschirm und im Dynamic Island zeigen, bis du Shy Out machst oder es abläuft."
   },
   "legal": {
     "privacy": "Datenschutzrichtlinie",

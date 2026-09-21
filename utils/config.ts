@@ -2,7 +2,6 @@ export function isDevToolsEnabled(): boolean {
   return process.env.EXPO_PUBLIC_DEV_MODE === 'true';
 }
 
-export const CHECK_IN_MS = 60 * 60 * 1000;
 export const DEFAULT_SHYTEXT_MINUTES = 30;
 /**
  * Activity-based Shyne: every app open/foreground extends the check-in by this

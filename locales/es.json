@@ -285,7 +285,7 @@
     "deleteAccount": "Eliminar cuenta",
     "nobodyBlocked": "Nadie bloqueado",
     "unblock": "Desbloquear",
-    "lockScreenFooter": "Los avisos en la pantalla de bloqueo nunca incluyen la nota.",
+    "lockScreenFooter": "Los avisos de ShyText nuevo nunca incluyen la nota. Las alertas de chat pueden mostrar una vista previa corta.",
     "helpSupport": "Ayuda y soporte",
     "supportHint": "Dudas o seguridad — {{email}}",
     "newShyText": "Nuevo ShyText",
@@ -316,7 +316,8 @@
     "p4": "Solo aparecen las personas que hicieron Shyne en el mismo lugar — y solo después de que tú también lo hagas.",
     "p5": "Nunca mostramos cuántas personas silenciosas hay cerca.",
     "p6": "Los chats siguen privados tras Shy Out o al expirar tu Shyne. El hilo permanece abierto para seguir escribiendo o verse en persona.",
-    "p7": "Las notificaciones en la pantalla de bloqueo no incluyen el texto privado."
+    "p7": "Los avisos de solicitud de ShyText nunca incluyen la nota. Las notificaciones de chat en curso pueden mostrar una vista previa corta del mensaje en la pantalla de bloqueo.",
+    "p8": "En iOS, mientras haces Shyne, una Live Activity puede mostrar el nombre del lugar en la pantalla de bloqueo y el Dynamic Island hasta que hagas Shy Out o expire."
   },
   "legal": {
     "privacy": "Política de privacidad",

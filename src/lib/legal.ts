@@ -1,4 +1,4 @@
-export const PRIVACY_POLICY_TEXT = `Last updated: September 17, 2026
+export const PRIVACY_POLICY_TEXT = `Last updated: September 21, 2026
 
 ShyText is a venue check-in app operated by an independent developer (hello@shytext.com). It helps people check into a place they are in, send a short ShyText to someone else checked in there, and chat privately if they accept. It is not a dating app and does not show a public social feed.
 
@@ -16,19 +16,24 @@ We use this data to run check-in, ShyTexts, chat, safety (block/report), and acc
 3. What other people see
 People checked into the same venue can see your first name, photo, and vibe after they check in too. Messages are visible only to the two participants.
 
-4. Storage and processors
+4. Notifications and Lock Screen
+- New ShyText request notifications do not include the note text (open the app to read it).
+- Ongoing chat notifications may show a short message preview on the lock screen.
+- On iOS, while you are Shyned, a Live Activity may show the venue name on the Lock Screen and Dynamic Island until you Shy Out or the Shyne expires. You can dismiss it from the Lock Screen or by ending your Shyne in the app.
+
+5. Storage and processors
 Data is stored in Firebase (Google): Authentication, Cloud Firestore, and Storage, primarily in the United States. Expo is used to build and deliver the app.
 
-5. Retention
+6. Retention
 Shyne presence uses a rolling idle window of about 30 minutes while you stay active. Account deletion removes your profile, private profile data, device push token, avatar, and active Shyne. Existing chats may remain visible to the other participant with your profile shown as deleted. We may keep reports for safety review.
 
-6. Your rights
+7. Your rights
 You can access, correct, or delete your account in the app (You → Account Settings → Delete Account). You may also email hello@shytext.com. GDPR and CCPA rights apply where those laws do.
 
-7. Children
+8. Children
 ShyText is 18+. We do not knowingly collect data from anyone under 18.
 
-8. Contact
+9. Contact
 hello@shytext.com`;
 
 export const COMMUNITY_GUIDELINES_TEXT = `Last updated: September 21, 2026
