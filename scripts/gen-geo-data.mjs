@@ -1,0 +1,85 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const out = path.join(__dirname, '..', 'data');
+fs.mkdirSync(out, { recursive: true });
+
+const codes =
+  'AD,AE,AF,AG,AI,AL,AM,AO,AR,AS,AT,AU,AW,AZ,BA,BB,BD,BE,BF,BG,BH,BI,BJ,BM,BN,BO,BR,BS,BT,BW,BY,BZ,CA,CD,CF,CG,CH,CI,CL,CM,CN,CO,CR,CU,CV,CW,CY,CZ,DE,DJ,DK,DM,DO,DZ,EC,EE,EG,EH,ER,ES,ET,FI,FJ,FK,FM,FO,FR,GA,GB,GD,GE,GF,GG,GH,GI,GL,GM,GN,GP,GQ,GR,GT,GU,GW,GY,HK,HN,HR,HT,HU,ID,IE,IL,IM,IN,IQ,IR,IS,IT,JE,JM,JO,JP,KE,KG,KH,KI,KM,KN,KP,KR,KW,KY,KZ,LA,LB,LC,LI,LK,LR,LS,LT,LU,LV,LY,MA,MC,MD,ME,MF,MG,MH,MK,ML,MM,MN,MO,MP,MQ,MR,MS,MT,MU,MV,MW,MX,MY,MZ,NA,NC,NE,NF,NG,NI,NL,NO,NP,NR,NU,NZ,OM,PA,PE,PF,PG,PH,PK,PL,PM,PR,PS,PT,PW,PY,QA,RE,RO,RS,RU,RW,SA,SB,SC,SD,SE,SG,SH,SI,SK,SL,SM,SN,SO,SR,SS,ST,SV,SX,SY,SZ,TC,TD,TG,TH,TJ,TK,TL,TM,TN,TO,TR,TT,TV,TW,TZ,UA,UG,US,UY,UZ,VA,VC,VE,VG,VI,VN,VU,WF,WS,XK,YE,YT,ZA,ZM,ZW'.split(
+    ','
+  );
+
+/** @type {Record<string, string[]>} */
+const cities = {
+  US: ['New York', 'Los Angeles', 'Chicago', 'Houston', 'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego', 'Dallas', 'San Jose', 'Austin', 'Jacksonville', 'San Francisco', 'Seattle', 'Denver', 'Boston', 'Nashville', 'Detroit', 'Portland', 'Las Vegas', 'Miami', 'Atlanta', 'Washington', 'Minneapolis', 'Tampa', 'Orlando', 'Charlotte', 'Raleigh', 'Salt Lake City', 'Honolulu'],
+  GB: ['London', 'Birmingham', 'Manchester', 'Glasgow', 'Liverpool', 'Leeds', 'Bristol', 'Sheffield', 'Edinburgh', 'Leicester', 'Coventry', 'Nottingham', 'Newcastle', 'Cardiff', 'Belfast', 'Brighton', 'Oxford', 'Cambridge', 'Southampton', 'Reading'],
+  CA: ['Toronto', 'Montreal', 'Vancouver', 'Calgary', 'Edmonton', 'Ottawa', 'Winnipeg', 'Quebec City', 'Hamilton', 'Kitchener', 'Victoria', 'Halifax', 'London', 'Windsor', 'Saskatoon'],
+  AU: ['Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Adelaide', 'Gold Coast', 'Canberra', 'Newcastle', 'Hobart', 'Darwin', 'Cairns', 'Geelong', 'Townsville', 'Ballarat'],
+  DE: ['Berlin', 'Hamburg', 'Munich', 'Cologne', 'Frankfurt', 'Stuttgart', 'Düsseldorf', 'Leipzig', 'Dortmund', 'Essen', 'Bremen', 'Dresden', 'Hanover', 'Nuremberg'],
+  FR: ['Paris', 'Marseille', 'Lyon', 'Toulouse', 'Nice', 'Nantes', 'Montpellier', 'Strasbourg', 'Bordeaux', 'Lille', 'Rennes', 'Reims', 'Toulon', 'Grenoble'],
+  ES: ['Madrid', 'Barcelona', 'Valencia', 'Seville', 'Zaragoza', 'Málaga', 'Murcia', 'Palma', 'Las Palmas', 'Bilbao', 'Alicante', 'Córdoba', 'Valladolid', 'Vigo'],
+  IT: ['Rome', 'Milan', 'Naples', 'Turin', 'Palermo', 'Genoa', 'Bologna', 'Florence', 'Bari', 'Catania', 'Venice', 'Verona', 'Padua', 'Trieste'],
+  NL: ['Amsterdam', 'Rotterdam', 'The Hague', 'Utrecht', 'Eindhoven', 'Groningen', 'Tilburg', 'Almere', 'Breda', 'Nijmegen'],
+  BE: ['Brussels', 'Antwerp', 'Ghent', 'Charleroi', 'Liège', 'Bruges', 'Namur', 'Leuven', 'Mons', 'Mechelen'],
+  PT: ['Lisbon', 'Porto', 'Braga', 'Coimbra', 'Funchal', 'Setúbal', 'Aveiro', 'Évora', 'Faro', 'Guimarães'],
+  BR: ['São Paulo', 'Rio de Janeiro', 'Brasília', 'Salvador', 'Fortaleza', 'Belo Horizonte', 'Manaus', 'Curitiba', 'Recife', 'Porto Alegre', 'Belém', 'Goiânia', 'Guarulhos', 'Campinas'],
+  MX: ['Mexico City', 'Guadalajara', 'Monterrey', 'Puebla', 'Tijuana', 'León', 'Juárez', 'Zapopan', 'Mérida', 'Cancún', 'Querétaro', 'Toluca'],
+  AR: ['Buenos Aires', 'Córdoba', 'Rosario', 'Mendoza', 'La Plata', 'Tucumán', 'Mar del Plata', 'Salta', 'Santa Fe', 'San Juan'],
+  CL: ['Santiago', 'Valparaíso', 'Concepción', 'La Serena', 'Antofagasta', 'Temuco', 'Viña del Mar', 'Puerto Montt'],
+  CO: ['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Cartagena', 'Cúcuta', 'Bucaramanga', 'Pereira'],
+  PE: ['Lima', 'Arequipa', 'Trujillo', 'Chiclayo', 'Piura', 'Cusco', 'Iquitos', 'Huancayo'],
+  JP: ['Tokyo', 'Yokohama', 'Osaka', 'Nagoya', 'Sapporo', 'Fukuoka', 'Kobe', 'Kyoto', 'Kawasaki', 'Saitama', 'Hiroshima', 'Sendai'],
+  KR: ['Seoul', 'Busan', 'Incheon', 'Daegu', 'Daejeon', 'Gwangju', 'Suwon', 'Ulsan', 'Seongnam', 'Goyang'],
+  CN: ['Shanghai', 'Beijing', 'Guangzhou', 'Shenzhen', 'Chengdu', 'Chongqing', 'Tianjin', 'Wuhan', 'Hangzhou', 'Xian', 'Nanjing', 'Suzhou'],
+  IN: ['Mumbai', 'Delhi', 'Bengaluru', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune', 'Ahmedabad', 'Jaipur', 'Surat', 'Lucknow', 'Kanpur', 'Nagpur', 'Indore'],
+  ID: ['Jakarta', 'Surabaya', 'Bandung', 'Medan', 'Bekasi', 'Depok', 'Tangerang', 'Semarang', 'Palembang', 'Makassar'],
+  TH: ['Bangkok', 'Chiang Mai', 'Pattaya', 'Phuket', 'Hat Yai', 'Nakhon Ratchasima', 'Khon Kaen', 'Nonthaburi'],
+  VN: ['Ho Chi Minh City', 'Hanoi', 'Da Nang', 'Haiphong', 'Can Tho', 'Bien Hoa', 'Nha Trang', 'Hue'],
+  PH: ['Manila', 'Quezon City', 'Davao', 'Cebu City', 'Makati', 'Taguig', 'Pasig', 'Caloocan'],
+  MY: ['Kuala Lumpur', 'George Town', 'Johor Bahru', 'Ipoh', 'Shah Alam', 'Petaling Jaya', 'Kota Kinabalu', 'Kuching'],
+  SG: ['Singapore'],
+  AE: ['Dubai', 'Abu Dhabi', 'Sharjah', 'Ajman', 'Ras Al Khaimah', 'Fujairah', 'Al Ain'],
+  SA: ['Riyadh', 'Jeddah', 'Mecca', 'Medina', 'Dammam', 'Khobar', 'Taif', 'Tabuk'],
+  EG: ['Cairo', 'Alexandria', 'Giza', 'Shubra El Kheima', 'Port Said', 'Suez', 'Luxor', 'Aswan'],
+  ZA: ['Johannesburg', 'Cape Town', 'Durban', 'Pretoria', 'Port Elizabeth', 'Bloemfontein', 'East London', 'Centurion'],
+  NG: ['Lagos', 'Abuja', 'Kano', 'Ibadan', 'Port Harcourt', 'Benin City', 'Kaduna', 'Enugu'],
+  KE: ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru', 'Eldoret', 'Thika'],
+  MA: ['Casablanca', 'Rabat', 'Fes', 'Marrakech', 'Tangier', 'Agadir', 'Meknes', 'Oujda'],
+  TR: ['Istanbul', 'Ankara', 'Izmir', 'Bursa', 'Antalya', 'Adana', 'Gaziantep', 'Konya'],
+  PL: ['Warsaw', 'Kraków', 'Łódź', 'Wrocław', 'Poznań', 'Gdańsk', 'Szczecin', 'Bydgoszcz', 'Lublin', 'Katowice'],
+  SE: ['Stockholm', 'Gothenburg', 'Malmö', 'Uppsala', 'Västerås', 'Örebro', 'Linköping', 'Helsingborg'],
+  NO: ['Oslo', 'Bergen', 'Trondheim', 'Stavanger', 'Drammen', 'Fredrikstad', 'Kristiansand', 'Tromsø'],
+  DK: ['Copenhagen', 'Aarhus', 'Odense', 'Aalborg', 'Esbjerg', 'Randers', 'Kolding', 'Horsens'],
+  FI: ['Helsinki', 'Espoo', 'Tampere', 'Vantaa', 'Oulu', 'Turku', 'Jyväskylä', 'Lahti'],
+  IE: ['Dublin', 'Cork', 'Limerick', 'Galway', 'Waterford', 'Drogheda', 'Dundalk', 'Swords'],
+  CH: ['Zurich', 'Geneva', 'Basel', 'Lausanne', 'Bern', 'Winterthur', 'Lucerne', 'St. Gallen'],
+  AT: ['Vienna', 'Graz', 'Linz', 'Salzburg', 'Innsbruck', 'Klagenfurt', 'Villach', 'Wels'],
+  CZ: ['Prague', 'Brno', 'Ostrava', 'Plzeň', 'Liberec', 'Olomouc'],
+  GR: ['Athens', 'Thessaloniki', 'Patras', 'Heraklion', 'Larissa', 'Volos', 'Rhodes', 'Ioannina'],
+  RO: ['Bucharest', 'Cluj-Napoca', 'Timișoara', 'Iași', 'Constanța', 'Craiova', 'Brașov', 'Galați'],
+  HU: ['Budapest', 'Debrecen', 'Szeged', 'Miskolc', 'Pécs', 'Győr', 'Nyíregyháza'],
+  RU: ['Moscow', 'Saint Petersburg', 'Novosibirsk', 'Yekaterinburg', 'Kazan', 'Nizhny Novgorod', 'Chelyabinsk', 'Samara'],
+  UA: ['Kyiv', 'Kharkiv', 'Odesa', 'Dnipro', 'Lviv', 'Zaporizhzhia'],
+  IL: ['Tel Aviv', 'Jerusalem', 'Haifa', 'Rishon LeZion', 'Petah Tikva', 'Ashdod', 'Netanya', 'Beersheba'],
+  NZ: ['Auckland', 'Wellington', 'Christchurch', 'Hamilton', 'Tauranga', 'Napier', 'Dunedin', 'Palmerston North'],
+  HK: ['Hong Kong'],
+  TW: ['Taipei', 'Kaohsiung', 'Taichung', 'Tainan', 'Hsinchu', 'Keelung'],
+  PK: ['Karachi', 'Lahore', 'Islamabad', 'Faisalabad', 'Rawalpindi', 'Multan', 'Peshawar', 'Quetta'],
+  BD: ['Dhaka', 'Chittagong', 'Khulna', 'Rajshahi', 'Sylhet', 'Gazipur'],
+  IQ: ['Baghdad', 'Basra', 'Mosul', 'Erbil', 'Kirkuk', 'Najaf', 'Karbala'],
+  IR: ['Tehran', 'Mashhad', 'Isfahan', 'Karaj', 'Shiraz', 'Tabriz', 'Qom', 'Ahvaz'],
+};
+
+const capitals = {
+  AD: 'Andorra la Vella', AF: 'Kabul', AG: "St. John's", AI: 'The Valley', AL: 'Tirana', AM: 'Yerevan', AO: 'Luanda', AS: 'Pago Pago', AW: 'Oranjestad', AZ: 'Baku', BA: 'Sarajevo', BB: 'Bridgetown', BF: 'Ouagadougou', BG: 'Sofia', BH: 'Manama', BI: 'Gitega', BJ: 'Porto-Novo', BM: 'Hamilton', BN: 'Bandar Seri Begawan', BO: 'La Paz', BS: 'Nassau', BT: 'Thimphu', BW: 'Gaborone', BY: 'Minsk', BZ: 'Belmopan', CD: 'Kinshasa', CF: 'Bangui', CG: 'Brazzaville', CI: 'Yamoussoukro', CM: 'Yaoundé', CR: 'San José', CU: 'Havana', CV: 'Praia', CW: 'Willemstad', CY: 'Nicosia', DJ: 'Djibouti', DM: 'Roseau', DO: 'Santo Domingo', DZ: 'Algiers', EC: 'Quito', EE: 'Tallinn', EH: 'Laayoune', ER: 'Asmara', ET: 'Addis Ababa', FJ: 'Suva', FK: 'Stanley', FM: 'Palikir', FO: 'Tórshavn', GA: 'Libreville', GD: "St. George's", GE: 'Tbilisi', GF: 'Cayenne', GG: 'St Peter Port', GH: 'Accra', GI: 'Gibraltar', GL: 'Nuuk', GM: 'Banjul', GN: 'Conakry', GP: 'Basse-Terre', GQ: 'Malabo', GT: 'Guatemala City', GU: 'Hagåtña', GW: 'Bissau', GY: 'Georgetown', HN: 'Tegucigalpa', HR: 'Zagreb', HT: 'Port-au-Prince', IM: 'Douglas', IS: 'Reykjavík', JE: 'Saint Helier', JM: 'Kingston', JO: 'Amman', KG: 'Bishkek', KH: 'Phnom Penh', KI: 'Tarawa', KM: 'Moroni', KN: 'Basseterre', KP: 'Pyongyang', KW: 'Kuwait City', KY: 'George Town', KZ: 'Astana', LA: 'Vientiane', LB: 'Beirut', LC: 'Castries', LI: 'Vaduz', LK: 'Colombo', LR: 'Monrovia', LS: 'Maseru', LT: 'Vilnius', LU: 'Luxembourg', LV: 'Riga', LY: 'Tripoli', MC: 'Monaco', MD: 'Chișinău', ME: 'Podgorica', MF: 'Marigot', MG: 'Antananarivo', MH: 'Majuro', MK: 'Skopje', ML: 'Bamako', MM: 'Naypyidaw', MN: 'Ulaanbaatar', MO: 'Macau', MP: 'Saipan', MQ: 'Fort-de-France', MR: 'Nouakchott', MS: 'Plymouth', MT: 'Valletta', MU: 'Port Louis', MV: 'Malé', MW: 'Lilongwe', MZ: 'Maputo', NA: 'Windhoek', NC: 'Nouméa', NE: 'Niamey', NF: 'Kingston', NI: 'Managua', NP: 'Kathmandu', NR: 'Yaren', NU: 'Alofi', OM: 'Muscat', PA: 'Panama City', PF: 'Papeete', PG: 'Port Moresby', PK: 'Islamabad', PM: 'Saint-Pierre', PR: 'San Juan', PS: 'Ramallah', PW: 'Ngerulmud', PY: 'Asunción', QA: 'Doha', RE: 'Saint-Denis', RS: 'Belgrade', RW: 'Kigali', SB: 'Honiara', SC: 'Victoria', SD: 'Khartoum', SH: 'Jamestown', SI: 'Ljubljana', SK: 'Bratislava', SL: 'Freetown', SM: 'San Marino', SN: 'Dakar', SO: 'Mogadishu', SR: 'Paramaribo', SS: 'Juba', ST: 'São Tomé', SV: 'San Salvador', SX: 'Philipsburg', SY: 'Damascus', SZ: 'Mbabane', TC: 'Cockburn Town', TD: "N'Djamena", TG: 'Lomé', TJ: 'Dushanbe', TK: 'Atafu', TL: 'Dili', TM: 'Ashgabat', TN: 'Tunis', TO: "Nuku'alofa", TT: 'Port of Spain', TV: 'Funafuti', TZ: 'Dodoma', UG: 'Kampala', UY: 'Montevideo', UZ: 'Tashkent', VA: 'Vatican City', VC: 'Kingstown', VE: 'Caracas', VG: 'Road Town', VI: 'Charlotte Amalie', VU: 'Port Vila', WF: 'Mata-Utu', WS: 'Apia', XK: 'Pristina', YE: "Sana'a", YT: 'Mamoudzou', ZM: 'Lusaka', ZW: 'Harare',
+};
+
+for (const [code, capital] of Object.entries(capitals)) {
+  if (!cities[code]) cities[code] = [capital];
+  else if (!cities[code].includes(capital)) cities[code].unshift(capital);
+}
+
+fs.writeFileSync(path.join(out, 'countries.json'), JSON.stringify(codes));
+fs.writeFileSync(path.join(out, 'cities-by-country.json'), JSON.stringify(cities));
+console.log('ok', codes.length, Object.keys(cities).length);

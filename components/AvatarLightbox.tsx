@@ -91,6 +91,8 @@ export function AvatarLightbox({
                 source={{ uri: src }}
                 cachePolicy="memory-disk"
                 contentFit="cover"
+                transition={0}
+                priority="high"
                 style={{
                   width: size,
                   height: size,

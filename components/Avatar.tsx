@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { initials } from '../utils/validation';
 import { Theme, type } from '../theme';
@@ -19,25 +19,13 @@ export function Avatar({
   size?: number;
 }) {
   const src = uri || lookupImage(userId, uri);
-  const outline = { borderWidth: 1, borderColor: theme.imageOutline };
+  const [photoReady, setPhotoReady] = useState(false);
 
   useEffect(() => {
+    setPhotoReady(false);
     prefetchProfileImage([userId, uri], uri);
   }, [uri, userId]);
 
-  if (src) {
-    return (
-      <Image
-        source={{ uri: src }}
-        cachePolicy="memory-disk"
-        recyclingKey={src}
-        transition={0}
-        priority="high"
-        contentFit="cover"
-        style={{ width: size, height: size, borderRadius: size / 2, ...outline }}
-      />
-    );
-  }
   return (
     <View
       style={{
@@ -45,12 +33,28 @@ export function Avatar({
         height: size,
         borderRadius: size / 2,
         backgroundColor: theme.accentSoft,
+        borderWidth: 1,
+        borderColor: theme.imageOutline,
+        overflow: 'hidden',
         alignItems: 'center',
         justifyContent: 'center',
-        ...outline,
       }}
     >
-      <Text style={[type.headline, { color: theme.accent, fontSize: size * 0.36 }]}>{initials(name)}</Text>
+      <Text style={[type.headline, { color: theme.accent, fontSize: size * 0.36 }]}>
+        {initials(name)}
+      </Text>
+      {src ? (
+        <Image
+          source={{ uri: src }}
+          cachePolicy="memory-disk"
+          recyclingKey={src}
+          transition={0}
+          priority="high"
+          contentFit="cover"
+          onLoad={() => setPhotoReady(true)}
+          style={[StyleSheet.absoluteFill, { opacity: photoReady ? 1 : 0 }]}
+        />
+      ) : null}
     </View>
   );
 }

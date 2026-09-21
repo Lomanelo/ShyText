@@ -24,7 +24,15 @@ export interface UserStats {
   chatsStarted: number;
 }
 
-export type Gender = 'male' | 'female';
+export type Gender = 'man' | 'woman' | 'nonbinary' | 'another' | 'prefer_not';
+
+export const GENDER_OPTIONS: Gender[] = [
+  'man',
+  'woman',
+  'nonbinary',
+  'another',
+  'prefer_not',
+];
 
 /**
  * Owner-only document at users/{uid}/private/profile.
@@ -32,13 +40,17 @@ export type Gender = 'male' | 'female';
  */
 export interface PrivateProfile {
   gender?: Gender;
-  /** ISO date (YYYY-MM-DD). Age shown publicly is derived once at save time. */
+  /** ISO date (YYYY-MM-DD). Kept private; age is not shown publicly by default. */
   birthDate?: string;
   email?: string;
   city?: string;
-  /** Country of residence. */
+  /** Country of residence (localized display name) — inferred, editable in settings. */
   country?: string;
+  /** ISO 3166-1 alpha-2 — source of truth for the country picker. */
+  countryCode?: string;
+  /** Optional; not collected during onboarding. */
   nationality?: string;
+  nationalityCode?: string;
   updatedAt?: number;
 }
 

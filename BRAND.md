@@ -338,7 +338,7 @@ Until (1) exists, do not run a 12-slide campaign — Flick will drift.
 
 ## 14. Legal / safety on camera
 
-- 17+ product. No school-coded content, no “teen nightlife.”
+- 18+ product. No school-coded content, no “teen nightlife.”
 - No real people’s faces from venues.
 - No “we know who’s nearby” energy. Heat is venue activity, not a people map.
 - Check-in is opt-in. Copy must never say the app tracks you in the background.

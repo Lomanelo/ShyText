@@ -27,7 +27,7 @@ import { DEMO_VENUES, seedCheckIns } from './mockData';
 import { ShyTextVibe } from '../types/shytext';
 import { isBlockedEitherWay } from './blocks';
 import { recordVenueShyText } from './venueHeat';
-import { moderateText } from './moderation';
+import { moderateTextRemote } from './moderation';
 import { prefetchProfileImage } from './imageCache';
 import { rememberVenueImage } from './venueImageCache';
 import { notifyUser } from './notifications';
@@ -357,7 +357,7 @@ export async function updateCheckInVibe(vibe: ShyTextVibe, status?: string | nul
   } else if (status !== undefined) {
     const trimmed = status?.trim() ?? '';
     if (trimmed) {
-      const moderated = moderateText(trimmed, { maxLength: MAX_STATUS_LENGTH });
+      const moderated = await moderateTextRemote(trimmed, { maxLength: MAX_STATUS_LENGTH });
       if (!moderated.ok) throw new Error(moderated.reason);
     }
     payload.status = trimmed || null;

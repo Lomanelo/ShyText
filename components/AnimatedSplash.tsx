@@ -1,8 +1,10 @@
-import { useCallback, useEffect } from 'react';
-import { StyleSheet, Text, useColorScheme } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import * as SplashScreen from 'expo-splash-screen';
 import Animated, {
   Easing,
+  cancelAnimation,
   interpolate,
   runOnJS,
   useAnimatedStyle,
@@ -11,133 +13,196 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { FlameMark } from './flame-mark';
-import { brand, motion } from '../theme';
+import { brand } from '../theme';
 import { useReduceMotion } from '../hooks/useReduceMotion';
-
-/** Must match the expo-splash-screen plugin config exactly for a seamless handoff. */
-const LIGHT_BG = '#FCF3E8';
-const DARK_BG = '#12100E';
-const FLAME = 148;
+import { warmLocalAssets } from '../services/warmAssets';
 
 /**
- * Cinematic launch: native splash (lit flame) hands off to this overlay —
- * one flame breath, ShyText wordmark rises underneath, then a soft dissolve.
+ * Must match expo-splash-screen plugin `imageWidth` + backgroundColor exactly.
+ * Any mismatch → visible pop on the native → JS handoff.
+ */
+const LIGHT_BG = '#FCF3E8';
+const DARK_BG = '#12100E';
+const FLAME_SIZE = 160;
+const FLAME_SRC = require('../assets/images/flame-lit.png');
+
+const EASE_OUT = Easing.bezier(0.16, 1, 0.3, 1);
+const EASE_INOUT = Easing.bezier(0.45, 0, 0.55, 1);
+
+// Start decoding stamps + flames immediately (shared promise).
+void warmLocalAssets();
+
+/**
+ * Launch handoff — Cash App / Linear pattern:
+ * 1) Hold a frame identical to the native splash
+ * 2) One soft breath + wordmark rise
+ * 3) Opacity-only dissolve (never scale the full-screen veil)
  */
 export function AnimatedSplash({ onDone }: { onDone: () => void }) {
   const scheme = useColorScheme();
   const reduce = useReduceMotion();
-  const breathe = useSharedValue(1);
-  const word = useSharedValue(0);
+  const [ready, setReady] = useState(false);
+
   const veil = useSharedValue(1);
-  const push = useSharedValue(1);
-  const flameLift = useSharedValue(0);
+  const breath = useSharedValue(1);
+  const wordEnter = useSharedValue(0);
+  const content = useSharedValue(1);
 
   const finish = useCallback(() => onDone(), [onDone]);
 
+  const onFlameReady = useCallback(() => {
+    setReady(true);
+  }, []);
+
+  // Warm local graphics while the splash holds; also cover load-end misses.
   useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      void SplashScreen.hideAsync().catch(() => undefined);
+    let cancelled = false;
+    void warmLocalAssets().then(() => {
+      if (!cancelled) setReady(true);
     });
+    const t = setTimeout(() => {
+      if (!cancelled) setReady(true);
+    }, 1200);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, []);
+
+  // Hide native splash only after the JS flame is painted — kills the flash/pop.
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+    const id = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        void SplashScreen.hideAsync().catch(() => undefined);
+      });
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+    };
+  }, [ready]);
+
+  useEffect(() => {
+    if (!ready) return;
 
     if (reduce) {
-      word.value = 1;
-      flameLift.value = 1;
+      wordEnter.value = 1;
       veil.value = withDelay(
-        520,
-        withTiming(0, { duration: 220 }, (done) => {
+        280,
+        withTiming(0, { duration: 240, easing: EASE_OUT }, (done) => {
           if (done) runOnJS(finish)();
         })
       );
-      return () => cancelAnimationFrame(raf);
+      return () => cancelAnimation(veil);
     }
 
-    // Soft breath on the flame.
-    breathe.value = withSequence(
-      withTiming(1.06, { duration: 680, easing: Easing.inOut(Easing.quad) }),
-      withTiming(1, { duration: 680, easing: Easing.inOut(Easing.quad) })
+    // Soft single breath — organic, not a bounce loop.
+    breath.value = withDelay(
+      120,
+      withSequence(
+        withTiming(1.045, { duration: 720, easing: EASE_INOUT }),
+        withTiming(1, { duration: 640, easing: EASE_INOUT })
+      )
     );
 
-    // Flame drifts up slightly as the wordmark claims the space below.
-    flameLift.value = withDelay(
-      280,
-      withTiming(1, { duration: motion.reveal, easing: Easing.out(Easing.cubic) })
+    // Wordmark title-card: fade + short rise under the flame.
+    wordEnter.value = withDelay(
+      420,
+      withTiming(1, { duration: 640, easing: EASE_OUT })
     );
 
-    // Wordmark: title-card fade + rise.
-    word.value = withDelay(
-      motion.echo + 80,
-      withTiming(1, { duration: motion.reveal, easing: Easing.out(Easing.cubic) })
-    );
-
-    // Dissolve into the app.
-    push.value = withDelay(
-      1480,
-      withTiming(1.028, { duration: motion.dissolve, easing: Easing.out(Easing.cubic) })
+    // Dissolve: brand content first, then the solid veil — no container scale.
+    content.value = withDelay(
+      1320,
+      withTiming(0, { duration: 420, easing: EASE_OUT })
     );
     veil.value = withDelay(
-      1480,
-      withTiming(0, { duration: motion.dissolve, easing: Easing.out(Easing.cubic) }, (done) => {
+      1500,
+      withTiming(0, { duration: 480, easing: EASE_OUT }, (done) => {
         if (done) runOnJS(finish)();
       })
     );
 
-    return () => cancelAnimationFrame(raf);
-  }, [breathe, finish, flameLift, push, reduce, veil, word]);
+    return () => {
+      cancelAnimation(breath);
+      cancelAnimation(wordEnter);
+      cancelAnimation(content);
+      cancelAnimation(veil);
+    };
+  }, [breath, content, finish, ready, reduce, veil, wordEnter]);
 
   const veilStyle = useAnimatedStyle(() => ({
     opacity: veil.value,
-    transform: [{ scale: push.value }],
   }));
+
   const flameStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: interpolate(flameLift.value, [0, 1], [0, -18]) },
-      { scale: breathe.value },
-    ],
+    opacity: content.value,
+    transform: [{ scale: breath.value }],
   }));
+
   const wordStyle = useAnimatedStyle(() => ({
-    opacity: word.value,
-    transform: [{ translateY: interpolate(word.value, [0, 1], [18, 0]) }],
+    opacity: wordEnter.value * content.value,
+    transform: [{ translateY: interpolate(wordEnter.value, [0, 1], [10, 0]) }],
   }));
+
+  const bg = scheme === 'dark' ? DARK_BG : LIGHT_BG;
 
   return (
     <Animated.View
       pointerEvents="none"
       accessibilityElementsHidden
-      style={[styles.fill, { backgroundColor: scheme === 'dark' ? DARK_BG : LIGHT_BG }, veilStyle]}
+      importantForAccessibility="no-hide-descendants"
+      collapsable={false}
+      style={[styles.fill, { backgroundColor: bg }, veilStyle]}
     >
-      <Animated.View style={flameStyle}>
-        <FlameMark size={FLAME} variant="lit" />
-      </Animated.View>
-      <Animated.View style={[styles.wordWrap, wordStyle]}>
-        <Text style={[styles.word, { color: brand.accent }]}>ShyText</Text>
-      </Animated.View>
+      <View style={styles.stage} collapsable={false}>
+        <Animated.View style={flameStyle} collapsable={false}>
+          <ExpoImage
+            source={FLAME_SRC}
+            accessibilityIgnoresInvertColors
+            onLoad={onFlameReady}
+            onError={onFlameReady}
+            cachePolicy="memory-disk"
+            transition={0}
+            priority="high"
+            contentFit="contain"
+            style={styles.flame}
+          />
+        </Animated.View>
+        <Animated.View style={[styles.wordWrap, wordStyle]}>
+          <Text style={[styles.word, { color: brand.accent }]}>ShyText</Text>
+        </Animated.View>
+      </View>
     </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   fill: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    zIndex: 10,
+    ...StyleSheet.absoluteFill,
+    zIndex: 100,
+    elevation: 100,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  stage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flame: {
+    width: FLAME_SIZE,
+    height: FLAME_SIZE,
+  },
   wordWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: '50%',
-    marginTop: FLAME / 2 + 10,
+    marginTop: 14,
     alignItems: 'center',
   },
   word: {
     fontSize: 28,
     fontWeight: '700',
-    letterSpacing: 0.6,
+    letterSpacing: 0.4,
   },
 });

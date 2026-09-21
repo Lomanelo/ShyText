@@ -22,6 +22,7 @@ import { OtpSlots } from './OtpSlots';
 import { PressScale } from './PressScale';
 import { motion, radius, space, type, useTheme } from '../theme';
 import { usePhoneAuth } from '../hooks/usePhoneAuth';
+import { clearNativePhoneAuth } from '../services/phone-native';
 import { useTranslation } from 'react-i18next';
 import {
   CALLING_CODES,
@@ -51,6 +52,8 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
   const submittedCode = useRef('');
 
   useEffect(() => {
+    // Clear any leftover native Auth session from a JS-only logout.
+    void clearNativePhoneAuth();
     WebBrowser.warmUpAsync();
     return () => {
       WebBrowser.coolDownAsync();
@@ -154,6 +157,23 @@ export function PhoneAuthForm({ title, body, footerLabel, footerAction, footerHr
               loading={auth.loading}
               onPress={() => auth.sendCode(phone)}
             />
+            <Text style={[type.caption, { color: theme.quiet, textAlign: 'center', paddingHorizontal: space[8] }]}>
+              {t('auth.legalByContinuing')}{' '}
+              <Text
+                style={{ color: theme.accent, fontWeight: '600' }}
+                onPress={() => router.push('/legal/terms')}
+              >
+                {t('legal.terms')}
+              </Text>{' '}
+              {t('auth.legalAnd')}{' '}
+              <Text
+                style={{ color: theme.accent, fontWeight: '600' }}
+                onPress={() => router.push('/legal/privacy')}
+              >
+                {t('legal.privacy')}
+              </Text>
+              {t('auth.legalPeriod')}
+            </Text>
             <Pressable onPress={() => router.push(footerHref)} style={styles.footer}>
               <Text style={{ color: theme.muted }}>
                 {footerLabel} <Text style={{ color: theme.accent, fontWeight: '700' }}>{footerAction}</Text>

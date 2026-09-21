@@ -1,3 +1,7 @@
+import * as Localization from 'expo-localization';
+import countries from '../data/countries.json';
+import citiesByCountry from '../data/cities-by-country.json';
+
 /** How close you must be to check in — and to stay checked in when you reopen. */
 export const NEARBY_RADIUS_METERS = 100;
 export const NEARBY_MAX_VENUES = 5;
@@ -45,4 +49,54 @@ export function pickClosest<T extends { distanceMeters: number }>(
     .filter((item) => Number.isFinite(item.distanceMeters) && item.distanceMeters <= radiusMeters)
     .sort((a, b) => a.distanceMeters - b.distanceMeters)
     .slice(0, limit);
+}
+
+export type CountryOption = { code: string; name: string };
+export type CityOption = { id: string; name: string };
+
+const CITY_MAP = citiesByCountry as Record<string, string[]>;
+
+export function listCountries(locale: string): CountryOption[] {
+  let names: Intl.DisplayNames | null = null;
+  try {
+    names = new Intl.DisplayNames([locale], { type: 'region' });
+  } catch {
+    try {
+      names = new Intl.DisplayNames(['en'], { type: 'region' });
+    } catch {
+      names = null;
+    }
+  }
+  return (countries as string[])
+    .map((code) => ({
+      code,
+      name: names?.of(code) ?? code,
+    }))
+    .filter((item) => item.name && item.name !== item.code)
+    .sort((a, b) => a.name.localeCompare(b.name, locale));
+}
+
+export function countryName(code: string, locale: string): string {
+  try {
+    return new Intl.DisplayNames([locale], { type: 'region' }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+export function listCities(countryCode: string): CityOption[] {
+  const list = CITY_MAP[countryCode] ?? [];
+  return list.map((name) => ({ id: `${countryCode}:${name}`, name }));
+}
+
+export function defaultCountryCode(): string {
+  return Localization.getLocales()[0]?.regionCode || 'US';
+}
+
+/** Resolve an ISO code from a previously stored display name (legacy private profiles). */
+export function countryCodeFromName(name: string | undefined, locale: string): string | undefined {
+  if (!name) return undefined;
+  const needle = name.trim().toLowerCase();
+  if (!needle) return undefined;
+  return listCountries(locale).find((c) => c.name.toLowerCase() === needle)?.code;
 }

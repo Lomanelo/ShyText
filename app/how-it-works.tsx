@@ -27,7 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Screen } from '../components/Screen';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { Avatar } from '../components/Avatar';
-import { flameSource } from '../components/flame-mark';
+import { flameSource, AnimatedFlameImage } from '../components/flame-mark';
 import { radius, space, Theme, type, useTheme } from '../theme';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { HOW_IT_WORKS_SEEN_KEY } from '../utils/walkthrough';
@@ -144,9 +144,20 @@ function SlideDemo({ theme, reduce }: { theme: Theme; reduce: boolean }) {
           </Text>
         </Animated.View>
         <Animated.View style={[styles.demoThumb, { backgroundColor: theme.card }, thumbStyle]}>
-          <Animated.Image source={flameSource('dim')} style={[styles.demoFlame, dimStyle]} />
-          <Animated.Image
+          <AnimatedFlameImage
+            source={flameSource('dim')}
+            cachePolicy="memory-disk"
+            transition={0}
+            priority="high"
+            contentFit="contain"
+            style={[styles.demoFlame, dimStyle]}
+          />
+          <AnimatedFlameImage
             source={flameSource('lit')}
+            cachePolicy="memory-disk"
+            transition={0}
+            priority="high"
+            contentFit="contain"
             style={[styles.demoFlame, styles.demoFlameOverlay, litStyle]}
           />
         </Animated.View>
@@ -174,7 +185,14 @@ function PeopleDemo({ theme, reduce }: { theme: Theme; reduce: boolean }) {
   }));
 
   const flame = (
-    <Animated.Image source={flameSource('lit')} style={{ width: 18, height: 18, resizeMode: 'contain' }} />
+    <AnimatedFlameImage
+      source={flameSource('lit')}
+      cachePolicy="memory-disk"
+      transition={0}
+      priority="high"
+      contentFit="contain"
+      style={{ width: 18, height: 18 }}
+    />
   );
 
   return (
@@ -335,7 +353,14 @@ function ChatDemo({ theme, reduce }: { theme: Theme; reduce: boolean }) {
         <Text style={[type.body, { color: theme.onAccent }]}>{t('walkthrough.demoMsg2')}</Text>
       </Animated.View>
       <Animated.View style={[styles.meetRow, meet]}>
-        <Animated.Image source={flameSource('lit')} style={{ width: 20, height: 20, resizeMode: 'contain' }} />
+        <AnimatedFlameImage
+          source={flameSource('lit')}
+          cachePolicy="memory-disk"
+          transition={0}
+          priority="high"
+          contentFit="contain"
+          style={{ width: 20, height: 20 }}
+        />
         <Text style={[type.caption, { color: theme.muted }]}>{t('walkthrough.offline')}</Text>
       </Animated.View>
     </View>
@@ -525,7 +550,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
-  demoFlame: { width: 28, height: 28, resizeMode: 'contain' },
+  demoFlame: { width: 28, height: 28 },
   demoFlameOverlay: { position: 'absolute' },
   personRow: {
     flexDirection: 'row',

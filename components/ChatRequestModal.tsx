@@ -8,6 +8,7 @@ import { radius, space, Theme, type } from '../theme';
 import { PrimaryButton } from './PrimaryButton';
 import { PressScale } from './PressScale';
 import { MAX_MESSAGE_LENGTH } from '../utils/config';
+import { userFacingError } from '../utils/userError';
 
 export function ChatRequestModal({
   visible,
@@ -51,7 +52,7 @@ export function ChatRequestModal({
       setIntro('');
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.couldNotSend'));
+      setError(userFacingError(err, t('errors.couldNotSend')));
     } finally {
       setBusy(false);
     }

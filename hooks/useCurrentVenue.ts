@@ -21,10 +21,12 @@ import {
   patchPendingCheckIn,
   setPendingShyneError,
 } from '../services/pendingShyne';
+import { CURRENT_VENUE_KEY } from '../services/session';
+import { userFacingError } from '../utils/userError';
 import { ShyTextVibe } from '../types/shytext';
 import { DEFAULT_SHYTEXT_MINUTES } from '../utils/config';
 
-const KEY = 'currentVenue';
+const KEY = CURRENT_VENUE_KEY;
 const VIBE_KEY = 'lastCheckInVibe';
 
 function buildOptimisticCheckIn(
@@ -66,8 +68,11 @@ export function useCurrentVenue() {
       unsubCheckIn?.();
       unsubCheckIn = undefined;
       if (!user) {
+        clearPendingShyne();
+        void syncCheckInEndingNotice(null);
         setCheckIn(null);
         setShyneVenue(null);
+        setVenue(null);
         setLoading(false);
         return;
       }
@@ -178,7 +183,7 @@ export function useCurrentVenue() {
         await AsyncStorage.setItem(VIBE_KEY, vibe);
         return created;
       } catch (err) {
-        setPendingShyneError(next.id, err instanceof Error ? err.message : 'Could not check in');
+        setPendingShyneError(next.id, userFacingError(err, 'Could not check in'));
         setCheckIn((prev) => (prev?.id.startsWith('pending:') ? null : prev));
         setShyneVenue((prev) => (prev?.id === next.id && !getPendingShyne(next.id) ? null : prev));
         throw err;

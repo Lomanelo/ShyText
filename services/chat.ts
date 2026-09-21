@@ -17,7 +17,7 @@ import {
 import { FirebaseError } from 'firebase/app';
 import { auth, db } from './firebase';
 import { ChatMessage, ChatRequest, Conversation } from '../types/chat';
-import { moderateText } from './moderation';
+import { moderateTextRemote } from './moderation';
 import { MAX_REQUESTS_PER_HOUR, REQUEST_REPLY_LOCK_MS } from '../utils/config';
 import { isChatSendingOpen } from '../utils/chatTime';
 import { isBlockedEitherWay } from './blocks';
@@ -154,7 +154,7 @@ export async function sendChatRequest(input: {
   }
 
   if (input.introMessage) {
-    const moderated = moderateText(input.introMessage);
+    const moderated = await moderateTextRemote(input.introMessage);
     if (!moderated.ok) throw new Error(moderated.reason);
   }
 
@@ -244,7 +244,7 @@ export async function sendChatRequest(input: {
     {
       titleKey: 'push.shytextTitle',
       bodyKey: 'push.openToRead',
-      data: { type: 'shytext' },
+      data: { type: 'shytext', venueId: input.venueId },
     },
     'shytexts'
   ).catch(() => undefined);
@@ -419,21 +419,29 @@ export async function sendMessage(conversationId: string, text: string) {
   } else if (!isChatSendingOpen(convo)) {
     throw new Error(i18n.t('errors.chatNotFound'));
   }
-  const moderated = moderateText(text);
+  const moderated = await moderateTextRemote(text);
   if (!moderated.ok) throw new Error(moderated.reason);
   const body = text.trim();
-  await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
-    senderId: user.uid,
-    text: body,
-    createdAt: Date.now(),
-    serverCreatedAt: serverTimestamp(),
-  });
-  await updateDoc(doc(db, 'conversations', conversationId), {
-    lastMessage: body,
-    lastMessageAt: Date.now(),
-    lastSenderId: user.uid,
-    status: 'active',
-  });
+
+  // Server-side moderation + write (Admin SDK). Falls back to client write if API is down.
+  try {
+    const { authedPost } = await import('./api');
+    await authedPost('/api/messages', { conversationId, text: body });
+  } catch {
+    await addDoc(collection(db, 'conversations', conversationId, 'messages'), {
+      senderId: user.uid,
+      text: body,
+      createdAt: Date.now(),
+      serverCreatedAt: serverTimestamp(),
+    });
+    await updateDoc(doc(db, 'conversations', conversationId), {
+      lastMessage: body,
+      lastMessageAt: Date.now(),
+      lastSenderId: user.uid,
+      status: 'active',
+    });
+  }
+
   const otherId = convo.participantIds.find((id) => id !== user.uid);
   if (otherId) {
     void (async () => {

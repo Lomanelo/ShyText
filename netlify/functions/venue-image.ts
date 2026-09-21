@@ -1,16 +1,11 @@
 import type { Config, Context } from '@netlify/functions';
+import { clientIp, json, verifyIdToken } from './_shared/auth';
+import { pruneRateLimits, rateLimit } from './_shared/rateLimit';
 import { searchSerperVenueImage, serperConfigured } from './_shared/serperClient';
 
 type CacheEntry = { at: number; imageUrl: string };
 const cache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-
-function json(body: unknown, status = 200) {
-  return Response.json(body, {
-    status,
-    headers: { 'Cache-Control': 'no-store' },
-  });
-}
 
 function clampDimension(value: number) {
   return Math.min(640, Math.max(1, Math.round(value)));
@@ -19,6 +14,30 @@ function clampDimension(value: number) {
 export default async (req: Request, _context: Context) => {
   if (req.method !== 'GET') {
     return new Response('Method not allowed', { status: 405 });
+  }
+
+  const user = await verifyIdToken(req);
+  if (!user) {
+    return json({ error: 'Unauthorized', code: 'unauthorized', available: false }, 401);
+  }
+
+  pruneRateLimits();
+  const ip = clientIp(req);
+  const uidLimit = rateLimit(`venue-image:uid:${user.uid}`, 90, 60_000);
+  if (!uidLimit.ok) {
+    return json(
+      { error: 'Too many requests', code: 'rate_limited', available: false },
+      429,
+      { 'Retry-After': String(uidLimit.retryAfterSec) }
+    );
+  }
+  const ipLimit = rateLimit(`venue-image:ip:${ip}`, 180, 60_000);
+  if (!ipLimit.ok) {
+    return json(
+      { error: 'Too many requests', code: 'rate_limited', available: false },
+      429,
+      { 'Retry-After': String(ipLimit.retryAfterSec) }
+    );
   }
 
   if (!serperConfigured()) {
@@ -44,7 +63,10 @@ export default async (req: Request, _context: Context) => {
     }
     const q = queryParts.filter(Boolean).join(' ').trim();
     if (!q) {
-      return json({ error: 'name, address, thumb, or lat/lng required', code: 'bad_request', available: false }, 400);
+      return json(
+        { error: 'name, address, thumb, or lat/lng required', code: 'bad_request', available: false },
+        400
+      );
     }
 
     const cacheKey = `${q.toLowerCase()}:${lang}`;
@@ -61,7 +83,10 @@ export default async (req: Request, _context: Context) => {
         imageUrl = found;
         cache.set(cacheKey, { at: Date.now(), imageUrl: found });
       } catch (err) {
-        const status = typeof err === 'object' && err && 'status' in err ? Number((err as { status: number }).status) : 502;
+        const status =
+          typeof err === 'object' && err && 'status' in err
+            ? Number((err as { status: number }).status)
+            : 502;
         const message = err instanceof Error ? err.message : 'Image search failed.';
         return json({ error: message, code: 'serper_image', available: false }, status);
       }
@@ -85,7 +110,7 @@ export default async (req: Request, _context: Context) => {
       status: 200,
       headers: {
         'Content-Type': imageRes.headers.get('Content-Type') || 'image/jpeg',
-        'Cache-Control': 'public, max-age=3600',
+        'Cache-Control': 'private, max-age=3600',
       },
     });
   } catch {

@@ -39,7 +39,8 @@ export default function SettingsScreen() {
         </Group>
         <Group theme={theme}>
           <ListRow title={t('settings.privacyPolicy')} theme={theme} onPress={() => router.push('/legal/privacy')} />
-          <ListRow title={t('settings.terms')} theme={theme} last onPress={() => router.push('/legal/terms')} />
+          <ListRow title={t('settings.terms')} theme={theme} onPress={() => router.push('/legal/terms')} />
+          <ListRow title={t('settings.guidelines')} theme={theme} last onPress={() => router.push('/legal/guidelines')} />
         </Group>
         <PrimaryButton
           title={t('common.signOut')}

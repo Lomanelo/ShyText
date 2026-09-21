@@ -61,6 +61,7 @@ export default function ProfileScreen() {
         </View>
         <Group theme={theme}>
           <ListRow title={t('profile.howItWorks')} theme={theme} onPress={() => router.push('/how-it-works')} />
+          <ListRow title={t('settings.guidelines')} theme={theme} onPress={() => router.push('/legal/guidelines')} />
           <ListRow
             title={t('settings.helpSupport')}
             theme={theme}

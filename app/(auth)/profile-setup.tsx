@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -11,101 +11,79 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import * as Localization from 'expo-localization';
+import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, { Easing, FadeInUp } from 'react-native-reanimated';
+import Animated, { Easing, FadeInRight, FadeOutLeft } from 'react-native-reanimated';
 import { Screen } from '../../components/Screen';
 import { PrimaryButton } from '../../components/PrimaryButton';
 import { PressScale } from '../../components/PressScale';
 import { Avatar } from '../../components/Avatar';
-import { motion, radius, space, type, useTheme, type Theme } from '../../theme';
+import { SearchSelectModal } from '../../components/SearchSelectModal';
+import { motion, radius, space, type, useTheme } from '../../theme';
 import { ageFromBirthDate, completeProfile, uploadAvatar } from '../../services/auth';
+import { userFacingError } from '../../utils/userError';
 import { HOW_IT_WORKS_SEEN_KEY } from '../../utils/walkthrough';
 import { useAuth } from '../../hooks/useAuth';
-import { Gender } from '../../types/user';
-import { MAX_BIO_LENGTH } from '../../utils/config';
+import { GENDER_OPTIONS, Gender } from '../../types/user';
+import {
+  countryName,
+  defaultCountryCode,
+  listCities,
+  listCountries,
+} from '../../utils/geo';
 import { useTranslation } from 'react-i18next';
 
 const EMAIL_RE = /^\S+@\S+\.\S+$/;
-const STEPS = 3;
 
-function defaultCountry(language: string): string {
-  try {
-    const region = Localization.getLocales()[0]?.regionCode;
-    if (!region) return '';
-    return new Intl.DisplayNames([language], { type: 'region' }).of(region) ?? '';
-  } catch {
-    return '';
-  }
-}
-
-function FieldGroup({
-  theme,
-  children,
-}: {
-  theme: Theme;
-  children: ReactNode;
-}) {
-  return (
-    <View style={[styles.group, { backgroundColor: theme.card }]}>{children}</View>
-  );
-}
-
-function FieldRow({
-  theme,
-  label,
-  last,
-  children,
-}: {
-  theme: Theme;
-  label: string;
-  last?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <View
-      style={[
-        styles.fieldRow,
-        !last
-          ? { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border }
-          : null,
-      ]}
-    >
-      <Text style={[styles.fieldLabel, { color: theme.quiet }]}>{label}</Text>
-      {children}
-    </View>
-  );
-}
+type StepId = 'birthday' | 'name' | 'gender' | 'photo' | 'email' | 'city';
 
 export default function ProfileSetupScreen() {
   const theme = useTheme();
   const { t, i18n } = useTranslation();
-  const { refreshProfile } = useAuth();
+  const { user, refreshProfile } = useAuth();
+
+  const authEmail = user?.email?.trim() || '';
+  const needsEmail = !EMAIL_RE.test(authEmail);
+
+  const steps = useMemo<StepId[]>(() => {
+    const list: StepId[] = ['birthday', 'name', 'gender', 'photo'];
+    if (needsEmail) list.push('email');
+    list.push('city');
+    return list;
+  }, [needsEmail]);
 
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
-  const [bio, setBio] = useState('');
   const [photoUri, setPhotoUri] = useState<string>();
   const [day, setDay] = useState('');
   const [month, setMonth] = useState('');
   const [year, setYear] = useState('');
   const [gender, setGender] = useState<Gender | null>(null);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(authEmail);
+  const [countryCode, setCountryCode] = useState(() => defaultCountryCode());
   const [city, setCity] = useState('');
-  const [country, setCountry] = useState(() => defaultCountry(i18n.language));
-  const [nationality, setNationality] = useState('');
+  const [suggestedCity, setSuggestedCity] = useState<string | null>(null);
+  const [detectingCity, setDetectingCity] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const monthRef = useRef<TextInput>(null);
   const yearRef = useRef<TextInput>(null);
-  const bioRef = useRef<TextInput>(null);
-  const cityRef = useRef<TextInput>(null);
-  const countryRef = useRef<TextInput>(null);
-  const nationalityRef = useRef<TextInput>(null);
+  const cityDetected = useRef(false);
+
+  // Keep step index valid if email step appears/disappears.
+  useEffect(() => {
+    if (step >= steps.length) setStep(steps.length - 1);
+  }, [step, steps.length]);
+
+  const stepId = steps[Math.min(step, steps.length - 1)];
+  const cities = useMemo(() => listCities(countryCode), [countryCode]);
+  const countries = useMemo(() => listCountries(i18n.language), [i18n.language]);
+  const countryLabel = countryName(countryCode, i18n.language);
 
   const birthDate = useMemo(() => {
     const d = Number(day);
@@ -119,12 +97,64 @@ export default function ProfileSetupScreen() {
   const birthdayComplete = day.length > 0 && month.length > 0 && year.length === 4;
   const underage = birthdayComplete && birthDate != null && age == null;
 
-  const stepReady =
-    step === 0
-      ? name.trim().length >= 2
-      : step === 1
-        ? age != null && gender != null
-        : EMAIL_RE.test(email.trim());
+  const stepReady = (() => {
+    switch (stepId) {
+      case 'birthday':
+        return age != null;
+      case 'name':
+        return name.trim().length >= 2;
+      case 'gender':
+        return true; // optional
+      case 'photo':
+        return true; // skippable
+      case 'email':
+        return EMAIL_RE.test(email.trim());
+      case 'city':
+        return Boolean(city);
+      default:
+        return false;
+    }
+  })();
+
+  // Infer city (and refine country) from location when we land on the city step.
+  useEffect(() => {
+    if (stepId !== 'city' || cityDetected.current) return;
+    cityDetected.current = true;
+    let cancelled = false;
+    (async () => {
+      setDetectingCity(true);
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted' || cancelled) return;
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        const places = await Location.reverseGeocodeAsync({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+        const place = places[0];
+        if (!place || cancelled) return;
+        const iso = place.isoCountryCode?.toUpperCase();
+        if (iso && countries.some((c) => c.code === iso)) {
+          setCountryCode(iso);
+        }
+        const detected =
+          place.city || place.subregion || place.district || place.region || '';
+        if (detected) {
+          setSuggestedCity(detected);
+          setCity((prev) => prev || detected);
+        }
+      } catch {
+        // Location optional — user can still pick from the list.
+      } finally {
+        if (!cancelled) setDetectingCity(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [countries, stepId]);
 
   const pickPhoto = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -152,26 +182,21 @@ export default function ProfileSetupScreen() {
       if (photoUri) {
         avatarUrl = await uploadAvatar(photoUri);
       }
-      await completeProfile(name.trim(), avatarUrl, bio.trim() || undefined, age, {
+      const resolvedEmail = needsEmail ? email.trim() : authEmail || undefined;
+      // Age stays private — never published on the public profile by default.
+      await completeProfile(name.trim(), avatarUrl, undefined, undefined, {
         gender: gender ?? undefined,
         birthDate: birthDate ?? undefined,
-        email: email.trim() || undefined,
-        city: city.trim() || undefined,
-        country: country.trim() || undefined,
-        nationality: nationality.trim() || undefined,
+        email: resolvedEmail,
+        city: city || undefined,
+        country: countryLabel || undefined,
+        countryCode: countryCode || undefined,
       });
       await refreshProfile();
       await AsyncStorage.setItem(HOW_IT_WORKS_SEEN_KEY, '1').catch(() => undefined);
       router.replace('/how-it-works?first=1');
     } catch (err) {
-      const message = err instanceof Error ? err.message : '';
-      setError(
-        message.includes('storage/')
-          ? t('errors.photoUploadOrSkip')
-          : message.includes('permission') || message.includes('insufficient')
-            ? t('errors.profilePermission')
-            : message || t('errors.saveProfile')
-      );
+      setError(userFacingError(err, t('errors.saveProfile')));
     } finally {
       setBusy(false);
     }
@@ -186,7 +211,7 @@ export default function ProfileSetupScreen() {
 
   const next = () => {
     setError(null);
-    if (step < STEPS - 1) {
+    if (step < steps.length - 1) {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setStep(step + 1);
       return;
@@ -194,7 +219,30 @@ export default function ProfileSetupScreen() {
     void finish();
   };
 
-  const fieldInput = [styles.fieldInput, { color: theme.text }];
+  const selectGender = (option: Gender) => {
+    setGender(option);
+    void Haptics.selectionAsync();
+  };
+
+  const title = t(`auth.step.${stepId}.title`);
+  const body = t(`auth.step.${stepId}.body`);
+
+  const cityOptions = useMemo(() => {
+    const base = cities.map((c) => ({ id: c.id, label: c.name }));
+    if (suggestedCity && !base.some((c) => c.label.toLowerCase() === suggestedCity.toLowerCase())) {
+      return [{ id: `detected:${suggestedCity}`, label: suggestedCity }, ...base];
+    }
+    return base;
+  }, [cities, suggestedCity]);
+
+  const primaryTitle = (() => {
+    if (step === steps.length - 1) {
+      return busy ? t('common.saving') : t('common.continue');
+    }
+    if (stepId === 'gender' && !gender) return t('common.skip');
+    if (stepId === 'photo' && !photoUri) return t('common.skip');
+    return t('common.continue');
+  })();
 
   return (
     <Screen theme={theme}>
@@ -215,20 +263,13 @@ export default function ProfileSetupScreen() {
               <View style={styles.back} />
             )}
             <View style={styles.bars}>
-              {Array.from({ length: STEPS }).map((_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.barTrack,
-                    { backgroundColor: theme.border },
-                  ]}
-                >
+              {steps.map((_, i) => (
+                <View key={i} style={[styles.barTrack, { backgroundColor: theme.border }]}>
                   <View
                     style={[
                       styles.barFill,
                       {
                         backgroundColor: theme.accent,
-                        // Completed + current steps are fully filled; upcoming stay empty.
                         width: i <= step ? '100%' : '0%',
                       },
                     ]}
@@ -237,7 +278,7 @@ export default function ProfileSetupScreen() {
               ))}
             </View>
             <Text style={[styles.stepCount, { color: theme.quiet }]}>
-              {step + 1}/{STEPS}
+              {step + 1}/{steps.length}
             </Text>
           </View>
         </View>
@@ -249,95 +290,22 @@ export default function ProfileSetupScreen() {
           bounces
         >
           <Animated.View
-            key={step}
-            entering={FadeInUp.duration(motion.enter).easing(Easing.out(Easing.cubic))}
+            key={stepId}
+            entering={FadeInRight.duration(motion.enter).easing(Easing.out(Easing.cubic))}
+            exiting={FadeOutLeft.duration(160)}
             style={styles.step}
           >
-            {step === 0 ? (
+            <View style={styles.copy}>
+              <Text style={[type.display, { color: theme.text }]}>{title}</Text>
+              <Text style={[type.body, { color: theme.muted }]}>{body}</Text>
+            </View>
+
+            {stepId === 'birthday' ? (
               <>
-                <View style={styles.copy}>
-                  <Text style={[type.display, { color: theme.text }]}>{t('auth.setupTitle')}</Text>
-                  <Text style={[type.body, { color: theme.muted }]}>{t('auth.publicOnly')}</Text>
-                </View>
-
-                <PressScale
-                  onPress={pickPhoto}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('auth.addPhotoA11y')}
-                  style={styles.photoWrap}
-                >
-                  <View style={[styles.photoRing, { borderColor: theme.accentSoft }]}>
-                    {photoUri ? (
-                      <Avatar name={name} uri={photoUri} theme={theme} size={112} />
-                    ) : (
-                      <View
-                        style={[
-                          styles.photoEmpty,
-                          { backgroundColor: theme.accentSoft, borderColor: theme.imageOutline },
-                        ]}
-                      >
-                        <Ionicons name="person" size={44} color={theme.accent} />
-                      </View>
-                    )}
-                    <View
-                      style={[
-                        styles.cameraBadge,
-                        { backgroundColor: theme.accent, borderColor: theme.bg as string },
-                      ]}
-                    >
-                      <Ionicons name={photoUri ? 'pencil' : 'camera'} size={15} color={theme.onAccent} />
-                    </View>
-                  </View>
-                  <Text style={[styles.photoHint, { color: theme.accent }]}>
-                    {photoUri ? t('profile.changePhoto') : t('auth.addPhoto')}
-                  </Text>
-                </PressScale>
-
-                <FieldGroup theme={theme}>
-                  <FieldRow theme={theme} label={t('auth.firstName')}>
-                    <TextInput
-                      value={name}
-                      onChangeText={setName}
-                      placeholder={t('auth.firstNameHint')}
-                      placeholderTextColor={theme.quiet}
-                      autoComplete="name"
-                      textContentType="givenName"
-                      autoCapitalize="words"
-                      autoFocus
-                      returnKeyType="next"
-                      onSubmitEditing={() => bioRef.current?.focus()}
-                      style={fieldInput}
-                    />
-                  </FieldRow>
-                  <FieldRow theme={theme} label={t('auth.oneLinerLabel')} last>
-                    <TextInput
-                      ref={bioRef}
-                      value={bio}
-                      onChangeText={setBio}
-                      placeholder={t('auth.oneLinerOptional')}
-                      placeholderTextColor={theme.quiet}
-                      maxLength={MAX_BIO_LENGTH}
-                      returnKeyType="done"
-                      style={fieldInput}
-                    />
-                  </FieldRow>
-                </FieldGroup>
-              </>
-            ) : null}
-
-            {step === 1 ? (
-              <>
-                <View style={styles.copy}>
-                  <Text style={[type.display, { color: theme.text }]}>{t('auth.birthdayTitle')}</Text>
-                  <Text style={[type.body, { color: theme.muted }]}>{t('auth.birthdaySub')}</Text>
-                </View>
-
-                <FieldGroup theme={theme}>
+                <View style={[styles.fieldCard, { backgroundColor: theme.card }]}>
                   <View style={styles.dobCard}>
                     <View style={styles.dobCol}>
-                      <Text style={[styles.fieldLabel, { color: theme.quiet, textAlign: 'center' }]}>
-                        {t('auth.day')}
-                      </Text>
+                      <Text style={[styles.dobLabel, { color: theme.quiet }]}>{t('auth.day')}</Text>
                       <TextInput
                         value={day}
                         onChangeText={(v) => {
@@ -349,15 +317,12 @@ export default function ProfileSetupScreen() {
                         placeholderTextColor={theme.quiet}
                         keyboardType="number-pad"
                         maxLength={2}
-                        autoFocus
                         style={[styles.dobInput, { color: theme.text }]}
                       />
                     </View>
                     <View style={[styles.dobDivider, { backgroundColor: theme.border }]} />
                     <View style={styles.dobCol}>
-                      <Text style={[styles.fieldLabel, { color: theme.quiet, textAlign: 'center' }]}>
-                        {t('auth.month')}
-                      </Text>
+                      <Text style={[styles.dobLabel, { color: theme.quiet }]}>{t('auth.month')}</Text>
                       <TextInput
                         ref={monthRef}
                         value={month}
@@ -375,9 +340,7 @@ export default function ProfileSetupScreen() {
                     </View>
                     <View style={[styles.dobDivider, { backgroundColor: theme.border }]} />
                     <View style={[styles.dobCol, { flex: 1.35 }]}>
-                      <Text style={[styles.fieldLabel, { color: theme.quiet, textAlign: 'center' }]}>
-                        {t('auth.year')}
-                      </Text>
+                      <Text style={[styles.dobLabel, { color: theme.quiet }]}>{t('auth.year')}</Text>
                       <TextInput
                         ref={yearRef}
                         value={year}
@@ -390,261 +353,248 @@ export default function ProfileSetupScreen() {
                       />
                     </View>
                   </View>
-                </FieldGroup>
-
+                </View>
                 {underage ? (
                   <Text style={[type.caption, { color: theme.danger }]}>{t('auth.ageError')}</Text>
-                ) : age != null ? (
-                  <Text style={[type.caption, { color: theme.muted }]}>
-                    {t('auth.agePreview', { age })}
-                  </Text>
                 ) : null}
-
-                <Text style={[type.headline, { color: theme.text, marginTop: space[8] }]}>
-                  {t('auth.genderTitle')}
-                </Text>
-                <View style={styles.genderRow}>
-                  {(['female', 'male'] as const).map((option) => {
-                    const active = gender === option;
-                    return (
-                      <PressScale
-                        key={option}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: active }}
-                        onPress={() => {
-                          setGender(option);
-                          void Haptics.selectionAsync();
-                        }}
-                        style={[
-                          styles.genderCard,
-                          {
-                            backgroundColor: active ? theme.accentSoft : theme.card,
-                            borderColor: active ? theme.accent : 'transparent',
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            type.headline,
-                            { color: active ? theme.accent : theme.text },
-                          ]}
-                        >
-                          {t(`auth.${option}`)}
-                        </Text>
-                        {active ? (
-                          <Ionicons name="checkmark-circle" size={20} color={theme.accent} />
-                        ) : (
-                          <View style={[styles.genderDot, { borderColor: theme.border }]} />
-                        )}
-                      </PressScale>
-                    );
-                  })}
-                </View>
               </>
             ) : null}
 
-            {step === 2 ? (
-              <>
-                <View style={styles.copy}>
-                  <Text style={[type.display, { color: theme.text }]}>{t('auth.detailsTitle')}</Text>
-                  <Text style={[type.body, { color: theme.muted }]}>{t('auth.detailsSub')}</Text>
+            {stepId === 'name' ? (
+              <View style={[styles.fieldCard, { backgroundColor: theme.card }]}>
+                <TextInput
+                  value={name}
+                  onChangeText={setName}
+                  placeholder={t('auth.firstNameHint')}
+                  placeholderTextColor={theme.quiet}
+                  autoComplete="name"
+                  textContentType="givenName"
+                  autoCapitalize="words"
+                  returnKeyType="done"
+                  onSubmitEditing={() => stepReady && next()}
+                  style={[styles.soloInput, { color: theme.text }]}
+                />
+              </View>
+            ) : null}
+
+            {stepId === 'gender' ? (
+              <View style={styles.genderCol}>
+                {GENDER_OPTIONS.map((option) => {
+                  const active = gender === option;
+                  return (
+                    <PressScale
+                      key={option}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      onPress={() => selectGender(option)}
+                      style={[
+                        styles.genderCard,
+                        {
+                          backgroundColor: active ? theme.accentSoft : theme.card,
+                          borderColor: active ? theme.accent : 'transparent',
+                        },
+                      ]}
+                    >
+                      <Text style={[type.headline, { color: active ? theme.accent : theme.text }]}>
+                        {t(`auth.gender.${option}`)}
+                      </Text>
+                      {active ? (
+                        <Ionicons name="checkmark-circle" size={22} color={theme.accent} />
+                      ) : (
+                        <View style={[styles.genderDot, { borderColor: theme.border }]} />
+                      )}
+                    </PressScale>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {stepId === 'photo' ? (
+              <PressScale
+                onPress={pickPhoto}
+                accessibilityRole="button"
+                accessibilityLabel={t('auth.addPhotoA11y')}
+                style={styles.photoWrap}
+              >
+                <View style={[styles.photoRing, { borderColor: theme.accentSoft }]}>
+                  {photoUri ? (
+                    <Avatar name={name || t('common.you')} uri={photoUri} theme={theme} size={128} />
+                  ) : (
+                    <View
+                      style={[
+                        styles.photoEmpty,
+                        { backgroundColor: theme.accentSoft, borderColor: theme.imageOutline },
+                      ]}
+                    >
+                      <Ionicons name="person" size={48} color={theme.accent} />
+                    </View>
+                  )}
+                  <View
+                    style={[
+                      styles.cameraBadge,
+                      { backgroundColor: theme.accent, borderColor: theme.bg as string },
+                    ]}
+                  >
+                    <Ionicons name={photoUri ? 'pencil' : 'camera'} size={15} color={theme.onAccent} />
+                  </View>
                 </View>
+                <Text style={[styles.photoHint, { color: theme.accent }]}>
+                  {photoUri ? t('profile.changePhoto') : t('auth.addPhoto')}
+                </Text>
+              </PressScale>
+            ) : null}
 
-                <FieldGroup theme={theme}>
-                  <FieldRow theme={theme} label={t('auth.email')}>
-                    <TextInput
-                      value={email}
-                      onChangeText={setEmail}
-                      placeholder={t('auth.emailHint')}
-                      placeholderTextColor={theme.quiet}
-                      keyboardType="email-address"
-                      autoComplete="email"
-                      textContentType="emailAddress"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      autoFocus
-                      returnKeyType="next"
-                      onSubmitEditing={() => cityRef.current?.focus()}
-                      style={fieldInput}
-                    />
-                  </FieldRow>
-                  <FieldRow theme={theme} label={t('auth.city')}>
-                    <TextInput
-                      ref={cityRef}
-                      value={city}
-                      onChangeText={setCity}
-                      placeholder={t('auth.cityHint')}
-                      placeholderTextColor={theme.quiet}
-                      autoCapitalize="words"
-                      textContentType="addressCity"
-                      returnKeyType="next"
-                      onSubmitEditing={() => countryRef.current?.focus()}
-                      style={fieldInput}
-                    />
-                  </FieldRow>
-                  <FieldRow theme={theme} label={t('auth.countryResidence')}>
-                    <TextInput
-                      ref={countryRef}
-                      value={country}
-                      onChangeText={setCountry}
-                      placeholder={t('auth.countryHint')}
-                      placeholderTextColor={theme.quiet}
-                      autoCapitalize="words"
-                      textContentType="countryName"
-                      returnKeyType="next"
-                      onSubmitEditing={() => nationalityRef.current?.focus()}
-                      style={fieldInput}
-                    />
-                  </FieldRow>
-                  <FieldRow theme={theme} label={t('auth.nationality')} last>
-                    <TextInput
-                      ref={nationalityRef}
-                      value={nationality}
-                      onChangeText={setNationality}
-                      placeholder={t('auth.nationalityHint')}
-                      placeholderTextColor={theme.quiet}
-                      autoCapitalize="words"
-                      returnKeyType="done"
-                      style={fieldInput}
-                    />
-                  </FieldRow>
-                </FieldGroup>
+            {stepId === 'email' ? (
+              <View style={[styles.fieldCard, { backgroundColor: theme.card }]}>
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder={t('auth.emailHint')}
+                  placeholderTextColor={theme.quiet}
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={() => stepReady && next()}
+                  style={[styles.soloInput, { color: theme.text }]}
+                />
+              </View>
+            ) : null}
 
-                {email.length > 3 && !EMAIL_RE.test(email.trim()) ? (
-                  <Text style={[type.caption, { color: theme.danger }]}>{t('auth.emailError')}</Text>
-                ) : null}
-
-                <View style={[styles.privacyNote, { backgroundColor: theme.accentSoft }]}>
-                  <Ionicons name="lock-closed" size={15} color={theme.accent} />
-                  <Text style={[type.caption, { color: theme.muted, flex: 1 }]}>
-                    {t('auth.privateNote')}
+            {stepId === 'city' ? (
+              <View style={{ gap: space[12] }}>
+                {detectingCity ? (
+                  <Text style={[type.caption, { color: theme.quiet }]}>{t('auth.detectingCity')}</Text>
+                ) : suggestedCity ? (
+                  <Text style={[type.caption, { color: theme.muted }]}>
+                    {t('auth.suggestedCity', { city: suggestedCity })}
                   </Text>
-                </View>
-              </>
+                ) : null}
+                <PressScale
+                  onPress={() => setPickerOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('auth.city')}
+                  style={[styles.selectRow, { backgroundColor: theme.card }]}
+                >
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={[type.caption, { color: theme.quiet }]}>{t('auth.city')}</Text>
+                    <Text style={[type.body, { color: city ? theme.text : theme.quiet }]} numberOfLines={1}>
+                      {city || t('auth.selectCity')}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color={theme.quiet} />
+                </PressScale>
+              </View>
+            ) : null}
+
+            {error ? (
+              <Text style={[type.caption, { color: theme.danger, textAlign: 'center' }]}>{error}</Text>
             ) : null}
           </Animated.View>
-
-          {error ? <Text style={[type.caption, { color: theme.danger }]}>{error}</Text> : null}
         </ScrollView>
 
-        <View style={[styles.dock, { borderTopColor: theme.border, backgroundColor: theme.bg }]}>
+        <View style={styles.dock}>
           <PrimaryButton
-            title={step < STEPS - 1 ? t('common.continue') : t('auth.finish')}
+            title={primaryTitle}
             theme={theme}
-            disabled={!stepReady}
+            disabled={!stepReady || busy}
             loading={busy}
             onPress={next}
           />
         </View>
       </KeyboardAvoidingView>
+
+      <SearchSelectModal
+        visible={pickerOpen && stepId === 'city'}
+        title={t('auth.selectCity')}
+        theme={theme}
+        options={cityOptions}
+        selectedId={
+          city
+            ? cityOptions.find((c) => c.label === city)?.id ?? `detected:${city}`
+            : undefined
+        }
+        onClose={() => setPickerOpen(false)}
+        onSelect={(option) => {
+          setCity(option.label);
+          void Haptics.selectionAsync();
+        }}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  top: { paddingHorizontal: space[24], paddingTop: space[8] },
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: space[12] },
-  back: { width: 44, height: 44, alignItems: 'flex-start', justifyContent: 'center' },
-  bars: { flex: 1, flexDirection: 'row', gap: 6 },
-  barTrack: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: '100%',
-    borderRadius: 2,
-  },
-  stepCount: {
-    fontSize: 13,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
-    minWidth: 28,
-    textAlign: 'right',
-  },
+  top: { paddingHorizontal: space[16], paddingTop: space[8] },
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: space[8] },
+  back: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  bars: { flex: 1, flexDirection: 'row', gap: 4 },
+  barTrack: { flex: 1, height: 3, borderRadius: 2, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 2 },
+  stepCount: { ...type.caption, fontVariant: ['tabular-nums'], minWidth: 36, textAlign: 'right' },
   scroll: {
     flexGrow: 1,
-    paddingHorizontal: space[24],
-    paddingTop: space[16],
+    paddingHorizontal: space[16],
+    paddingTop: space[24],
     paddingBottom: space[24],
-    gap: space[16],
+    gap: space[24],
   },
-  step: { gap: space[16] },
+  step: { gap: space[24] },
   copy: { gap: space[8] },
-  photoWrap: { alignSelf: 'center', alignItems: 'center', gap: space[8], paddingVertical: space[4] },
+  photoWrap: { alignItems: 'center', gap: space[12], paddingVertical: space[16] },
   photoRing: {
-    padding: 5,
-    borderRadius: 999,
-    borderWidth: 2,
-  },
-  photoEmpty: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 3,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+  },
+  photoEmpty: {
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cameraBadge: {
     position: 'absolute',
-    right: 2,
-    bottom: 2,
+    right: 6,
+    bottom: 6,
     width: 32,
     height: 32,
     borderRadius: 16,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
   },
-  photoHint: { fontSize: 15, fontWeight: '700' },
-  group: {
+  photoHint: { ...type.headline },
+  fieldCard: {
     borderRadius: radius.lg,
     borderCurve: 'continuous',
-    overflow: 'hidden',
-  },
-  fieldRow: {
     paddingHorizontal: space[16],
-    paddingTop: space[12],
-    paddingBottom: space[12],
-    gap: 4,
+    paddingVertical: space[4],
   },
-  fieldLabel: {
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  fieldInput: {
-    fontSize: 17,
-    lineHeight: 22,
-    fontWeight: '500',
-    minHeight: 28,
-    padding: 0,
-  },
-  dobCard: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    paddingVertical: space[12],
-    paddingHorizontal: space[8],
-  },
-  dobCol: { flex: 1, gap: 6 },
-  dobDivider: { width: StyleSheet.hairlineWidth, marginVertical: 4 },
+  soloInput: { fontSize: 22, lineHeight: 28, fontWeight: '600', paddingVertical: space[16] },
+  dobCard: { flexDirection: 'row', alignItems: 'stretch', paddingVertical: space[8] },
+  dobCol: { flex: 1, alignItems: 'center', gap: 4 },
+  dobLabel: { ...type.caption, textAlign: 'center' },
   dobInput: {
     fontSize: 28,
-    lineHeight: 34,
     fontWeight: '700',
     textAlign: 'center',
-    fontVariant: ['tabular-nums'],
-    minHeight: 40,
-    padding: 0,
+    minWidth: 48,
+    paddingVertical: space[8],
   },
-  genderRow: { gap: space[12] },
+  dobDivider: { width: StyleSheet.hairlineWidth, marginVertical: space[8] },
+  genderCol: { gap: space[12] },
   genderCard: {
     minHeight: 56,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderCurve: 'continuous',
     borderWidth: 1.5,
     paddingHorizontal: space[16],
@@ -652,25 +602,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  genderDot: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1.5,
-  },
-  privacyNote: {
+  genderDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5 },
+  selectRow: {
+    minHeight: 72,
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    paddingHorizontal: space[16],
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: space[16],
-    paddingVertical: space[12],
-    borderRadius: radius.md,
-    borderCurve: 'continuous',
+    gap: space[8],
   },
   dock: {
-    paddingHorizontal: space[24],
-    paddingTop: space[12],
-    paddingBottom: space[12],
-    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: space[16],
+    paddingBottom: space[16],
+    paddingTop: space[8],
+    gap: space[8],
   },
 });

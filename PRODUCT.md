@@ -44,4 +44,4 @@ Demo venue “Paddy’s Corner” and seed people (Sarah, Adam, Marie) exist onl
 
 ## Accessibility & Inclusion
 
-17+ age gate on optional profile age. Tap targets should stay at least 44pt. Support light and dark system appearance.
+18+ age gate on private birthday. Tap targets should stay at least 44pt. Support light and dark system appearance.

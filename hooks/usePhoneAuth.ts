@@ -1,37 +1,16 @@
-import { useEffect, useState } from 'react';
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { getUserProfile, confirmPhoneVerification } from '../services/auth';
 import { createBrowserRecaptchaVerifier } from '../services/phone-recaptcha';
 import { sendPhoneCodeNativeFirst } from '../services/phone-native';
-
+import { userFacingError } from '../utils/userError';
 import i18n from '../i18n';
 
 const RESEND_MS = 45_000;
 
+/** @deprecated Prefer userFacingError — kept for existing imports. */
 export function authErrorMessage(error: unknown) {
-  const raw = error instanceof Error ? error.message : String(error ?? '');
-  const message = raw.toLowerCase();
-  if (raw === 'cancelled' || message.includes('cancelled')) return i18n.t('authErrors.cancelled');
-  if (message.includes('invalid-phone-number') || message.includes('missing-phone-number')) {
-    return i18n.t('authErrors.invalidPhone');
-  }
-  if (message.includes('invalid-verification-code')) return i18n.t('authErrors.invalidCode');
-  if (message.includes('invalid-verification-id') || message.includes('session-expired')) {
-    return i18n.t('authErrors.expiredCode');
-  }
-  if (message.includes('too-many-requests') || message.includes('quota-exceeded')) {
-    return i18n.t('authErrors.tooMany');
-  }
-  if (message.includes('operation-not-allowed')) {
-    return i18n.t('authErrors.notEnabled');
-  }
-  if (message.includes('captcha-check-failed')) return i18n.t('authErrors.captcha');
-  if (message.includes('network-request-failed')) return i18n.t('authErrors.network');
-  if (message.includes('user-disabled')) return i18n.t('authErrors.disabled');
-  if (message.includes('permission') || message.includes('insufficient')) {
-    return i18n.t('authErrors.permission');
-  }
-  return i18n.t('authErrors.generic');
+  return userFacingError(error, i18n.t('authErrors.generic'));
 }
 
 async function afterSignIn() {

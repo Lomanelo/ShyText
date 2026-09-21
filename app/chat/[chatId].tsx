@@ -23,6 +23,7 @@ import { Avatar } from '../../components/Avatar';
 import { AvatarLightbox } from '../../components/AvatarLightbox';
 import { type, useTheme } from '../../theme';
 import { useAuth } from '../../hooks/useAuth';
+import { userFacingError } from '../../utils/userError';
 import { ChatMessage, Conversation } from '../../types/chat';
 import {
   closeConversation,
@@ -199,7 +200,7 @@ export default function ChatScreen() {
     } catch (err) {
       setPending((prev) => prev.filter((item) => item.id !== local.id));
       setText(body);
-      setError(err instanceof Error ? err.message : t('errors.couldNotSend'));
+      setError(userFacingError(err, t('errors.couldNotSend')));
     }
   };
 

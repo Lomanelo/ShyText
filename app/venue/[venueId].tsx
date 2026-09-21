@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import * as Haptics from 'expo-haptics';
@@ -18,6 +18,7 @@ import { VenueStamp } from '../../components/VenueStamp';
 import { PressScale } from '../../components/PressScale';
 import { Ionicons } from '@expo/vector-icons';
 import { openDirections } from '../../utils/directions';
+import { userFacingError } from '../../utils/userError';
 import { cardShadow, radius, space, type, useTheme } from '../../theme';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useAuth } from '../../hooks/useAuth';
@@ -28,9 +29,11 @@ import { useLocation } from '../../hooks/useLocation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getVenue } from '../../services/venues';
 import { ensureUserProfile } from '../../services/auth';
+import { blockUser } from '../../services/blocks';
 import { ensureConversationOpen, respondToRequest, sendChatRequest } from '../../services/chat';
-import { buildVenueImageUrl } from '../../services/venueImage';
+import { buildVenueImageUrl, authorizeVenueImageUrl } from '../../services/venueImage';
 import { lookupVenueImage, rememberVenueImage } from '../../services/venueImageCache';
+import { prefetchVenueImages } from '../../services/warmAssets';
 import {
   clearPendingShyne,
   getPendingShyne,
@@ -73,6 +76,7 @@ export default function VenueScreen() {
   const [venue, setVenue] = useState<Venue | null>(remembered);
   const [hello, setHello] = useState<CheckIn | null>(null);
   const [report, setReport] = useState<CheckIn | null>(null);
+  const [blockedLocal, setBlockedLocal] = useState<string[]>([]);
   const [notice, setNotice] = useState<{ text: string; tone: 'ok' | 'error' } | null>(null);
   const [busy, setBusy] = useState(false);
   const [statusDraft, setStatusDraft] = useState('');
@@ -96,10 +100,13 @@ export default function VenueScreen() {
     const seededUrl = resolveHeroUrl(venueId, seed);
     if (seed) setVenue((prev) => prev ?? seed);
     // Fill once if first paint missed the cache; never replace an existing URL.
-    if (seededUrl) setHeroImageUrl((prev) => prev ?? seededUrl);
+    if (seededUrl) {
+      setHeroImageUrl((prev) => prev ?? seededUrl);
+      prefetchVenueImages([seededUrl]);
+    }
 
     let cancelled = false;
-    getVenue(venueId).then((found) => {
+    getVenue(venueId).then(async (found) => {
       if (cancelled || !found) return;
       const mergedUrl = found.imageUrl ?? seed?.imageUrl;
       setVenue((prev) => ({
@@ -108,8 +115,11 @@ export default function VenueScreen() {
       }));
       const nextUrl = buildVenueImageUrl({ ...found, imageUrl: mergedUrl });
       if (nextUrl) {
-        rememberVenueImage([venueId, found.providerPlaceId], nextUrl);
-        setHeroImageUrl((prev) => prev ?? nextUrl);
+        const authorized = (await authorizeVenueImageUrl(nextUrl)) ?? nextUrl;
+        if (cancelled) return;
+        rememberVenueImage([venueId, found.providerPlaceId], authorized);
+        prefetchVenueImages([authorized]);
+        setHeroImageUrl((prev) => prev ?? authorized);
       }
     });
     return () => {
@@ -128,7 +138,13 @@ export default function VenueScreen() {
   const pendingHere = shyneIntent && isPendingShyne(venueId);
   const here = confirmedHere || pendingHere;
   const { people, loading } = useCheckIns(here || leaving ? venueId : undefined);
-  const liveOthers = people.filter((item) => item.userId !== user?.uid);
+  const liveOthers = useMemo(
+    () =>
+      people.filter(
+        (item) => item.userId !== user?.uid && !blockedLocal.includes(item.userId)
+      ),
+    [people, user?.uid, blockedLocal]
+  );
   const liveMine =
     people.find((item) => item.userId === user?.uid) ??
     (current.checkIn?.venueId === venueId && !current.expired ? current.checkIn : null) ??
@@ -212,7 +228,7 @@ export default function VenueScreen() {
     if (mine?.id.startsWith('pending:')) return;
     const id = setTimeout(() => {
       void current.setVibe('other', statusDraft).catch((err) => {
-        setStatusError(err instanceof Error ? err.message : t('errors.couldNotSave'));
+        setStatusError(userFacingError(err, t('errors.couldNotSave')));
       });
     }, 420);
     return () => clearTimeout(id);
@@ -247,7 +263,7 @@ export default function VenueScreen() {
     } catch (err) {
       setShyneIntent(false);
       prompt.value = withTiming(1, { duration: 180, easing: Easing.out(Easing.cubic) });
-      setNotice({ text: err instanceof Error ? err.message : t('errors.couldNotCheckIn'), tone: 'error' });
+      setNotice({ text: userFacingError(err, t('errors.couldNotCheckIn')), tone: 'error' });
     } finally {
       setBusy(false);
     }
@@ -390,7 +406,7 @@ export default function VenueScreen() {
                             else router.push('/(tabs)/chats');
                           } catch (err) {
                             setNotice({
-                              text: err instanceof Error ? err.message : t('errors.couldNotAccept'),
+                              text: userFacingError(err, t('errors.couldNotAccept')),
                               tone: 'error',
                             });
                           }
@@ -406,6 +422,23 @@ export default function VenueScreen() {
                           router.push('/(tabs)/chats');
                         }}
                         onReport={() => setReport(person)}
+                        onBlock={async () => {
+                          if (!user) return;
+                          try {
+                            await blockUser(user.uid, person.userId);
+                            setBlockedLocal((prev) =>
+                              prev.includes(person.userId) ? prev : [...prev, person.userId]
+                            );
+                            setHello((cur) => (cur?.userId === person.userId ? null : cur));
+                            setNotice({ text: t('venue.blocked'), tone: 'ok' });
+                            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          } catch (err) {
+                            setNotice({
+                              text: userFacingError(err, t('errors.couldNotBlock')),
+                              tone: 'error',
+                            });
+                          }
+                        }}
                       />
                     </PersonArrival>
                   );

@@ -1,17 +1,45 @@
-import { getApp, getApps, initializeApp } from 'firebase/app';
+import { getApp, getApps, initializeApp, type FirebaseOptions } from 'firebase/app';
 import { getAuth, initializeAuth, type Auth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const firebaseConfig = {
-  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 'AIzaSyAVnkBhxkzWdh2fLXsBMRDcRGYbY2KnBeE',
-  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || 'auth.shytext.com',
-  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || 'myshytext',
-  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || 'myshytext.firebasestorage.app',
-  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '680911194317',
-  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || '1:680911194317:web:b5c93b3d272d9e727cc184',
+type ExtraFirebase = {
+  apiKey?: string;
+  authDomain?: string;
+  projectId?: string;
+  storageBucket?: string;
+  messagingSenderId?: string;
+  appId?: string;
+};
+
+function fromExtra(): ExtraFirebase {
+  const extra = Constants.expoConfig?.extra as { firebase?: ExtraFirebase } | undefined;
+  return extra?.firebase ?? {};
+}
+
+function required(name: string, fallback?: string): string {
+  const value = process.env[name]?.trim() || fallback?.trim();
+  if (!value) {
+    throw new Error(`Missing ${name}. Set it in EAS env / .env — then fully restart Metro (not just reload).`);
+  }
+  return value;
+}
+
+const extra = fromExtra();
+
+const firebaseConfig: FirebaseOptions = {
+  apiKey: required('EXPO_PUBLIC_FIREBASE_API_KEY', extra.apiKey),
+  authDomain:
+    process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN?.trim() ||
+    extra.authDomain ||
+    'auth.shytext.com',
+  projectId: required('EXPO_PUBLIC_FIREBASE_PROJECT_ID', extra.projectId),
+  storageBucket: required('EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET', extra.storageBucket),
+  messagingSenderId: required('EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID', extra.messagingSenderId),
+  appId: required('EXPO_PUBLIC_FIREBASE_APP_ID', extra.appId),
 };
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -8,28 +8,53 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  View,
 } from 'react-native';
 import { Stack, router, useFocusEffect, useNavigation } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
 import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '../../components/Screen';
 import { Avatar } from '../../components/Avatar';
+import { PressScale } from '../../components/PressScale';
+import { SearchSelectModal } from '../../components/SearchSelectModal';
 import { radius, space, type, useTheme } from '../../theme';
-import { removeOwnAvatar, updateOwnProfile, uploadAvatar } from '../../services/auth';
+import {
+  getOwnPrivateProfile,
+  removeOwnAvatar,
+  savePrivateProfile,
+  updateOwnProfile,
+  uploadAvatar,
+} from '../../services/auth';
+import { userFacingError } from '../../utils/userError';
 import { useAuth } from '../../hooks/useAuth';
 import { MAX_BIO_LENGTH } from '../../utils/config';
+import {
+  countryCodeFromName,
+  countryName,
+  defaultCountryCode,
+  listCities,
+  listCountries,
+} from '../../utils/geo';
 import { useTranslation } from 'react-i18next';
+
+type PickerKind = 'country' | 'city' | null;
 
 export default function EditProfileScreen() {
   const theme = useTheme();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigation = useNavigation();
   const { profile, refreshProfile, user } = useAuth();
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
   const [pickedUri, setPickedUri] = useState<string>();
   const [removed, setRemoved] = useState(false);
+  const [countryCode, setCountryCode] = useState('');
+  const [city, setCity] = useState('');
+  const [savedCountryCode, setSavedCountryCode] = useState('');
+  const [savedCity, setSavedCity] = useState('');
+  const [picker, setPicker] = useState<PickerKind>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Flip after a successful save so usePreventRemove unlocks before router.back(). */
@@ -37,6 +62,10 @@ export default function EditProfileScreen() {
   const bioRef = useRef<TextInput>(null);
   /** True after the form has been filled from Firestore (not Auth-only). */
   const hydrated = useRef(false);
+
+  const countries = useMemo(() => listCountries(i18n.language), [i18n.language]);
+  const cities = useMemo(() => listCities(countryCode || defaultCountryCode()), [countryCode]);
+  const countryLabel = countryCode ? countryName(countryCode, i18n.language) : '';
 
   const hydrateFromProfile = useCallback(() => {
     if (!profile) return;
@@ -48,6 +77,20 @@ export default function EditProfileScreen() {
     hydrated.current = true;
   }, [profile, user?.displayName]);
 
+  const hydratePrivate = useCallback(async () => {
+    const priv = await getOwnPrivateProfile();
+    if (!priv) return;
+    const nextCountry =
+      priv.countryCode ||
+      countryCodeFromName(priv.country, i18n.language) ||
+      '';
+    const nextCity = priv.city?.trim() || '';
+    setCountryCode(nextCountry);
+    setCity(nextCity);
+    setSavedCountryCode(nextCountry);
+    setSavedCity(nextCity);
+  }, [i18n.language]);
+
   const displayUri = removed ? undefined : pickedUri ?? profile?.avatarUrl;
   const trimmedName = name.trim();
   const trimmedBio = bio.trim();
@@ -57,7 +100,9 @@ export default function EditProfileScreen() {
     trimmedName !== profileName ||
     trimmedBio !== profileBio ||
     Boolean(pickedUri) ||
-    removed;
+    removed ||
+    countryCode !== savedCountryCode ||
+    city !== savedCity;
   const canSave = dirty && trimmedName.length >= 2 && !busy;
   const blockLeave = dirty && !busy && !leaveAllowed;
   const dirtyRef = useRef(false);
@@ -67,14 +112,16 @@ export default function EditProfileScreen() {
   useEffect(() => {
     if (!profile || hydrated.current) return;
     hydrateFromProfile();
-  }, [profile, hydrateFromProfile]);
+    void hydratePrivate();
+  }, [profile, hydrateFromProfile, hydratePrivate]);
 
   // Re-entering the screen reloads saved values; skip if the user has local edits.
   useFocusEffect(
     useCallback(() => {
       if (!profile || dirtyRef.current) return;
       hydrateFromProfile();
-    }, [profile, hydrateFromProfile])
+      void hydratePrivate();
+    }, [profile, hydrateFromProfile, hydratePrivate])
   );
 
   // Native-stack safe discard guard (replaces beforeRemove + preventDefault).
@@ -146,22 +193,41 @@ export default function EditProfileScreen() {
         await updateOwnProfile({ avatarUrl });
       }
       await updateOwnProfile({ displayName: trimmedName, bio: trimmedBio || null });
+      await savePrivateProfile({
+        city: city || undefined,
+        country: countryLabel || undefined,
+        countryCode: countryCode || undefined,
+      });
       await refreshProfile();
       setPickedUri(undefined);
       setRemoved(false);
+      setSavedCountryCode(countryCode);
+      setSavedCity(city);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setLeaveAllowed(true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : '';
-      setError(
-        message.includes('storage/')
-          ? t('errors.photoUpload')
-          : message || t('errors.saveProfile')
-      );
+      setError(userFacingError(err, t('errors.saveProfile')));
     } finally {
       setBusy(false);
     }
   };
+
+  const selectRow = (label: string, value: string, onPress: () => void, placeholder: string) => (
+    <PressScale
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={[styles.selectRow, { backgroundColor: theme.card }]}
+    >
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[type.caption, { color: theme.quiet }]}>{label}</Text>
+        <Text style={[type.body, { color: value ? theme.text : theme.quiet }]} numberOfLines={1}>
+          {value || placeholder}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={theme.quiet} />
+    </PressScale>
+  );
 
   return (
     <Screen theme={theme} inset={false}>
@@ -229,9 +295,43 @@ export default function EditProfileScreen() {
           <Text style={[type.caption, { color: theme.quiet, textAlign: 'right' }]}>
             {bio.length}/{MAX_BIO_LENGTH}
           </Text>
+
+          <View style={styles.privateBlock}>
+            <Text style={[type.headline, { color: theme.text }]}>{t('profile.privateSection')}</Text>
+            <Text style={[type.caption, { color: theme.quiet }]}>{t('profile.privateSectionHint')}</Text>
+            {selectRow(t('auth.country'), countryLabel, () => setPicker('country'), t('auth.selectCountry'))}
+            {selectRow(t('auth.city'), city, () => setPicker('city'), t('auth.selectCity'))}
+          </View>
+
           {error ? <Text style={[type.body, { color: theme.danger }]}>{error}</Text> : null}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <SearchSelectModal
+        visible={picker === 'country'}
+        title={t('auth.selectCountry')}
+        theme={theme}
+        options={countries.map((c) => ({ id: c.code, label: c.name }))}
+        selectedId={countryCode || undefined}
+        onClose={() => setPicker(null)}
+        onSelect={(option) => {
+          setCountryCode(option.id);
+          setCity('');
+          void Haptics.selectionAsync();
+        }}
+      />
+      <SearchSelectModal
+        visible={picker === 'city'}
+        title={t('auth.selectCity')}
+        theme={theme}
+        options={cities.map((c) => ({ id: c.id, label: c.name }))}
+        selectedId={city && countryCode ? `${countryCode}:${city}` : undefined}
+        onClose={() => setPicker(null)}
+        onSelect={(option) => {
+          setCity(option.label);
+          void Haptics.selectionAsync();
+        }}
+      />
     </Screen>
   );
 }
@@ -241,4 +341,14 @@ const styles = StyleSheet.create({
   photo: { alignItems: 'center', paddingVertical: space[16] },
   input: { borderRadius: radius.md, padding: space[16], minHeight: 52, fontSize: 17 },
   bio: { minHeight: 96, textAlignVertical: 'top' },
+  privateBlock: { gap: space[12], marginTop: space[8] },
+  selectRow: {
+    minHeight: 64,
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
+    paddingHorizontal: space[16],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space[8],
+  },
 });

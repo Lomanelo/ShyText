@@ -73,7 +73,13 @@ class PlacesProxyProvider implements PlacesProvider {
     url.searchParams.set('lang', languageTagOf(i18n.language));
     if (query) url.searchParams.set('q', query);
 
-    const response = await fetch(url.toString());
+    const { authedGet } = await import('./api');
+    let response: Response;
+    try {
+      response = await authedGet(url.toString());
+    } catch {
+      throw new PlacesRequestError(i18n.t('errors.signInFirst'), 401, 'places_auth');
+    }
     if (response.status === 429) {
       throw new PlacesRequestError(i18n.t('errors.placesBusy'), 429, 'rate_limited');
     }

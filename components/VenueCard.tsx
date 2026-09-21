@@ -1,12 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Venue } from '../types/venue';
 import { cardShadow, radius, space, Theme, type } from '../theme';
 import { CHECK_IN_RADIUS_METERS, formatDistance } from '../utils/geo';
-import { buildVenueImageUrl } from '../services/venueImage';
+import { authorizeVenueImageUrl, buildVenueImageUrl } from '../services/venueImage';
 import { rememberVenueImage } from '../services/venueImageCache';
+import { prefetchVenueImages } from '../services/warmAssets';
 import { openDirections } from '../utils/directions';
 import { VenueStamp } from './VenueStamp';
 import { LiveDots } from './LiveDots';
@@ -43,14 +43,25 @@ export function VenueCard({
     meters > CHECK_IN_RADIUS_METERS * 1.5 &&
     venue.latitude != null &&
     venue.longitude != null;
-  // Same size as venue hero proxy fallback so URLs match when imageUrl is absent.
-  const imageUrl = buildVenueImageUrl(venue);
+  const rawImageUrl = buildVenueImageUrl(venue);
+  const [imageUrl, setImageUrl] = useState<string | null>(rawImageUrl);
   const meta = [howFar, venue.category].filter(Boolean).join(' · ');
+
+  useEffect(() => {
+    let cancelled = false;
+    setImageUrl(rawImageUrl);
+    void authorizeVenueImageUrl(rawImageUrl).then((next) => {
+      if (!cancelled && next) setImageUrl(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [rawImageUrl]);
 
   useEffect(() => {
     if (!imageUrl) return;
     rememberVenueImage([venue.id, venue.providerPlaceId], imageUrl);
-    void Image.prefetch(imageUrl);
+    prefetchVenueImages([imageUrl]);
   }, [imageUrl, venue.id, venue.providerPlaceId]);
 
   return (

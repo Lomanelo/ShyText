@@ -1,4 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
+import { clientIp, json, verifyIdToken } from './_shared/auth';
+import { pruneRateLimits, rateLimit } from './_shared/rateLimit';
 import { searchSerperVenues, serperConfigured } from './_shared/serperClient';
 
 type CacheEntry = { at: number; body: unknown };
@@ -9,16 +11,33 @@ function cacheKey(lat: number, lng: number, q: string, lang: string) {
   return `s:${lat.toFixed(3)}:${lng.toFixed(3)}:${q}:${lang}`;
 }
 
-function json(body: unknown, status = 200, extra?: HeadersInit) {
-  return Response.json(body, {
-    status,
-    headers: { 'Cache-Control': 'no-store', ...extra },
-  });
-}
-
 export default async (req: Request, _context: Context) => {
   if (req.method !== 'GET') {
     return new Response('Method not allowed', { status: 405 });
+  }
+
+  const user = await verifyIdToken(req);
+  if (!user) {
+    return json({ error: 'Unauthorized', code: 'unauthorized' }, 401);
+  }
+
+  pruneRateLimits();
+  const ip = clientIp(req);
+  const uidLimit = rateLimit(`places:uid:${user.uid}`, 60, 60_000);
+  if (!uidLimit.ok) {
+    return json(
+      { error: 'Too many requests', code: 'rate_limited' },
+      429,
+      { 'Retry-After': String(uidLimit.retryAfterSec) }
+    );
+  }
+  const ipLimit = rateLimit(`places:ip:${ip}`, 120, 60_000);
+  if (!ipLimit.ok) {
+    return json(
+      { error: 'Too many requests', code: 'rate_limited' },
+      429,
+      { 'Retry-After': String(ipLimit.retryAfterSec) }
+    );
   }
 
   const url = new URL(req.url);
@@ -48,7 +67,10 @@ export default async (req: Request, _context: Context) => {
     cache.set(key, { at: Date.now(), body: venues });
     return json(venues);
   } catch (err) {
-    const status = typeof err === 'object' && err && 'status' in err ? Number((err as { status: number }).status) : 502;
+    const status =
+      typeof err === 'object' && err && 'status' in err
+        ? Number((err as { status: number }).status)
+        : 502;
     const message = err instanceof Error ? err.message : 'Could not load nearby venues.';
     const code = status === 429 ? 'rate_limited' : status === 401 ? 'serper_auth' : 'serper_request';
     return json({ error: message, code }, status);

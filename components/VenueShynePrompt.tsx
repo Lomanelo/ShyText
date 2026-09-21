@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { radius, space, Theme, type } from '../theme';
 import { useReduceMotion } from '../hooks/useReduceMotion';
-import { flameSource } from './flame-mark';
+import { AnimatedFlameImage, flameSource } from './flame-mark';
 
 /** Venue empty prompt — Mobbin-style: glyph + short title + soft body + dock cue. */
 export function VenueShynePrompt({ theme }: { theme: Theme }) {
@@ -50,10 +50,14 @@ export function VenueShynePrompt({ theme }: { theme: Theme }) {
   return (
     <View style={styles.wrap} accessibilityRole="text">
       <View style={[styles.glyph, { backgroundColor: theme.accentSoft }]}>
-        <Animated.Image
+        <AnimatedFlameImage
           source={flameSource('dim')}
           accessibilityIgnoresInvertColors
-          style={[{ width: 36, height: 36, resizeMode: 'contain' }, flameStyle]}
+          cachePolicy="memory-disk"
+          transition={0}
+          priority="high"
+          contentFit="contain"
+          style={[{ width: 36, height: 36 }, flameStyle]}
         />
       </View>
       <Text style={[styles.title, { color: theme.text }]}>{t('venue.shyInToSee')}</Text>

@@ -12,6 +12,7 @@ import { type, useTheme } from '../../theme';
 import { springLayout, springSlideOutRight } from '../../hooks/usePressScale';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useAuth } from '../../hooks/useAuth';
+import { userFacingError } from '../../utils/userError';
 import { useChatRequests } from '../../hooks/useChatRequests';
 import { useChats } from '../../hooks/useChats';
 import { getUserProfile } from '../../services/auth';
@@ -118,7 +119,7 @@ export default function ChatsScreen() {
         delete next[request.id];
         return next;
       });
-      setError(err instanceof Error ? err.message : t('errors.couldNotAccept'));
+      setError(userFacingError(err, t('errors.couldNotAccept')));
     } finally {
       setBusyId(null);
     }
@@ -136,7 +137,7 @@ export default function ChatsScreen() {
         delete next[request.id];
         return next;
       });
-      setError(err instanceof Error ? err.message : t('errors.couldNotDecline'));
+      setError(userFacingError(err, t('errors.couldNotDecline')));
     }
   };
 

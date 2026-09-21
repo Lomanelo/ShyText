@@ -13,7 +13,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { normalizeVibe, ShyTextPost, ShyTextVibe } from '../types/shytext';
-import { moderateText } from './moderation';
+import { moderateTextRemote } from './moderation';
 import { MAX_SHYTEXTS_PER_HOUR, MAX_SHYTEXT_MESSAGE_LENGTH } from '../utils/config';
 import { checkInToVenue, getActiveCheckIn, getVenue, isDemoVenue } from './venues';
 import { Venue } from '../types/venue';
@@ -130,7 +130,7 @@ export async function activateShyText(input: {
       throw new Error(i18n.t('errors.moveCloserShyText'));
     }
   }
-  const moderated = moderateText(input.message ?? '', {
+  const moderated = await moderateTextRemote(input.message ?? '', {
     allowEmpty: true,
     maxLength: MAX_SHYTEXT_MESSAGE_LENGTH,
   });

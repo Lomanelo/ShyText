@@ -8,6 +8,7 @@ import { useCurrentVenue } from '../../hooks/useCurrentVenue';
 import { useLocation } from '../../hooks/useLocation';
 import { resolveCheckInVenue } from '../../services/checkInTarget';
 import { ensureInternalVenue } from '../../services/venues';
+import { userFacingError } from '../../utils/userError';
 import { useTranslation } from 'react-i18next';
 
 export default function CheckInScreen() {
@@ -66,7 +67,7 @@ export default function CheckInScreen() {
         });
         if (!cancelled) router.replace(`/venue/${internal.id}`);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
+        if (!cancelled) setError(userFacingError(err, t('errors.couldNotCheckIn')));
       }
     })();
     return () => {

@@ -18,13 +18,20 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuth } from '../hooks/useAuth';
 import { persistUserLanguage } from '../services/auth';
 import { listenNotificationTaps, registerPushToken } from '../services/notifications';
+import { startAppCheck } from '../services/appCheck';
+import { setCrashUser, startCrashReporting } from '../services/crashReporting';
 import { brand, useTheme } from '../theme';
 import { AwayCheckoutHost } from '../components/AwayCheckoutHost';
 import { AnimatedSplash } from '../components/AnimatedSplash';
 import { OfflineBanner } from '../components/OfflineBanner';
+import { warmLocalAssets } from '../services/warmAssets';
 
 // Hold the native splash until the animated handoff is on screen.
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
+// Decode stamps + flames during native splash so Nearby never paints blank thumbs.
+void warmLocalAssets();
+void startAppCheck();
+void startCrashReporting();
 
 export default function RootLayout() {
   const theme = useTheme();
@@ -39,6 +46,10 @@ export default function RootLayout() {
       void persistUserLanguage();
     }
   }, [user, hasProfile]);
+
+  useEffect(() => {
+    setCrashUser(user?.uid);
+  }, [user?.uid]);
 
   useEffect(() => {
     const sub = listenNotificationTaps();
@@ -78,6 +89,7 @@ export default function RootLayout() {
           <Stack.Screen name="settings/delete-account" options={{ headerShown: true, title: t('settings.deleteAccount') }} />
           <Stack.Screen name="legal/privacy" options={{ headerShown: true, title: t('legal.privacy') }} />
           <Stack.Screen name="legal/terms" options={{ headerShown: true, title: t('legal.terms') }} />
+          <Stack.Screen name="legal/guidelines" options={{ headerShown: true, title: t('legal.guidelines') }} />
           <Stack.Screen name="suspended" options={{ headerShown: false, gestureEnabled: false }} />
         </Stack>
         <OfflineBanner />

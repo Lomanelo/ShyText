@@ -1,4 +1,5 @@
 import { DEFAULT_PLACES_PROXY_URL } from '../utils/config';
+import { idTokenQueryValue } from './api';
 
 export type VenueImageTarget = {
   latitude?: number | null;
@@ -38,10 +39,23 @@ export function isVenueImageConfigured() {
   return Boolean(venueImageProxyBase());
 }
 
-/** Prefer the Serper Maps thumbnail directly — no Netlify re-proxy hop. */
+function isProxyUrl(url: string) {
+  try {
+    const base = venueImageProxyBase();
+    if (!base) return false;
+    return url.startsWith(base) || url.includes('/api/venue-image');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Prefer Serper Maps thumbnail directly — no Netlify hop.
+ * Proxy URLs need a Firebase ID token query param (Image cannot send Authorization).
+ */
 export function buildVenueImageUrl(target: VenueImageTarget, size: VenueImageSize = DEFAULT_SIZE): string | null {
   const direct = target.imageUrl?.trim();
-  if (direct) return direct;
+  if (direct && !isProxyUrl(direct)) return direct;
 
   const base = venueImageProxyBase();
   if (!base) return null;
@@ -66,8 +80,19 @@ export function buildVenueImageUrl(target: VenueImageTarget, size: VenueImageSiz
   return url.toString();
 }
 
+/** Attach a fresh ID token when the URL hits our authenticated image proxy. */
+export async function authorizeVenueImageUrl(url: string | null | undefined): Promise<string | null> {
+  if (!url) return null;
+  if (!isProxyUrl(url)) return url;
+  const token = await idTokenQueryValue();
+  if (!token) return null;
+  const next = new URL(url);
+  next.searchParams.set('idToken', token);
+  return next.toString();
+}
+
 export function buildVenueImageMetaUrl(target: VenueImageTarget): string | null {
-  if (target.imageUrl?.trim()) {
+  if (target.imageUrl?.trim() && !isProxyUrl(target.imageUrl)) {
     return null;
   }
   const imageUrl = buildVenueImageUrl(target);

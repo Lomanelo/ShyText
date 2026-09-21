@@ -29,7 +29,8 @@
     "chat": "Chat",
     "venue": "Ort",
     "signOut": "Abmelden",
-    "offline": "Du bist offline"
+    "offline": "Du bist offline",
+    "noResults": "Keine Treffer"
   },
   "tabs": {
     "nearby": "In der Nähe",
@@ -80,14 +81,14 @@
     "oneLinerOptional": "Optional — ein kurzer Satz",
     "stepOf": "Schritt {{n}} von {{total}}",
     "publicOnly": "Nur dein Vorname und dein Foto sind für andere sichtbar.",
-    "birthdayTitle": "Wann bist du geboren?",
-    "birthdaySub": "Du musst 17+ sein. Nur dein Alter wird angezeigt.",
+    "birthdayTitle": "Wann hast du Geburtstag?",
+    "birthdaySub": "Du musst 18+ sein, um ShyText zu nutzen.",
     "day": "Tag",
     "month": "Monat",
     "year": "Jahr",
-    "ageError": "Du musst mindestens 17 sein.",
-    "agePreview": "Du erscheinst als {{age}}.",
-    "genderTitle": "Du bist…",
+    "ageError": "Du musst mindestens 18 sein.",
+    "agePreview": "Du bist berechtigt.",
+    "genderTitle": "Wie identifizierst du dich?",
     "male": "Mann",
     "female": "Frau",
     "detailsTitle": "Ein paar private Angaben",
@@ -102,7 +103,52 @@
     "nationality": "Nationalität",
     "nationalityHint": "Optional",
     "privateNote": "Nur für dich sichtbar. Nie auf deinem Profil.",
-    "finish": "Fertig"
+    "finish": "Fertig",
+    "selectCountry": "Land wählen",
+    "selectCity": "Stadt wählen",
+    "selectNationality": "Nationalität wählen",
+    "step": {
+      "photo": {
+        "title": "Füg ein Foto hinzu, damit klar ist, wen man begrüßt.",
+        "body": "Stark empfohlen für Vertrauen. Du kannst das erstmal überspringen."
+      },
+      "name": {
+        "title": "Wie sollen wir dich nennen?",
+        "body": "Vorname oder Anzeigename — nicht dein rechtlicher Name."
+      },
+      "bio": {
+        "title": "Erzähl kurz etwas über dich",
+        "body": "Optional. Überspringe, wenn du magst."
+      },
+      "birthday": {
+        "title": "Wann hast du Geburtstag?",
+        "body": "Du musst 18+ sein, um ShyText zu nutzen."
+      },
+      "gender": {
+        "title": "Wie identifizierst du dich?",
+        "body": "Optional. Privat — nie auf deinem Profil."
+      },
+      "email": {
+        "title": "Wie lautet deine E-Mail?",
+        "body": "Für Konto-Wiederherstellung und wichtige Updates."
+      },
+      "city": {
+        "title": "Wo bist du zu Hause?",
+        "body": "Bestätige den Vorschlag oder wähle eine andere Stadt. Privat."
+      }
+    },
+    "legalByContinuing": "Mit dem Fortfahren stimmst du den",
+    "legalAnd": "und der",
+    "legalPeriod": " zu.",
+    "detectingCity": "Stadt wird erkannt…",
+    "suggestedCity": "Vorschlag: {{city}}",
+    "gender": {
+      "man": "Mann",
+      "woman": "Frau",
+      "nonbinary": "Nicht-binär",
+      "another": "Andere Identität",
+      "prefer_not": "Möchte ich nicht sagen"
+    }
   },
   "authErrors": {
     "cancelled": "Bestätigung abgebrochen.",
@@ -128,8 +174,8 @@
     "aVenue": "einem Ort",
     "rateLimitedTitle": "Gleich nochmal versuchen",
     "rateLimitedBody": "Apple Maps hat uns gebeten, langsamer zu machen.",
-    "emptyTitle": "Nichts im Umkreis von 100 m",
-    "emptyBody": "Geh näher an ein Café, eine Bar oder einen Park.",
+    "emptyTitle": "Keine Orte so nah",
+    "emptyBody": "Suche Café oder Bar nach Namen, oder geh etwas näher und zieh zum Aktualisieren.",
     "searchOffline": "Suche ist nicht verbunden"
   },
   "location": {
@@ -153,19 +199,19 @@
     "shyInToSee": "Wer ist hier?",
     "shyInToSeeBody": "Mach Shyne, um sichtbar zu werden und zu sehen, wer hier ist.",
     "shyInToSeeHint": "Flamme unten wischen",
-    "justYou": "Nur du",
-    "justYouBody": "Du shynest. Wenn jemand anderes das auch tut, erscheint er hier.",
+    "justYou": "Nur du — vorerst",
+    "justYouBody": "Bleib im Shyne — wenn jemand anderes hier aufleuchtet, erscheint die Person und du bekommst einen Ping, falls aktiv. Bitte einen Freund, ShyText hier zu öffnen.",
     "demoPerson": "Das ist eine Demo-Person. Mach Shyne, um einen echten ShyText zu schicken.",
-    "sent": "Unterwegs",
+    "sent": "Gesendet — sie entscheiden in Chats. Du wirst benachrichtigt, wenn sie annehmen.",
     "sendTo": "ShyText an {{name}} senden?",
     "writeOwn": "Selber schreiben…",
     "helloPlaceholder": "Schreib ein kurzes Hi…",
     "notNow": "Jetzt nicht",
-    "alreadySent": "Gesendet",
-    "alreadySentA11y": "ShyText bereits an {{name}} gesendet",
+    "alreadySent": "Warten",
+    "alreadySentA11y": "Warte auf Annahme von {{name}} — öffne Chats",
     "sendShyText": "ShyText senden",
     "sendToA11y": "ShyText an {{name}} senden",
-    "reportMore": "Melden oder mehr",
+    "reportMore": "Melden, blockieren oder mehr",
     "openA11y": "Öffne {{name}}{{distance}}{{live}}",
     "liveCount": ", {{count}} live",
     "holdToCheckIn": "",
@@ -180,11 +226,15 @@
     "theySentFirst": "Sie haben dir schon einen ShyText geschickt",
     "acceptA11y": "ShyText von {{name}} annehmen",
     "openChat": "Chat öffnen",
-    "openChatA11y": "Chat mit {{name}} öffnen"
+    "openChatA11y": "Chat mit {{name}} öffnen",
+    "alreadySentHint": "Annahme in Chats",
+    "blocked": "Blockiert",
+    "blockConfirmTitle": "{{name}} blockieren?",
+    "blockConfirmBody": "Sie verschwinden hier und können dich nicht kontaktieren."
   },
   "chats": {
     "emptyTitle": "Noch keine Chats",
-    "emptyBody": "Wenn jemand an deinem Ort dir einen ShyText schickt, landet er hier.",
+    "emptyBody": "Gesendete Anfragen warten hier auf Annahme. Eingehende ShyTexts landen ebenfalls hier.",
     "requests": "Anfragen",
     "privateChat": "Privater Chat",
     "goTalk": "Sag hi persönlich",
@@ -192,7 +242,7 @@
     "ended": "Tippen zum Öffnen",
     "endedShort": "Beendet",
     "timeToTalk": "Zeit zu reden",
-    "closedBody": "Dieser Chat bleibt hier, aber neue Nachrichten sind zu. Sag hi persönlich.",
+    "closedBody": "Dieser Chat bleibt. Schreib weiter, oder sag persönlich hallo, wenn du bereit bist.",
     "message": "Nachricht",
     "pin": "Anpinnen",
     "unpin": "Lösen",
@@ -210,14 +260,16 @@
     "howItWorks": "So funktioniert ShyText",
     "changePhoto": "Foto ändern",
     "changePhotoA11y": "Profilfoto ändern",
-    "oneLiner": "Ein Satz",
+    "oneLiner": "Ein Satz (optional)",
     "discardTitle": "Änderungen verwerfen?",
-    "discardBody": "Foto, Name und Bio werden nicht gespeichert.",
+    "discardBody": "Deine Änderungen werden nicht gespeichert.",
     "keepEditing": "Weiter bearbeiten",
     "discard": "Verwerfen",
     "photoTitle": "Profilfoto",
     "choosePhoto": "Foto wählen",
-    "remove": "Entfernen"
+    "remove": "Entfernen",
+    "privateSection": "Private Angaben",
+    "privateSectionHint": "Nur für dich sichtbar. Nie auf deinem Profil."
   },
   "settings": {
     "title": "Einstellungen",
@@ -227,6 +279,7 @@
     "blockedUsers": "Blockierte Nutzer",
     "privacyPolicy": "Datenschutzrichtlinie",
     "terms": "Bedingungen",
+    "guidelines": "Community-Richtlinien",
     "deleteAccount": "Konto löschen",
     "nobodyBlocked": "Niemand blockiert",
     "unblock": "Entblocken",
@@ -260,12 +313,13 @@
     "p3": "An einem Ort zu sein macht dich nie sichtbar. Du machst absichtlich Shyne.",
     "p4": "Nur Leute, die am selben Ort Shyne gemacht haben, erscheinen — und erst, nachdem du auch Shyne gemacht hast.",
     "p5": "Wir zeigen nie, wie viele stille Leute in der Nähe sind.",
-    "p6": "Chats bleiben privat, wenn du Shy Out machst oder dein Shyne endet. Nach einer Stunde bleibt der Thread, aber neue Nachrichten schließen, damit ihr persönlich redet.",
+    "p6": "Chats bleiben privat nach Shy Out oder Ablauf deines Shyne. Der Thread bleibt offen zum Schreiben oder Treffen.",
     "p7": "Mitteilungen auf dem Sperrbildschirm enthalten keinen privaten Nachrichtentext."
   },
   "legal": {
     "privacy": "Datenschutzrichtlinie",
     "terms": "Nutzungsbedingungen",
+    "guidelines": "Community-Richtlinien",
     "englishOnly": "Auf Englisch verfügbar."
   },
   "report": {
@@ -307,7 +361,7 @@
     "tooManyHour": "Zu viele ShyTexts in dieser Stunde.",
     "notAllowed": "Nicht erlaubt.",
     "chatNotFound": "Chat nicht gefunden.",
-    "chatWrapped": "Dieser Chat ist zu Ende. Sag hi persönlich.",
+    "chatWrapped": "Dieser Chat ist geschlossen.",
     "nameMin": "Der Name braucht mindestens 2 Zeichen.",
     "bioMax": "Die Bio darf {{count}} Zeichen haben.",
     "recentLogin": "Bestätige mit dem SMS-Code auf deinem Telefon und versuche es erneut.",
@@ -344,7 +398,8 @@
     "siriVenueNotFound": "{{name}} liegt nicht im Umkreis von 100 m.",
     "theyAlreadySent": "Sie haben dir schon einen ShyText geschickt — nimm ihn an.",
     "theyAlreadyAccepted": "Ihr chattet bereits.",
-    "alreadyChatting": "Ihr chattet bereits — öffne den Chat."
+    "alreadyChatting": "Ihr chattet bereits — öffne den Chat.",
+    "couldNotBlock": "Blockieren fehlgeschlagen."
   },
   "vibes": {
     "chat": "💬 Plaudern",
@@ -450,13 +505,13 @@
     "body1": "Schieb die Flamme an deinem Ort. Leute dort sehen dich, solange du aktiv bleibst.",
     "title2": "Schick einen ShyText.",
     "body2": "Wähl eine Person und schick ein kurzes Hallo. Sie nimmt an — oder es verschwindet leise.",
-    "title3": "Sag’s in echt.",
-    "body3": "Ein paar Nachrichten, dann geh rüber. Der Rest passiert offline.",
+    "title3": "Der Chat bleibt deiner.",
+    "body3": "Schreib privat weiter, oder sag persönlich hallo, wenn es passt. Der Chat zwingt dich nicht offline.",
     "done": "Verstanden",
     "demoNote": "Bist du öfter hier? ☕",
     "demoMsg1": "Treffen wir uns an der Theke?",
     "demoMsg2": "Bin unterwegs 🙂",
-    "offline": "Der Rest passiert offline."
+    "offline": "Trefft euch, wenn ihr bereit seid."
   },
   "notFound": {
     "title": "Hoppla!",

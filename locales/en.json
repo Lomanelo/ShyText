@@ -29,7 +29,8 @@
     "chat": "Chat",
     "venue": "Venue",
     "signOut": "Sign out",
-    "offline": "You’re offline"
+    "offline": "You’re offline",
+    "noResults": "No matches"
   },
   "tabs": {
     "nearby": "Nearby",
@@ -70,6 +71,9 @@
     "resendCode": "Resend code",
     "resendIn": "Resend in {{seconds}}s",
     "differentNumber": "Use a different number",
+    "legalByContinuing": "By continuing, you agree to the",
+    "legalAnd": "and",
+    "legalPeriod": ".",
     "setupTitle": "What should people call you?",
     "addPhoto": "Add photo",
     "addPhotoA11y": "Add profile photo",
@@ -80,16 +84,23 @@
     "oneLinerOptional": "Optional — one short line",
     "stepOf": "Step {{n}} of {{total}}",
     "publicOnly": "Only your first name and photo are visible to others.",
-    "birthdayTitle": "When were you born?",
-    "birthdaySub": "You must be 17+. Only your age is shown.",
+    "birthdayTitle": "When’s your birthday?",
+    "birthdaySub": "You must be 18+ to use ShyText.",
     "day": "Day",
     "month": "Month",
     "year": "Year",
-    "ageError": "You must be at least 17.",
-    "agePreview": "You’ll show as {{age}}.",
-    "genderTitle": "You are…",
-    "male": "Male",
-    "female": "Female",
+    "ageError": "You must be at least 18.",
+    "agePreview": "You’re eligible.",
+    "genderTitle": "How do you identify?",
+    "male": "Man",
+    "female": "Woman",
+    "gender": {
+      "man": "Man",
+      "woman": "Woman",
+      "nonbinary": "Non-binary",
+      "another": "Another identity",
+      "prefer_not": "Prefer not to say"
+    },
     "detailsTitle": "A few private details",
     "detailsSub": "Never shown to other people. They keep ShyText real.",
     "email": "Email",
@@ -97,12 +108,47 @@
     "emailError": "Enter a valid email.",
     "city": "City",
     "cityHint": "Where you live",
+    "detectingCity": "Detecting your city…",
+    "suggestedCity": "Suggested: {{city}}",
     "countryResidence": "Country",
     "countryHint": "Country of residence",
     "nationality": "Nationality",
     "nationalityHint": "Optional",
     "privateNote": "Only you can see these. Never on your profile.",
-    "finish": "Finish"
+    "finish": "Finish",
+    "selectCountry": "Select country",
+    "selectCity": "Select city",
+    "selectNationality": "Select nationality",
+    "step": {
+      "photo": {
+        "title": "Add a photo so people know who they’re saying hi to.",
+        "body": "Strongly recommended for trust in the room. You can skip for now and add one later."
+      },
+      "name": {
+        "title": "What should we call you?",
+        "body": "Your first name or display name — not your legal name."
+      },
+      "bio": {
+        "title": "Say a little about yourself",
+        "body": "Optional. Skip if you’d rather not."
+      },
+      "birthday": {
+        "title": "When’s your birthday?",
+        "body": "You must be 18+ to use ShyText."
+      },
+      "gender": {
+        "title": "How do you identify?",
+        "body": "Optional. Private — never shown on your profile."
+      },
+      "email": {
+        "title": "What’s your email?",
+        "body": "For account recovery and important account updates."
+      },
+      "city": {
+        "title": "Where are you based?",
+        "body": "Confirm the suggestion or pick another city. Private."
+      }
+    }
   },
   "authErrors": {
     "cancelled": "Verification cancelled.",
@@ -128,8 +174,8 @@
     "aVenue": "a venue",
     "rateLimitedTitle": "Try again shortly",
     "rateLimitedBody": "Apple Maps asked us to slow down.",
-    "emptyTitle": "Nothing within 100 m",
-    "emptyBody": "Move closer to a café, bar, or park.",
+    "emptyTitle": "No places this close",
+    "emptyBody": "Search for the café or bar by name, or walk a bit closer and pull to refresh.",
     "searchOffline": "Search isn’t connected"
   },
   "location": {
@@ -153,19 +199,23 @@
     "shyInToSee": "Who’s here?",
     "shyInToSeeBody": "Shyne to appear and see people at this place.",
     "shyInToSeeHint": "Slide the flame below",
-    "justYou": "Just you",
-    "justYouBody": "You're Shyning. When someone else does too, they'll show here.",
+    "justYou": "Just you for now",
+    "justYouBody": "Stay Shyning — when someone else lights up here, they’ll appear and you’ll get a ping if that’s on. Ask a friend to open ShyText at this place.",
     "demoPerson": "This is a demo person. Shyne yourself to send a real ShyText.",
-    "sent": "On its way",
+    "sent": "Sent — they decide in Chats. You’ll get a ping if they accept.",
     "sendTo": "Send a ShyText to {{name}}?",
     "writeOwn": "Write my own…",
     "helloPlaceholder": "Write a short hello…",
     "notNow": "Not now",
-    "alreadySent": "Sent",
-    "alreadySentA11y": "ShyText already sent to {{name}}",
+    "alreadySent": "Waiting",
+    "alreadySentA11y": "Waiting for {{name}} to accept — check Chats",
+    "alreadySentHint": "They accept in Chats",
     "sendShyText": "Send a ShyText",
     "sendToA11y": "Send a ShyText to {{name}}",
-    "reportMore": "Report or more",
+    "reportMore": "Report, block, or more",
+    "blocked": "Blocked",
+    "blockConfirmTitle": "Block {{name}}?",
+    "blockConfirmBody": "They’ll disappear here and can’t contact you.",
     "openA11y": "Open {{name}}{{distance}}{{live}}",
     "liveCount": ", {{count}} live",
     "holdToCheckIn": "",
@@ -184,7 +234,7 @@
   },
   "chats": {
     "emptyTitle": "No chats yet",
-    "emptyBody": "When someone at your venue sends you a ShyText, it shows up here.",
+    "emptyBody": "Requests you send wait here until they accept. Incoming ShyTexts land here too.",
     "requests": "Requests",
     "privateChat": "Private chat",
     "goTalk": "Go talk in person",
@@ -192,7 +242,7 @@
     "ended": "Tap to reopen",
     "endedShort": "Ended",
     "timeToTalk": "Time to talk",
-    "closedBody": "This chat stays here, but new messages are closed. Go say hi in person.",
+    "closedBody": "This chat is still here. Keep messaging, or say hi in person when you’re ready.",
     "message": "Message",
     "pin": "Pin",
     "unpin": "Unpin",
@@ -210,14 +260,16 @@
     "howItWorks": "How ShyText works",
     "changePhoto": "Change photo",
     "changePhotoA11y": "Change profile photo",
-    "oneLiner": "One-liner",
+    "oneLiner": "One-liner (optional)",
     "discardTitle": "Discard changes?",
-    "discardBody": "Your photo, name, and bio will not be saved.",
+    "discardBody": "Your changes will not be saved.",
     "keepEditing": "Keep editing",
     "discard": "Discard",
     "photoTitle": "Profile photo",
     "choosePhoto": "Choose photo",
-    "remove": "Remove"
+    "remove": "Remove",
+    "privateSection": "Private details",
+    "privateSectionHint": "Only you can see these. Never on your profile."
   },
   "settings": {
     "title": "Settings",
@@ -227,6 +279,7 @@
     "blockedUsers": "Blocked users",
     "privacyPolicy": "Privacy policy",
     "terms": "Terms",
+    "guidelines": "Community Guidelines",
     "deleteAccount": "Delete account",
     "nobodyBlocked": "Nobody blocked",
     "unblock": "Unblock",
@@ -260,12 +313,13 @@
     "p3": "Being at a venue never makes you visible. You Shyne on purpose.",
     "p4": "Only people who Shyne at the same venue appear — and only after you Shyne too.",
     "p5": "We never show how many silent people are nearby.",
-    "p6": "Chats stay private after you Shy Out or your Shyne expires. After an hour, the thread stays but new messages close so you can talk in person.",
+    "p6": "Chats stay private after you Shy Out or your Shyne expires. The thread stays open so you can keep messaging or meet in person when you’re ready.",
     "p7": "Lock-screen notifications do not include private message text."
   },
   "legal": {
     "privacy": "Privacy Policy",
     "terms": "Terms of Service",
+    "guidelines": "Community Guidelines",
     "englishOnly": "Available in English."
   },
   "report": {
@@ -307,7 +361,7 @@
     "tooManyHour": "Too many ShyTexts this hour.",
     "notAllowed": "Not allowed.",
     "chatNotFound": "Chat not found.",
-    "chatWrapped": "This chat wrapped. Go say hi in person.",
+    "chatWrapped": "This chat is closed.",
     "nameMin": "Name needs at least 2 characters.",
     "bioMax": "Bio can be {{count}} characters.",
     "recentLogin": "Confirm with the SMS code sent to your phone, then try again.",
@@ -330,6 +384,7 @@
     "tryAgain": "Try again in a moment.",
     "couldNotSend": "Could not send.",
     "couldNotAccept": "Could not accept.",
+    "couldNotBlock": "Could not block.",
     "couldNotDecline": "Could not decline.",
     "couldNotCheckIn": "Could not Shyne.",
     "couldNotLoadVenues": "Could not load venues.",
@@ -450,13 +505,13 @@
     "body1": "Slide the flame at your venue. People there can see you while you stay active.",
     "title2": "Send one ShyText.",
     "body2": "Pick one person and send a short hello. They accept — or it quietly disappears.",
-    "title3": "Say it for real.",
-    "body3": "A few messages, then go talk. The rest happens offline.",
+    "title3": "Chat stays yours.",
+    "body3": "Keep messaging privately, or say hi in person when it feels right. The chat doesn’t force you offline.",
     "done": "Got it",
     "demoNote": "Come here often? ☕",
     "demoMsg1": "Meet you at the counter?",
     "demoMsg2": "On my way 🙂",
-    "offline": "The rest happens offline."
+    "offline": "Meet when you’re ready."
   },
   "notFound": {
     "title": "Oops!",

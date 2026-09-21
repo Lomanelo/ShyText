@@ -36,30 +36,38 @@ export function VenueStamp({
   const kind = placeKind(category);
   const compact = height < 100;
   const [remoteFailed, setRemoteFailed] = useState(false);
+  const [remoteReady, setRemoteReady] = useState(false);
   const remote = Boolean(imageUrl) && !remoteFailed;
 
   useEffect(() => {
     setRemoteFailed(false);
+    setRemoteReady(false);
   }, [imageUrl]);
 
   return (
     <View style={[styles.well, { height }]} collapsable={false}>
+      {/* Local stamp always underneath — never a blank cream flash while remote loads. */}
+      <Image
+        source={STILLS[kind]}
+        style={styles.still}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={0}
+        priority="high"
+      />
       {remote ? (
         <Image
           source={imageUrl!}
-          style={styles.still}
+          style={[styles.still, { opacity: remoteReady ? 1 : 0 }]}
           contentFit="cover"
           cachePolicy="memory-disk"
           recyclingKey={imageUrl!}
           transition={0}
           priority="high"
-          placeholderContentFit="cover"
+          onLoad={() => setRemoteReady(true)}
           onError={() => setRemoteFailed(true)}
         />
-      ) : (
-        <Image source={STILLS[kind]} style={styles.still} contentFit="cover" cachePolicy="memory-disk" transition={0} />
-      )}
-      {/* Film-poster scrim: the still fades to dark at the base so type sits in the scene. */}
+      ) : null}
       {!compact ? <View style={styles.scrim} pointerEvents="none" /> : null}
       {!compact ? (
         <View style={styles.stamp} accessibilityElementsHidden>

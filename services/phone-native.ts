@@ -14,6 +14,22 @@ function isNativeModuleMissing(err: unknown): boolean {
   );
 }
 
+/** Sign out @react-native-firebase/auth so JS logout and re-login stay in sync. */
+export async function clearNativePhoneAuth(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const { getAuth, signOut } = await import('@react-native-firebase/auth');
+    const nativeAuth = getAuth();
+    if (nativeAuth.currentUser) {
+      await signOut(nativeAuth);
+    }
+  } catch (err) {
+    if (__DEV__) {
+      console.warn('[phone] Native signOut skipped', err);
+    }
+  }
+}
+
 /**
  * Ask iOS for an APNs device token before phone verify.
  * Firebase Auth uses silent push for app verification; without a token it falls back to reCAPTCHA
@@ -55,29 +71,45 @@ export async function sendPhoneCodeNativeFirst(
   }
 
   try {
+    // Stale native sessions after JS-only logout break the next verifyPhoneNumber.
+    await clearNativePhoneAuth();
     await ensureRemoteNotificationsReady();
     const { getAuth, verifyPhoneNumber } = await import('@react-native-firebase/auth');
     const listener = verifyPhoneNumber(getAuth(), phoneNumber);
     const verificationId = await new Promise<string>((resolve, reject) => {
+      let settled = false;
+      const fail = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+      const ok = (id: string) => {
+        if (settled) return;
+        settled = true;
+        resolve(id);
+      };
       listener.on(
         'state_changed',
         (snapshot) => {
           if (snapshot.error) {
-            reject(snapshot.error);
+            fail(snapshot.error);
             return;
           }
           if (snapshot.verificationId) {
-            resolve(snapshot.verificationId);
+            ok(snapshot.verificationId);
           }
         },
-        (error) => reject(error)
+        (error) => fail(error)
       );
     });
     if (!verificationId) {
       throw new Error('native-phone-no-verification-id');
     }
+    // Android auto-retrieval can leave a native session; keep JS Auth as the source of truth.
+    await clearNativePhoneAuth();
     return verificationId;
   } catch (err) {
+    await clearNativePhoneAuth().catch(() => undefined);
     if (isNativeModuleMissing(err)) {
       if (__DEV__) {
         console.warn('[phone] Native module missing, falling back to reCAPTCHA', err);

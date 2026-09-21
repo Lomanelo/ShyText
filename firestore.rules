@@ -12,21 +12,67 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
+      // Profiles are fetched by id (get). Collection listing is denied.
       allow get: if signedIn();
-      allow list: if signedIn();
-      allow create: if isSelf(userId);
-      allow update: if isSelf(userId);
+      allow list: if false;
+
+      allow create: if isSelf(userId)
+        && request.resource.data.status == 'active'
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 40;
+
+      // Clients may update profile fields but must never change status/createdAt
+      // (admins set suspended via console / Admin SDK).
+      allow update: if isSelf(userId)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'displayName',
+            'username',
+            'avatarUrl',
+            'age',
+            'bio',
+            'stats',
+            'language',
+            'notificationPrefs',
+            'visibilityMode',
+            'expoPushToken'
+          ])
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.createdAt == resource.data.createdAt;
+
       allow delete: if isSelf(userId);
 
-      // Owner-only facts (gender, birthday, email, city, nationality).
+      // Owner-only facts (gender, birthday, email, city, nationality, device).
       match /private/{docId} {
         allow read, write: if isSelf(userId);
       }
     }
 
     match /venues/{venueId} {
+      function venueKeysOk() {
+        return request.resource.data.keys().hasAll(['provider', 'providerPlaceId', 'name'])
+          && request.resource.data.provider is string
+          && request.resource.data.providerPlaceId is string
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 120;
+      }
       allow read: if signedIn();
-      allow create, update: if signedIn();
+      allow create: if signedIn() && venueKeysOk();
+      // Discovery clients may refresh image/geo metadata only.
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'imageUrl',
+            'address',
+            'category',
+            'latitude',
+            'longitude',
+            'name'
+          ])
+        && request.resource.data.provider == resource.data.provider
+        && request.resource.data.providerPlaceId == resource.data.providerPlaceId;
       allow delete: if false;
     }
 
@@ -119,7 +165,15 @@ service cloud.firestore {
         && request.resource.data.status == 'pending';
       allow update: if partyToRequest()
         && request.resource.data.senderId == resource.data.senderId
-        && request.resource.data.receiverId == resource.data.receiverId;
+        && request.resource.data.receiverId == resource.data.receiverId
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['status', 'conversationId'])
+        && (
+          (resource.data.status == 'pending'
+            && request.resource.data.status in ['accepted', 'declined', 'cancelled'])
+          || (resource.data.status == 'accepted'
+            && request.resource.data.status == 'accepted')
+        );
       allow delete: if false;
     }
 
@@ -151,7 +205,14 @@ service cloud.firestore {
 
     match /reports/{reportId} {
       allow read: if isSelf(resource.data.reporterId);
-      allow create: if isSelf(request.resource.data.reporterId);
+      allow create: if isSelf(request.resource.data.reporterId)
+        && request.resource.data.reason is string
+        && request.resource.data.targetType is string
+        && request.resource.data.targetId is string
+        && (!('details' in request.resource.data)
+          || request.resource.data.details == null
+          || (request.resource.data.details is string
+            && request.resource.data.details.size() <= 500));
       allow update, delete: if false;
     }
 

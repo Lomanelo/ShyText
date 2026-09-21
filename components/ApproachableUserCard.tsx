@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Swipeable } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
@@ -23,6 +23,7 @@ export function ApproachableUserCard({
   onAccept,
   onOpenChat,
   onReport,
+  onBlock,
 }: {
   person: CheckIn;
   theme: Theme;
@@ -31,6 +32,7 @@ export function ApproachableUserCard({
   onAccept: () => void | Promise<void>;
   onOpenChat: () => void;
   onReport: () => void;
+  onBlock: () => void | Promise<void>;
 }) {
   const { t } = useTranslation();
   const [zoom, setZoom] = useState(false);
@@ -123,35 +125,71 @@ export function ApproachableUserCard({
           <Text style={[type.caption, { color: theme.quiet }]}>{t('venue.theySentFirst')}</Text>
         ) : null}
         <View style={styles.actions}>
-          <PressScale
-            disabled={mode.kind === 'sent'}
-            accessibilityLabel={a11y}
-            onPress={primary}
-            style={[
-              styles.hi,
-              {
-                backgroundColor:
-                  mode.kind === 'sent' ? theme.border : mode.kind === 'chat' ? theme.bg : theme.accent,
-              },
-            ]}
-          >
-            <Text
+          <View style={{ flex: 1, gap: 4 }}>
+            <PressScale
+              disabled={mode.kind === 'sent'}
+              accessibilityLabel={a11y}
+              onPress={primary}
               style={[
-                type.headline,
+                styles.hi,
                 {
-                  color:
-                    mode.kind === 'sent'
-                      ? theme.quiet
-                      : mode.kind === 'chat'
-                        ? theme.text
-                        : theme.onAccent,
+                  alignSelf: 'flex-start',
+                  backgroundColor:
+                    mode.kind === 'sent' ? theme.border : mode.kind === 'chat' ? theme.bg : theme.accent,
                 },
               ]}
             >
-              {label}
-            </Text>
-          </PressScale>
-          <Pressable onPress={onReport} accessibilityLabel={t('venue.reportMore')} hitSlop={8} style={styles.more}>
+              <Text
+                style={[
+                  type.headline,
+                  {
+                    color:
+                      mode.kind === 'sent'
+                        ? theme.quiet
+                        : mode.kind === 'chat'
+                          ? theme.text
+                          : theme.onAccent,
+                  },
+                ]}
+              >
+                {label}
+              </Text>
+            </PressScale>
+            {mode.kind === 'sent' ? (
+              <Text style={[type.caption, { color: theme.quiet }]}>{t('venue.alreadySentHint')}</Text>
+            ) : null}
+          </View>
+          <Pressable
+            onPress={() => {
+              Alert.alert(name, undefined, [
+                { text: t('common.report'), onPress: onReport },
+                {
+                  text: t('common.block'),
+                  style: 'destructive',
+                  onPress: () => {
+                    Alert.alert(
+                      t('venue.blockConfirmTitle', { name: person.displayName ?? t('common.them') }),
+                      t('venue.blockConfirmBody'),
+                      [
+                        { text: t('common.cancel'), style: 'cancel' },
+                        {
+                          text: t('common.block'),
+                          style: 'destructive',
+                          onPress: () => {
+                            void onBlock();
+                          },
+                        },
+                      ]
+                    );
+                  },
+                },
+                { text: t('common.cancel'), style: 'cancel' },
+              ]);
+            }}
+            accessibilityLabel={t('venue.reportMore')}
+            hitSlop={8}
+            style={styles.more}
+          >
             <Ionicons name="ellipsis-horizontal" size={22} color={theme.quiet} />
           </Pressable>
         </View>

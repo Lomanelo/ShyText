@@ -14,9 +14,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db, storage } from './firebase';
 import { DEFAULT_NOTIFICATION_PREFS, NotificationPrefs, PrivateProfile, UserProfile } from '../types/user';
 import { MAX_BIO_LENGTH } from '../utils/config';
-import { expireMyCheckIns } from './venues';
-import { syncCheckInEndingNotice } from './notifications';
+import { clearSessionPresence } from './session';
+import { withTransientRetry } from '../utils/userError';
 import i18n from '../i18n';
+
+/** Ensure Auth has a usable ID token before Firestore/Storage writes (avoids flaky first-save denials). */
+async function ensureAuthReady(forceRefresh = false) {
+  const user = auth.currentUser;
+  if (!user) throw new Error(i18n.t('errors.notSignedIn'));
+  await user.getIdToken(forceRefresh);
+  return user;
+}
 
 export function notificationPrefsOf(profile?: UserProfile | null): NotificationPrefs {
   return {
@@ -70,7 +78,7 @@ export async function ensureUserProfile(): Promise<UserProfile | null> {
 export function sanitizeAge(value?: number): number | undefined {
   if (value == null || Number.isNaN(value)) return undefined;
   const age = Math.round(value);
-  if (age < 17 || age > 99) return undefined;
+  if (age < 18 || age > 99) return undefined;
   return age;
 }
 
@@ -80,37 +88,52 @@ export async function upsertUserProfile(input: {
   avatarUrl?: string;
   age?: number;
 }): Promise<void> {
-  const refDoc = doc(db, 'users', input.id);
-  const existing = await getDoc(refDoc);
-  const age = sanitizeAge(input.age);
-  if (existing.exists()) {
-    await updateDoc(refDoc, {
-      displayName: input.displayName,
-      avatarUrl: input.avatarUrl ?? existing.data()?.avatarUrl ?? null,
-      ...(age != null ? { age } : {}),
-    });
-    return;
-  }
-  await setDoc(refDoc, {
-    displayName: input.displayName,
-    avatarUrl: input.avatarUrl ?? null,
-    age: age ?? null,
-    createdAt: Date.now(),
-    serverCreatedAt: serverTimestamp(),
-    status: 'active',
-    stats: { shytextsPosted: 0, chatsStarted: 0 },
-    notificationPrefs: DEFAULT_NOTIFICATION_PREFS,
-    language: i18n.language,
+  await withTransientRetry(async () => {
+    await ensureAuthReady();
+    const refDoc = doc(db, 'users', input.id);
+    const existing = await getDoc(refDoc);
+    const age = sanitizeAge(input.age);
+    if (existing.exists()) {
+      await updateDoc(refDoc, {
+        displayName: input.displayName,
+        avatarUrl: input.avatarUrl ?? existing.data()?.avatarUrl ?? null,
+        ...(age != null ? { age } : {}),
+      });
+      return;
+    }
+    try {
+      await setDoc(refDoc, {
+        displayName: input.displayName,
+        avatarUrl: input.avatarUrl ?? null,
+        age: age ?? null,
+        createdAt: Date.now(),
+        serverCreatedAt: serverTimestamp(),
+        status: 'active',
+        stats: { shytextsPosted: 0, chatsStarted: 0 },
+        notificationPrefs: DEFAULT_NOTIFICATION_PREFS,
+        language: i18n.language,
+      });
+    } catch (err) {
+      // Parallel create (e.g. auth listener) — fall through to merge update.
+      const code = err && typeof err === 'object' && 'code' in err ? String((err as { code?: string }).code) : '';
+      if (!code.includes('already-exists') && !code.includes('permission-denied')) throw err;
+      await updateDoc(refDoc, {
+        displayName: input.displayName,
+        avatarUrl: input.avatarUrl ?? null,
+        ...(age != null ? { age } : {}),
+      });
+    }
   });
 }
 
 export async function uploadAvatar(localUri: string): Promise<string> {
-  const user = auth.currentUser;
-  if (!user) throw new Error(i18n.t('errors.notSignedIn'));
-  const blob = await readLocalImage(localUri);
-  const file = ref(storage, `avatars/${user.uid}.jpg`);
-  await uploadBytes(file, blob, { contentType: 'image/jpeg' });
-  return getDownloadURL(file);
+  return withTransientRetry(async () => {
+    const user = await ensureAuthReady();
+    const blob = await readLocalImage(localUri);
+    const file = ref(storage, `avatars/${user.uid}.jpg`);
+    await uploadBytes(file, blob, { contentType: 'image/jpeg' });
+    return getDownloadURL(file);
+  });
 }
 
 function readLocalImage(uri: string): Promise<Blob> {
@@ -169,12 +192,16 @@ export async function completeProfile(
   age?: number,
   privateDetails?: PrivateProfile
 ) {
-  const user = auth.currentUser;
-  if (!user) throw new Error(i18n.t('errors.notSignedIn'));
-  await updateProfile(user, { displayName, photoURL: avatarUrl });
+  // Force-refresh so the first city/profile save after phone auth is not denied.
+  const user = await ensureAuthReady(true);
+  await withTransientRetry(async () => {
+    await updateProfile(user, { displayName, photoURL: avatarUrl });
+  });
   await upsertUserProfile({ id: user.uid, displayName, avatarUrl, age });
   if (bio != null) {
-    await updateDoc(doc(db, 'users', user.uid), { bio });
+    await withTransientRetry(async () => {
+      await updateDoc(doc(db, 'users', user.uid), { bio });
+    });
   }
   if (privateDetails) {
     await savePrivateProfile(privateDetails);
@@ -184,12 +211,13 @@ export async function completeProfile(
 
 /** Owner-only facts (gender, birthday, email, city, country, nationality). */
 export async function savePrivateProfile(details: PrivateProfile) {
-  const user = auth.currentUser;
-  if (!user) throw new Error(i18n.t('errors.notSignedIn'));
-  const clean = Object.fromEntries(
-    Object.entries({ ...details, updatedAt: Date.now() }).filter(([, value]) => value !== undefined)
-  );
-  await setDoc(doc(db, 'users', user.uid, 'private', 'profile'), clean, { merge: true });
+  await withTransientRetry(async () => {
+    const user = await ensureAuthReady();
+    const clean = Object.fromEntries(
+      Object.entries({ ...details, updatedAt: Date.now() }).filter(([, value]) => value !== undefined)
+    );
+    await setDoc(doc(db, 'users', user.uid, 'private', 'profile'), clean, { merge: true });
+  });
 }
 
 export async function getOwnPrivateProfile(): Promise<PrivateProfile | null> {
@@ -217,46 +245,47 @@ export async function updateOwnProfile(input: {
   avatarUrl?: string | null;
   notificationPrefs?: NotificationPrefs;
 }) {
-  const user = auth.currentUser;
-  if (!user) throw new Error(i18n.t('errors.notSignedIn'));
   if (input.displayName != null && input.displayName.trim().length < 2) {
     throw new Error(i18n.t('errors.nameMin'));
   }
   if (input.bio != null && input.bio.length > MAX_BIO_LENGTH) {
     throw new Error(i18n.t('errors.bioMax', { count: MAX_BIO_LENGTH }));
   }
-  const payload: Record<string, unknown> = {};
-  if (input.displayName != null) payload.displayName = input.displayName.trim();
-  if (input.bio !== undefined) payload.bio = input.bio?.trim() || null;
-  if (input.avatarUrl !== undefined) payload.avatarUrl = input.avatarUrl;
-  if (input.notificationPrefs) payload.notificationPrefs = input.notificationPrefs;
-  if (Object.keys(payload).length) {
-    const refDoc = doc(db, 'users', user.uid);
-    const existing = await getDoc(refDoc);
-    if (existing.exists()) {
-      await updateDoc(refDoc, payload);
-    } else {
-      await setDoc(refDoc, {
-        displayName: input.displayName?.trim() || user.displayName || i18n.t('common.someone'),
-        avatarUrl: input.avatarUrl ?? user.photoURL ?? null,
-        bio: input.bio?.trim() || null,
-        age: null,
-        createdAt: Date.now(),
-        serverCreatedAt: serverTimestamp(),
-        status: 'active',
-        stats: { shytextsPosted: 0, chatsStarted: 0 },
-        notificationPrefs: input.notificationPrefs ?? DEFAULT_NOTIFICATION_PREFS,
-        language: i18n.language,
-        ...payload,
+  await withTransientRetry(async () => {
+    const user = await ensureAuthReady();
+    const payload: Record<string, unknown> = {};
+    if (input.displayName != null) payload.displayName = input.displayName.trim();
+    if (input.bio !== undefined) payload.bio = input.bio?.trim() || null;
+    if (input.avatarUrl !== undefined) payload.avatarUrl = input.avatarUrl;
+    if (input.notificationPrefs) payload.notificationPrefs = input.notificationPrefs;
+    if (Object.keys(payload).length) {
+      const refDoc = doc(db, 'users', user.uid);
+      const existing = await getDoc(refDoc);
+      if (existing.exists()) {
+        await updateDoc(refDoc, payload);
+      } else {
+        await setDoc(refDoc, {
+          displayName: input.displayName?.trim() || user.displayName || i18n.t('common.someone'),
+          avatarUrl: input.avatarUrl ?? user.photoURL ?? null,
+          bio: input.bio?.trim() || null,
+          age: null,
+          createdAt: Date.now(),
+          serverCreatedAt: serverTimestamp(),
+          status: 'active',
+          stats: { shytextsPosted: 0, chatsStarted: 0 },
+          notificationPrefs: input.notificationPrefs ?? DEFAULT_NOTIFICATION_PREFS,
+          language: i18n.language,
+          ...payload,
+        });
+      }
+    }
+    if (input.displayName != null || input.avatarUrl !== undefined) {
+      await updateProfile(user, {
+        ...(input.displayName != null ? { displayName: input.displayName.trim() } : {}),
+        ...(input.avatarUrl !== undefined ? { photoURL: input.avatarUrl || '' } : {}),
       });
     }
-  }
-  if (input.displayName != null || input.avatarUrl !== undefined) {
-    await updateProfile(user, {
-      ...(input.displayName != null ? { displayName: input.displayName.trim() } : {}),
-      ...(input.avatarUrl !== undefined ? { photoURL: input.avatarUrl || '' } : {}),
-    });
-  }
+  });
 }
 
 export async function removeOwnAvatar() {
@@ -277,8 +306,7 @@ export async function deleteOwnAccount() {
   const profileSnap = await getDoc(doc(db, 'users', uid)).catch(() => null);
   const profileData = profileSnap?.exists() ? profileSnap.data() : null;
 
-  await expireMyCheckIns(uid).catch(() => undefined);
-  await syncCheckInEndingNotice(null).catch(() => undefined);
+  await clearSessionPresence(uid).catch(() => undefined);
   try {
     await deleteObject(ref(storage, `avatars/${uid}.jpg`));
   } catch {
@@ -312,5 +340,14 @@ export async function persistUserLanguage() {
 }
 
 export async function signOut() {
-  await firebaseSignOut(auth);
+  const uid = auth.currentUser?.uid ?? null;
+  // Expire Shyne + clear local presence while still authenticated (rules need auth).
+  await clearSessionPresence(uid).catch(() => undefined);
+  try {
+    await firebaseSignOut(auth);
+  } finally {
+    // Phone verify uses @react-native-firebase/auth — must clear it too or re-login fails.
+    const { clearNativePhoneAuth } = await import('./phone-native');
+    await clearNativePhoneAuth();
+  }
 }

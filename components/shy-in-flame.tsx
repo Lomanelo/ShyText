@@ -18,7 +18,7 @@ import { brand, cardShadow, radius, Theme, type } from '../theme';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useTranslation } from 'react-i18next';
 import { PressScale } from './PressScale';
-import { flameSource } from './flame-mark';
+import { AnimatedFlameImage, flameSource } from './flame-mark';
 
 const COMMIT_RATIO = 0.72;
 const CATCH_RATIO = 0.45;
@@ -106,10 +106,14 @@ function LitStrip({
           { width: trackH - 8, height: trackH - 8, backgroundColor: theme.card },
         ]}
       >
-        <Animated.Image
+        <AnimatedFlameImage
           source={flameSource('lit')}
           accessibilityIgnoresInvertColors
-          style={[{ width: mark, height: mark, resizeMode: 'contain' }, flameStyle]}
+          cachePolicy="memory-disk"
+          transition={0}
+          priority="high"
+          contentFit="contain"
+          style={[{ width: mark, height: mark }, flameStyle]}
         />
       </View>
       <View style={styles.litCopy}>
@@ -518,19 +522,23 @@ export function ShyInFlame({
               <Animated.View
                 style={[styles.glow, { width: mark + 18, height: mark + 18 }, glowStyle]}
               />
-              <Animated.Image
+              <AnimatedFlameImage
                 source={flameSource('dim')}
                 accessibilityIgnoresInvertColors
-                style={[{ width: mark, height: mark, resizeMode: 'contain' }, dimMarkStyle]}
+                cachePolicy="memory-disk"
+                transition={0}
+                priority="high"
+                contentFit="contain"
+                style={[{ width: mark, height: mark }, dimMarkStyle]}
               />
-              <Animated.Image
+              <AnimatedFlameImage
                 source={flameSource('lit')}
                 accessibilityIgnoresInvertColors
-                style={[
-                  { width: mark, height: mark, resizeMode: 'contain' },
-                  styles.thumbMarkOverlay,
-                  litMarkStyle,
-                ]}
+                cachePolicy="memory-disk"
+                transition={0}
+                priority="high"
+                contentFit="contain"
+                style={[{ width: mark, height: mark }, styles.thumbMarkOverlay, litMarkStyle]}
               />
             </Animated.View>
           </GestureDetector>

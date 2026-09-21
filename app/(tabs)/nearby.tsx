@@ -23,6 +23,8 @@ import {
 } from '../../services/venues';
 import { buildVenueImageUrl } from '../../services/venueImage';
 import { rememberVenueImage } from '../../services/venueImageCache';
+import { userFacingError } from '../../utils/userError';
+import { prefetchVenueImages } from '../../services/warmAssets';
 import { isPendingShyne, setPendingShyneError } from '../../services/pendingShyne';
 import { HOW_IT_WORKS_SEEN_KEY } from '../../utils/walkthrough';
 import { PlacesRequestError, Venue, VenueCandidate } from '../../types/venue';
@@ -110,13 +112,14 @@ export default function NearbyScreen() {
         } catch (err) {
           if (err instanceof PlacesRequestError && err.status === 429) {
             setRateLimited(true);
-            setError(err.message);
+            setError(userFacingError(err, t('errors.couldNotLoadVenues')));
           } else {
             throw err;
           }
         }
         const listed = rankVenues(await hydrate(candidates), next.latitude, next.longitude);
         setVenues(listed);
+        prefetchVenueImages(listed.map((v) => buildVenueImageUrl(v)));
         setLoading(false);
         void attachCounts(listed)
           .then((withCounts) => {
@@ -124,7 +127,7 @@ export default function NearbyScreen() {
           })
           .catch(() => undefined);
       } catch (err) {
-        setError(err instanceof Error ? err.message : t('errors.couldNotLoadVenues'));
+        setError(userFacingError(err, t('errors.couldNotLoadVenues')));
         setLoading(false);
       }
     },
@@ -161,7 +164,7 @@ export default function NearbyScreen() {
         params: { venueId: withImage.id, mode: 'preview' },
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.couldNotOpenVenue'));
+      setError(userFacingError(err, t('errors.couldNotOpenVenue')));
     }
   };
 
@@ -210,12 +213,12 @@ export default function NearbyScreen() {
           age,
         })
         .catch((err) => {
-          const message = err instanceof Error ? err.message : t('errors.couldNotCheckIn');
+          const message = userFacingError(err, t('errors.couldNotCheckIn'));
           setPendingShyneError(withImage.id, message);
           setError(message);
         });
     } catch (err) {
-      setError(err instanceof Error ? err.message : t('errors.couldNotCheckIn'));
+      setError(userFacingError(err, t('errors.couldNotCheckIn')));
     } finally {
       setCheckingInId(null);
     }
