@@ -39,7 +39,7 @@ export function isVenueImageConfigured() {
   return Boolean(venueImageProxyBase());
 }
 
-function isProxyUrl(url: string) {
+export function isProxyUrl(url: string) {
   try {
     const base = venueImageProxyBase();
     if (!base) return false;
@@ -49,12 +49,26 @@ function isProxyUrl(url: string) {
   }
 }
 
+/** Prefer a durable Serper thumb; strip expired idToken from cached proxy URLs. */
+export function canonicalVenueImageUrl(url: string | null | undefined): string | null {
+  const raw = url?.trim();
+  if (!raw) return null;
+  if (!isProxyUrl(raw)) return raw;
+  try {
+    const next = new URL(raw);
+    next.searchParams.delete('idToken');
+    return next.toString();
+  } catch {
+    return raw;
+  }
+}
+
 /**
  * Prefer Serper Maps thumbnail directly — no Netlify hop.
  * Proxy URLs need a Firebase ID token query param (Image cannot send Authorization).
  */
 export function buildVenueImageUrl(target: VenueImageTarget, size: VenueImageSize = DEFAULT_SIZE): string | null {
-  const direct = target.imageUrl?.trim();
+  const direct = canonicalVenueImageUrl(target.imageUrl);
   if (direct && !isProxyUrl(direct)) return direct;
 
   const base = venueImageProxyBase();
@@ -73,6 +87,19 @@ export function buildVenueImageUrl(target: VenueImageTarget, size: VenueImageSiz
   if (target.name?.trim()) url.searchParams.set('name', target.name.trim());
   if (target.address?.trim()) url.searchParams.set('address', target.address.trim());
 
+  // Reuse a prior proxy URL's search when target has no coords/name (rare).
+  if (direct && isProxyUrl(direct)) {
+    try {
+      const prior = new URL(direct);
+      for (const key of ['lat', 'lng', 'name', 'address', 'thumb'] as const) {
+        const value = prior.searchParams.get(key);
+        if (value && !url.searchParams.has(key)) url.searchParams.set(key, value);
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   if (!url.searchParams.has('lat') && !url.searchParams.has('name') && !url.searchParams.has('address')) {
     return null;
   }
@@ -82,17 +109,27 @@ export function buildVenueImageUrl(target: VenueImageTarget, size: VenueImageSiz
 
 /** Attach a fresh ID token when the URL hits our authenticated image proxy. */
 export async function authorizeVenueImageUrl(url: string | null | undefined): Promise<string | null> {
-  if (!url) return null;
-  if (!isProxyUrl(url)) return url;
+  const canonical = canonicalVenueImageUrl(url);
+  if (!canonical) return null;
+  if (!isProxyUrl(canonical)) return canonical;
   const token = await idTokenQueryValue();
   if (!token) return null;
-  const next = new URL(url);
+  const next = new URL(canonical);
   next.searchParams.set('idToken', token);
   return next.toString();
 }
 
+/** Build + authorize in one step for display. */
+export async function resolveVenueImageUrl(
+  target: VenueImageTarget,
+  size: VenueImageSize = DEFAULT_SIZE
+): Promise<string | null> {
+  return authorizeVenueImageUrl(buildVenueImageUrl(target, size));
+}
+
 export function buildVenueImageMetaUrl(target: VenueImageTarget): string | null {
-  if (target.imageUrl?.trim() && !isProxyUrl(target.imageUrl)) {
+  const direct = canonicalVenueImageUrl(target.imageUrl);
+  if (direct && !isProxyUrl(direct)) {
     return null;
   }
   const imageUrl = buildVenueImageUrl(target);

@@ -31,7 +31,7 @@ import { getVenue } from '../../services/venues';
 import { ensureUserProfile } from '../../services/auth';
 import { blockUser } from '../../services/blocks';
 import { ensureConversationOpen, respondToRequest, sendChatRequest } from '../../services/chat';
-import { buildVenueImageUrl, authorizeVenueImageUrl } from '../../services/venueImage';
+import { buildVenueImageUrl, authorizeVenueImageUrl, canonicalVenueImageUrl } from '../../services/venueImage';
 import { lookupVenueImage, rememberVenueImage } from '../../services/venueImageCache';
 import { prefetchVenueImages } from '../../services/warmAssets';
 import {
@@ -49,9 +49,19 @@ import { useTranslation } from 'react-i18next';
 
 const SHY_OUT_MS = 260;
 
+/** Prefer list cache → seed thumb → built URL. Always durable (no idToken). */
 function resolveHeroUrl(venueId: string | undefined, seed: Venue | null): string | null {
-  const cached = lookupVenueImage(venueId, seed?.id, seed?.providerPlaceId);
+  const cached = canonicalVenueImageUrl(
+    lookupVenueImage(venueId, seed?.id, seed?.providerPlaceId)
+  );
   if (cached) return cached;
+  if (seed?.imageUrl?.trim()) {
+    const direct = canonicalVenueImageUrl(seed.imageUrl);
+    if (direct) {
+      rememberVenueImage([venueId, seed.id, seed.providerPlaceId], direct);
+      return direct;
+    }
+  }
   const built = seed ? buildVenueImageUrl(seed) : null;
   if (built) rememberVenueImage([venueId, seed?.providerPlaceId], built);
   return built;
@@ -86,8 +96,24 @@ export default function VenueScreen() {
   const [frozen, setFrozen] = useState<{ mine: CheckIn | null; others: CheckIn[] } | null>(null);
   // Sync cache first — React context is often still stale on the first paint after push.
   const [heroImageUrl, setHeroImageUrl] = useState<string | null>(() => resolveHeroUrl(venueId, remembered));
+  const [heroDisplayUrl, setHeroDisplayUrl] = useState<string | null>(heroImageUrl);
 
   useEffect(() => subscribePendingShyne(() => setPendingTick((n) => n + 1)), []);
+
+  // Authorize proxy URLs for display; keep durable URL in heroImageUrl / cache.
+  useEffect(() => {
+    let cancelled = false;
+    if (!heroImageUrl) {
+      setHeroDisplayUrl(null);
+      return;
+    }
+    void authorizeVenueImageUrl(heroImageUrl).then((next) => {
+      if (!cancelled) setHeroDisplayUrl(next ?? heroImageUrl);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [heroImageUrl]);
 
   useEffect(() => {
     if (!venueId) return;
@@ -98,7 +124,17 @@ export default function VenueScreen() {
           ? getPendingShyne(venueId)?.venue ?? null
           : null;
     const seededUrl = resolveHeroUrl(venueId, seed);
-    if (seed) setVenue((prev) => prev ?? seed);
+    if (seed) {
+      setVenue((prev) => {
+        if (!prev) return seed;
+        // Keep a list thumb if Firestore later returns without imageUrl.
+        return {
+          ...prev,
+          ...seed,
+          imageUrl: prev.imageUrl ?? seed.imageUrl,
+        };
+      });
+    }
     // Fill once if first paint missed the cache; never replace an existing URL.
     if (seededUrl) {
       setHeroImageUrl((prev) => prev ?? seededUrl);
@@ -108,18 +144,30 @@ export default function VenueScreen() {
     let cancelled = false;
     getVenue(venueId).then(async (found) => {
       if (cancelled || !found) return;
-      const mergedUrl = found.imageUrl ?? seed?.imageUrl;
+      const cached = canonicalVenueImageUrl(
+        lookupVenueImage(venueId, found.id, found.providerPlaceId, seed?.providerPlaceId)
+      );
+      const mergedUrl =
+        cached ||
+        canonicalVenueImageUrl(found.imageUrl) ||
+        canonicalVenueImageUrl(seed?.imageUrl) ||
+        undefined;
       setVenue((prev) => ({
         ...found,
-        imageUrl: prev?.imageUrl ?? mergedUrl,
+        imageUrl: prev?.imageUrl ?? mergedUrl ?? found.imageUrl,
       }));
-      const nextUrl = buildVenueImageUrl({ ...found, imageUrl: mergedUrl });
+      // Prefer an already-known list/cache image — do not invent a weaker proxy fallback over it.
+      if (mergedUrl) {
+        rememberVenueImage([venueId, found.providerPlaceId], mergedUrl);
+        prefetchVenueImages([mergedUrl]);
+        setHeroImageUrl((prev) => prev ?? mergedUrl);
+        return;
+      }
+      const nextUrl = buildVenueImageUrl({ ...found, imageUrl: found.imageUrl });
       if (nextUrl) {
-        const authorized = (await authorizeVenueImageUrl(nextUrl)) ?? nextUrl;
-        if (cancelled) return;
-        rememberVenueImage([venueId, found.providerPlaceId], authorized);
-        prefetchVenueImages([authorized]);
-        setHeroImageUrl((prev) => prev ?? authorized);
+        rememberVenueImage([venueId, found.providerPlaceId], nextUrl);
+        prefetchVenueImages([nextUrl]);
+        setHeroImageUrl((prev) => prev ?? nextUrl);
       }
     });
     return () => {
@@ -278,7 +326,7 @@ export default function VenueScreen() {
       >
         {venue || heroImageUrl ? (
           <View style={[styles.hero, cardShadow(theme)]}>
-            <VenueStamp category={venue?.category} height={168} imageUrl={heroImageUrl} />
+            <VenueStamp category={venue?.category} height={168} imageUrl={heroDisplayUrl ?? heroImageUrl} />
           </View>
         ) : null}
 

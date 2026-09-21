@@ -34,12 +34,15 @@ import { useTranslation } from 'react-i18next';
 const SHY_IN_HINT_KEY = 'shytext.hint.shyIn';
 
 function stampVenueThumb(listVenue: Venue, internal: Venue) {
-  const url = buildVenueImageUrl({ ...internal, imageUrl: internal.imageUrl ?? listVenue.imageUrl });
+  const imageUrl = listVenue.imageUrl ?? internal.imageUrl;
+  const merged = { ...internal, imageUrl: imageUrl ?? internal.imageUrl };
+  // Remember the durable URL (direct Serper thumb when present) — never a tokenized proxy.
+  const durable = buildVenueImageUrl(merged) ?? imageUrl ?? null;
   rememberVenueImage(
     [internal.id, internal.providerPlaceId, listVenue.id, listVenue.providerPlaceId],
-    url ?? listVenue.imageUrl
+    durable
   );
-  return { ...internal, imageUrl: internal.imageUrl ?? listVenue.imageUrl };
+  return merged;
 }
 
 async function hydrate(candidates: VenueCandidate[]): Promise<Venue[]> {

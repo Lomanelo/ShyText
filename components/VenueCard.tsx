@@ -4,16 +4,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { Venue } from '../types/venue';
 import { cardShadow, radius, space, Theme, type } from '../theme';
 import { CHECK_IN_RADIUS_METERS, formatDistance } from '../utils/geo';
-import { authorizeVenueImageUrl, buildVenueImageUrl } from '../services/venueImage';
+import { authorizeVenueImageUrl, buildVenueImageUrl, canonicalVenueImageUrl } from '../services/venueImage';
 import { rememberVenueImage } from '../services/venueImageCache';
 import { prefetchVenueImages } from '../services/warmAssets';
 import { openDirections } from '../utils/directions';
 import { VenueStamp } from './VenueStamp';
-import { LiveDots } from './LiveDots';
 import { PressScale } from './PressScale';
 import { ShyInFlame } from './shy-in-flame';
 import { useTranslation } from 'react-i18next';
 
+/** Venue list card — stamp + name + Shyne control (no live-dot badge). */
 export function VenueCard({
   venue,
   distance,
@@ -33,7 +33,6 @@ export function VenueCard({
   shyInLoading?: boolean;
 }) {
   const { t } = useTranslation();
-  const live = (venue.activeCount ?? 0) >= 1;
   const meters = distance ?? venue.distanceMeters;
   const howFar = formatDistance(meters);
   // Too far to Shyne (with GPS slack) — offer directions instead of a slider that would only error.
@@ -43,26 +42,30 @@ export function VenueCard({
     meters > CHECK_IN_RADIUS_METERS * 1.5 &&
     venue.latitude != null &&
     venue.longitude != null;
+  // Cache the durable URL (direct thumb or proxy without token) so the venue page can reuse it.
   const rawImageUrl = buildVenueImageUrl(venue);
   const [imageUrl, setImageUrl] = useState<string | null>(rawImageUrl);
   const meta = [howFar, venue.category].filter(Boolean).join(' · ');
 
   useEffect(() => {
     let cancelled = false;
-    setImageUrl(rawImageUrl);
-    void authorizeVenueImageUrl(rawImageUrl).then((next) => {
+    const canonical = canonicalVenueImageUrl(rawImageUrl) ?? rawImageUrl;
+    setImageUrl(canonical);
+    if (canonical) {
+      rememberVenueImage([venue.id, venue.providerPlaceId], canonical);
+    }
+    void authorizeVenueImageUrl(canonical).then((next) => {
       if (!cancelled && next) setImageUrl(next);
     });
     return () => {
       cancelled = true;
     };
-  }, [rawImageUrl]);
+  }, [rawImageUrl, venue.id, venue.providerPlaceId]);
 
   useEffect(() => {
     if (!imageUrl) return;
-    rememberVenueImage([venue.id, venue.providerPlaceId], imageUrl);
     prefetchVenueImages([imageUrl]);
-  }, [imageUrl, venue.id, venue.providerPlaceId]);
+  }, [imageUrl]);
 
   return (
     <View style={[styles.card, cardShadow(theme), { backgroundColor: theme.card }]}>
@@ -72,7 +75,7 @@ export function VenueCard({
         accessibilityLabel={t('venue.openA11y', {
           name: venue.name,
           distance: howFar ? `, ${howFar}` : '',
-          live: live ? t('venue.liveCount', { count: venue.activeCount }) : '',
+          live: '',
         })}
         style={styles.head}
       >
@@ -88,7 +91,6 @@ export function VenueCard({
               {meta}
             </Text>
           ) : null}
-          {live ? <LiveDots count={venue.activeCount ?? 0} color={theme.accent} /> : null}
         </View>
       </PressScale>
 

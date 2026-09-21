@@ -115,7 +115,8 @@ export function useCurrentVenue() {
   }, []);
 
   const rememberVenue = useCallback(async (next: Venue) => {
-    rememberVenueImage([next.id, next.providerPlaceId], buildVenueImageUrl(next) ?? next.imageUrl);
+    const durable = buildVenueImageUrl(next) ?? next.imageUrl ?? null;
+    rememberVenueImage([next.id, next.providerPlaceId], durable);
     setVenue(next);
     await AsyncStorage.setItem(KEY, JSON.stringify(next));
   }, []);
