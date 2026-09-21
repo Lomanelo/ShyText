@@ -188,13 +188,39 @@ service cloud.firestore {
       allow update: if partyToRequest()
         && request.resource.data.senderId == resource.data.senderId
         && request.resource.data.receiverId == resource.data.receiverId
-        && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['status', 'conversationId'])
+        && request.resource.data.venueId == resource.data.venueId
         && (
-          (resource.data.status == 'pending'
-            && request.resource.data.status in ['accepted', 'declined', 'cancelled'])
-          || (resource.data.status == 'accepted'
-            && request.resource.data.status == 'accepted')
+          // Accept / decline / cancel a pending request (or attach conversationId after accept).
+          (
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'conversationId'])
+            && (
+              (resource.data.status == 'pending'
+                && request.resource.data.status in ['accepted', 'declined', 'cancelled'])
+              || (resource.data.status == 'accepted'
+                && request.resource.data.status == 'accepted')
+            )
+          )
+          // Re-send after decline/cancel at the same venue (deterministic doc id).
+          || (
+            resource.data.status in ['declined', 'cancelled']
+            && isSelf(resource.data.senderId)
+            && request.resource.data.status == 'pending'
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly([
+                'status',
+                'createdAt',
+                'serverCreatedAt',
+                'checkInId',
+                'shytextId',
+                'shytextIntent',
+                'venueName',
+                'senderName',
+                'senderAvatarUrl',
+                'introMessage',
+                'introKey'
+              ])
+          )
         );
       allow delete: if false;
     }
