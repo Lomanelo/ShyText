@@ -14,6 +14,8 @@
     "leave": "Leave",
     "shyIn": "Shyne",
     "shyOut": "Shy Out",
+    "extend": "Extend",
+    "open": "Open",
     "shyingIn": "Shyning…",
     "checkIn": "Shyne",
     "checkingIn": "Shyning…",
@@ -349,6 +351,10 @@
     "openToReadOpen": "Tap to view it.",
     "acceptedBodyOpen": "Tap to open the chat.",
     "chatBodyOpen": "Tap to read it."
+  },
+  "liveActivity": {
+    "ended": "Shy’d out",
+    "left": "left"
   },
   "errors": {
     "signInFirst": "Sign in first.",

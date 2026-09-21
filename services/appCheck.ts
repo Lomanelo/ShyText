@@ -20,13 +20,22 @@ export async function startAppCheck() {
     } = require('@react-native-firebase/app-check') as typeof import('@react-native-firebase/app-check');
     const { getApp } = require('@react-native-firebase/app') as typeof import('@react-native-firebase/app');
 
+    // Prefer a console-registered token so Windows/EAS users don't need Xcode logs.
+    // Firebase Console → App Check → iOS app → Manage debug tokens → Add.
+    const debugToken =
+      __DEV__ && typeof process.env.EXPO_PUBLIC_APP_CHECK_DEBUG_TOKEN === 'string'
+        ? process.env.EXPO_PUBLIC_APP_CHECK_DEBUG_TOKEN.trim() || undefined
+        : undefined;
+
     const rnProvider = new ReactNativeFirebaseAppCheckProvider();
     rnProvider.configure({
       android: {
         provider: __DEV__ ? 'debug' : 'playIntegrity',
+        ...(debugToken ? { debugToken } : {}),
       },
       apple: {
         provider: __DEV__ ? 'debug' : 'appAttestWithDeviceCheckFallback',
+        ...(debugToken ? { debugToken } : {}),
       },
     });
 

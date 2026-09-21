@@ -11,6 +11,10 @@ import {
 } from '../services/venues';
 import { auth } from '../services/firebase';
 import { syncCheckInEndingNotice } from '../services/notifications';
+import {
+  endAllShyneLiveActivities,
+  syncShyneLiveActivity,
+} from '../services/shyneLiveActivity';
 import { rememberVenueImage } from '../services/venueImageCache';
 import { buildVenueImageUrl } from '../services/venueImage';
 import {
@@ -25,6 +29,15 @@ import { CURRENT_VENUE_KEY } from '../services/session';
 import { userFacingError } from '../utils/userError';
 import { ShyTextVibe } from '../types/shytext';
 import { DEFAULT_SHYTEXT_MINUTES } from '../utils/config';
+
+function pushLiveActivity(venue: Venue, checkIn: CheckIn) {
+  void syncShyneLiveActivity({
+    venueId: venue.id,
+    venueName: venue.name,
+    startedAt: checkIn.createdAt,
+    expiresAt: checkIn.expiresAt,
+  });
+}
 
 const KEY = CURRENT_VENUE_KEY;
 const VIBE_KEY = 'lastCheckInVibe';
@@ -70,6 +83,7 @@ export function useCurrentVenue() {
       if (!user) {
         clearPendingShyne();
         void syncCheckInEndingNotice(null);
+        void endAllShyneLiveActivities('immediate');
         setCheckIn(null);
         setShyneVenue(null);
         setVenue(null);
@@ -94,6 +108,7 @@ export function useCurrentVenue() {
         void syncCheckInEndingNotice(next?.expiresAt ?? null);
         if (!next) {
           setShyneVenue(null);
+          void endAllShyneLiveActivities('immediate');
           return;
         }
         void getVenue(next.venueId).then((found) => {
@@ -102,6 +117,7 @@ export function useCurrentVenue() {
             ...found,
             imageUrl: found.imageUrl ?? (prev?.id === found.id ? prev.imageUrl : undefined),
           }));
+          pushLiveActivity(found, next);
         });
       });
     });
@@ -138,6 +154,7 @@ export function useCurrentVenue() {
       setVenue(next);
       setShyneVenue(next);
       setCheckIn(optimistic);
+      pushLiveActivity(next, optimistic);
       void AsyncStorage.setItem(KEY, JSON.stringify(next));
     },
     []
@@ -180,6 +197,7 @@ export function useCurrentVenue() {
         setVenue(internal);
         setShyneVenue(internal);
         setCheckIn(created);
+        pushLiveActivity(internal, created);
         await AsyncStorage.setItem(KEY, JSON.stringify(internal));
         await AsyncStorage.setItem(VIBE_KEY, vibe);
         return created;
@@ -187,6 +205,7 @@ export function useCurrentVenue() {
         setPendingShyneError(next.id, userFacingError(err, 'Could not check in'));
         setCheckIn((prev) => (prev?.id.startsWith('pending:') ? null : prev));
         setShyneVenue((prev) => (prev?.id === next.id && !getPendingShyne(next.id) ? null : prev));
+        void endAllShyneLiveActivities('immediate');
         throw err;
       }
     },
@@ -213,6 +232,7 @@ export function useCurrentVenue() {
     clearPendingShyne();
     if (uid) await expireMyCheckIns(uid);
     await syncCheckInEndingNotice(null);
+    await endAllShyneLiveActivities('immediate');
     setCheckIn(null);
     setShyneVenue(null);
   }, []);

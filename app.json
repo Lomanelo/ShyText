@@ -14,6 +14,11 @@
       "buildNumber": "32",
       "googleServicesFile": "./GoogleService-Info.plist",
       "requireFullScreen": true,
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.rahimrady.myshytext"
+        ]
+      },
       "infoPlist": {
         "CFBundleAllowMixedLocalizations": true,
         "ITSAppUsesNonExemptEncryption": false,
@@ -149,10 +154,21 @@
       "expo-dev-client",
       "./plugins/with-siri-check-in",
       "expo-image",
+      [
+        "expo-widgets",
+        {
+          "bundleIdentifier": "com.rahimrady.myshytext.ExpoWidgetsTarget",
+          "groupIdentifier": "group.com.rahimrady.myshytext",
+          "frequentUpdates": true,
+          "enablePushNotifications": false,
+          "widgets": []
+        }
+      ],
       "@react-native-firebase/app",
       "@react-native-firebase/auth",
       "@react-native-firebase/app-check",
       "@react-native-firebase/crashlytics",
+      "./plugins/with-google-services-plist-root",
       [
         "expo-build-properties",
         {

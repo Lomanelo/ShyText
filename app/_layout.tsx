@@ -26,6 +26,9 @@ import { AnimatedSplash } from '../components/AnimatedSplash';
 import { OfflineBanner } from '../components/OfflineBanner';
 import { warmLocalAssets } from '../services/warmAssets';
 
+// Register the Shyne Live Activity factory on iOS (platform stubs elsewhere).
+import '../widgets/ShyneLiveActivity';
+
 // Hold the native splash until the animated handoff is on screen.
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 // Decode stamps + flames during native splash so Nearby never paints blank thumbs.

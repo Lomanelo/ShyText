@@ -332,18 +332,21 @@ async function notifyPeersOfNewShyne(input: {
 /**
  * Activity heartbeat: opening the app while Shyned extends the check-in to a
  * fresh 30-minute window. Going quiet lets it expire on its own.
+ * Pass `{ force: true }` for an explicit Extend (Live Activity / user action).
+ * @returns The new expiresAt, or null if nothing changed.
  */
-export async function extendMyCheckIn(): Promise<void> {
+export async function extendMyCheckIn(options?: { force?: boolean }): Promise<number | null> {
   const user = auth.currentUser;
-  if (!user) return;
+  if (!user) return null;
   const now = Date.now();
   const snap = await getDoc(checkInRef(user.uid)).catch(() => null);
-  if (!snap?.exists()) return;
+  if (!snap?.exists()) return null;
   const expiresAt = Number(snap.data().expiresAt);
-  if (!Number.isFinite(expiresAt) || expiresAt <= now) return;
+  if (!Number.isFinite(expiresAt) || expiresAt <= now) return null;
   const target = now + SHYNE_IDLE_WINDOW_MS;
-  if (expiresAt >= target - SHYNE_EXTEND_SLACK_MS) return;
+  if (!options?.force && expiresAt >= target - SHYNE_EXTEND_SLACK_MS) return null;
   await updateDoc(checkInRef(user.uid), { expiresAt: target }).catch(() => undefined);
+  return target;
 }
 
 export async function updateCheckInVibe(vibe: ShyTextVibe, status?: string | null) {

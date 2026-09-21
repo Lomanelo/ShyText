@@ -11,9 +11,14 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "doctor": "npx expo-doctor"
+    "doctor": "npx expo-doctor",
+    "eas:ios:dev": "cross-env EXPO_NO_CAPABILITY_SYNC=1 npx eas-cli build --profile development --platform ios",
+    "eas:ios:preview": "cross-env EXPO_NO_CAPABILITY_SYNC=1 npx eas-cli build --profile preview --platform ios",
+    "eas:ios:prod": "cross-env EXPO_NO_CAPABILITY_SYNC=1 npx eas-cli build --profile production --platform ios",
+    "eas:ios:credentials": "cross-env EXPO_NO_CAPABILITY_SYNC=1 npx eas-cli credentials --platform ios"
   },
   "dependencies": {
+    "@expo/ui": "~57.0.19",
     "@expo/vector-icons": "^15.0.2",
     "@netlify/functions": "^6.0.0",
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -45,6 +50,7 @@
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.3",
     "expo-web-browser": "~57.0.2",
+    "expo-widgets": "~57.0.20",
     "firebase": "^12.4.0",
     "i18next": "^26.4.1",
     "react": "19.2.3",
@@ -62,6 +68,7 @@
     "@babel/core": "^7.29.0",
     "@expo/ngrok": "^4.1.3",
     "@types/react": "~19.2.4",
+    "cross-env": "^10.1.0",
     "typescript": "~6.0.3"
   }
 }
