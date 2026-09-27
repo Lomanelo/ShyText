@@ -27,10 +27,14 @@ import type { ShyneLiveActivityProps } from './shyneLiveActivityTypes';
 import { SHYNE_LIVE_ACTIVITY_NAME } from './shyneLiveActivityTypes';
 
 /**
- * Lock Screen + Dynamic Island for an active Shyne.
+ * Shyne Live Activity — Lock Screen + Dynamic Island.
  *
- * Same transparent flame-lit mark everywhere (no cream well).
- * fullColor is required so Dynamic Island does not remap the PNG to a gray square.
+ * Single module (Expo docs pattern). On iOS, expo-widgets links ActivityKit;
+ * on Android/web the factory is a no-op stub. Do NOT split into `.ios.tsx` +
+ * a null `.ts` stub — Metro can resolve the stub on device and skip the factory.
+ *
+ * Pattern (Flighty / Uber): flame left of the camera cutout, countdown right;
+ * Lock Screen shows venue + Extend / Shy Out.
  */
 const ShyneLiveActivityLayout = (
   props: ShyneLiveActivityProps,
@@ -49,18 +53,18 @@ const ShyneLiveActivityLayout = (
     : dark
       ? 'rgba(255,255,255,0.16)'
       : 'rgba(28,18,14,0.12)';
+  const paper = reduced ? null : dark ? '#171310' : '#F7EDE2';
 
   const isEnded = props.status === 'ended';
   const expires = new Date(props.expiresAt);
   const started = new Date(props.startedAt);
 
-  /** Transparent brand flame — banner + Dynamic Island share this mark. */
+  /** Transparent flame-lit mark (fullColor so DI does not gray it out). */
   const brandMark = (size: number) =>
     props.logoUri ? (
       <Image
         uiImage={props.logoUri}
         modifiers={[
-          // Must stay first: DI uses accented rendering without this.
           widgetAccentedRenderingMode('fullColor'),
           resizable(),
           frame({ width: size, height: size }),
@@ -70,31 +74,27 @@ const ShyneLiveActivityLayout = (
       <Image systemName="flame.fill" color={accent} size={size} />
     );
 
-  const heroTimer = isEnded ? (
-    <Text
-      modifiers={[
-        font({ weight: 'semibold', size: 16, design: 'rounded' }),
-        foregroundStyle(secondary),
-      ]}
-    >
-      {props.endedLabel}
-    </Text>
-  ) : (
-    <VStack spacing={1} modifiers={[frame({ alignment: 'trailing' })]}>
+  const countdown = (size: number, weight: 'bold' | 'semibold' = 'bold') =>
+    isEnded ? (
+      <Text
+        modifiers={[
+          font({ weight: 'semibold', size: Math.min(size, 14) }),
+          foregroundStyle(secondary),
+        ]}
+      >
+        {props.endedLabel}
+      </Text>
+    ) : (
       <Text
         timerInterval={{ lower: started, upper: expires }}
         countsDown
         modifiers={[
-          font({ weight: 'bold', size: 34, design: 'rounded' }),
+          font({ weight, size, design: 'rounded' }),
           foregroundStyle(accent),
           monospacedDigit(),
         ]}
       />
-      <Text modifiers={[font({ size: 11, weight: 'semibold' }), foregroundStyle(secondary)]}>
-        {props.remainingLabel}
-      </Text>
-    </VStack>
-  );
+    );
 
   const progress = isEnded ? null : (
     <ProgressView
@@ -104,13 +104,14 @@ const ShyneLiveActivityLayout = (
         progressViewStyle('linear'),
         labelsHidden(),
         tint(accent),
-        frame({ maxHeight: 2 }),
+        frame({ maxHeight: 3 }),
       ]}
     />
   );
 
+  /** Twin actions — Extend (accent) / Shy Out (danger). */
   const actions = isEnded ? null : (
-    <HStack spacing={0} modifiers={[padding({ top: 2 })]}>
+    <HStack spacing={0} modifiers={[padding({ top: 4 })]}>
       <Link
         label={props.extendLabel}
         destination={props.extendUrl}
@@ -118,11 +119,11 @@ const ShyneLiveActivityLayout = (
           font({ weight: 'semibold', size: 16 }),
           foregroundStyle(accent),
           tint(accent),
-          padding({ vertical: 6, trailing: 16 }),
+          padding({ vertical: 8, trailing: 12 }),
         ]}
       />
       <Spacer />
-      <Divider modifiers={[frame({ width: 1, height: 14 }), foregroundStyle(rule)]} />
+      <Divider modifiers={[frame({ width: 1, height: 16 }), foregroundStyle(rule)]} />
       <Spacer />
       <Link
         label={props.shyOutLabel}
@@ -131,91 +132,77 @@ const ShyneLiveActivityLayout = (
           font({ weight: 'semibold', size: 16 }),
           foregroundStyle(danger),
           tint(danger),
-          padding({ vertical: 6, leading: 16 }),
+          padding({ vertical: 8, leading: 12 }),
         ]}
       />
     </HStack>
+  );
+
+  const venueBlock = (
+    <VStack spacing={2} modifiers={[frame({ maxWidth: 999, alignment: 'leading' })]}>
+      <Text
+        modifiers={[
+          font({ weight: 'semibold', size: 12 }),
+          foregroundStyle(secondary),
+          lineLimit(1),
+        ]}
+      >
+        {props.title}
+      </Text>
+      <Text
+        modifiers={[
+          font({ weight: 'bold', size: 18 }),
+          foregroundStyle(primary),
+          lineLimit(1),
+        ]}
+      >
+        {props.venueName}
+      </Text>
+    </VStack>
   );
 
   return {
     banner: (
       <VStack
         spacing={12}
-        modifiers={[
-          padding({ horizontal: 16, vertical: 14 }),
-          activityBackgroundTint(reduced ? null : dark ? '#171310' : '#F7EDE2'),
-        ]}
+        modifiers={[padding({ horizontal: 16, vertical: 14 }), activityBackgroundTint(paper)]}
       >
-        <HStack spacing={14}>
-          {brandMark(48)}
-          <VStack spacing={2} modifiers={[frame({ maxWidth: 999, alignment: 'leading' })]}>
-            <Text
-              modifiers={[
-                font({ weight: 'semibold', size: 12 }),
-                foregroundStyle(secondary),
-                lineLimit(1),
-              ]}
-            >
-              {props.title}
-            </Text>
-            <Text
-              modifiers={[
-                font({ weight: 'bold', size: 19 }),
-                foregroundStyle(primary),
-                lineLimit(1),
-              ]}
-            >
-              {props.venueName}
-            </Text>
-          </VStack>
+        <HStack spacing={12}>
+          {brandMark(40)}
+          {venueBlock}
           <Spacer />
-          {heroTimer}
+          <VStack spacing={1} modifiers={[frame({ alignment: 'trailing' })]}>
+            {countdown(28)}
+            {!isEnded ? (
+              <Text modifiers={[font({ size: 11, weight: 'semibold' }), foregroundStyle(secondary)]}>
+                {props.remainingLabel}
+              </Text>
+            ) : null}
+          </VStack>
         </HStack>
         {progress}
         {actions}
       </VStack>
     ),
-    // Push island mark size — compact leading budget is ~37pt max on Pro models.
-    compactLeading: brandMark(55),
-    compactTrailing: isEnded ? (
-      <Text modifiers={[font({ size: 12, weight: 'semibold' }), foregroundStyle(secondary)]}>
-        {props.endedLabel}
-      </Text>
-    ) : (
-      <Text
-        timerInterval={{ lower: started, upper: expires }}
-        countsDown
-        modifiers={[
-          font({ weight: 'bold', size: 15, design: 'rounded' }),
-          foregroundStyle(accent),
-          monospacedDigit(),
-        ]}
-      />
+
+    compactLeading: brandMark(20),
+    compactTrailing: countdown(15, 'semibold'),
+    minimal: brandMark(14),
+
+    expandedLeading: (
+      <VStack modifiers={[padding({ leading: 4 })]}>{brandMark(36)}</VStack>
     ),
-    minimal: brandMark(22),
-    expandedLeading: <VStack modifiers={[padding({ leading: 2 })]}>{brandMark(42)}</VStack>,
     expandedTrailing: (
-      <VStack spacing={0} modifiers={[padding({ trailing: 4 }), frame({ alignment: 'trailing' })]}>
-        {isEnded ? (
-          <Text modifiers={[font({ weight: 'semibold', size: 13 }), foregroundStyle(secondary)]}>
-            {props.endedLabel}
+      <VStack
+        spacing={0}
+        modifiers={[padding({ trailing: 4 }), frame({ alignment: 'trailing' })]}
+      >
+        {countdown(22)}
+        {!isEnded ? (
+          <Text modifiers={[font({ size: 10, weight: 'semibold' }), foregroundStyle(secondary)]}>
+            {props.remainingLabel}
           </Text>
-        ) : (
-          <>
-            <Text
-              timerInterval={{ lower: started, upper: expires }}
-              countsDown
-              modifiers={[
-                font({ weight: 'bold', size: 22, design: 'rounded' }),
-                foregroundStyle(accent),
-                monospacedDigit(),
-              ]}
-            />
-            <Text modifiers={[font({ size: 10, weight: 'semibold' }), foregroundStyle(secondary)]}>
-              {props.remainingLabel}
-            </Text>
-          </>
-        )}
+        ) : null}
       </VStack>
     ),
     expandedCenter: (

@@ -35,6 +35,7 @@ Launch: static native flame splash (warm paper / near-black) hands off to an ide
 Onboarding: four skippable beats (browse ≠ visible → slide to Shyne / ~30m active → one ShyText → accept opens lasting chat). Segment progress, demos play once and hold, letter marks only, manual Continue — no auto-advance, no decorative loops. Auth welcome stays three title-card beats, then phone.
 Loading: pulse skeletons, not static blocks
 Timers: tabular-nums; pulse when under 5 minutes
+Live Activity (iOS): Lock Screen + Dynamic Island while Shyned — flame mark beside the camera cutout, venue name, countdown, Extend (~30 min) and Shy Out. Starts on Shyne, ends on Shy Out / idle expiry. Reduce Motion / disabled Live Activities: no-op.
 Tabs: system tab bar, outline idle / fill selected, flame tint, light haptic on tab press
 Empty states: title + optional body + optional CTA
 Settings: grouped inset rows with chevron. Edit profile is one screen — photo (library, square crop, replace, remove), name, bio with count, header Save. Notifications are five switches (ShyText, accepted, chats, Shyne ending, co-Shyne). Help & Support opens mailto:hello@shytext.com. Delete account is a confirm-then-wipe row in Settings.

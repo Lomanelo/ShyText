@@ -285,7 +285,7 @@
     "deleteAccount": "Konto löschen",
     "nobodyBlocked": "Niemand blockiert",
     "unblock": "Entblocken",
-    "lockScreenFooter": "Neue ShyText-Banner enthalten nie die Notiz selbst. Chat-Hinweise können eine kurze Vorschau zeigen.",
+    "lockScreenFooter": "Während du shynst, zeigt iOS eine Live Activity auf Sperrbildschirm und Dynamic Island (Verlängern / Shy Out). Neue ShyText-Banner enthalten nie die Notiz. Chat-Hinweise können eine kurze Vorschau zeigen.",
     "helpSupport": "Hilfe & Support",
     "supportHint": "Fragen oder Sicherheit — {{email}}",
     "newShyText": "Neuer ShyText",

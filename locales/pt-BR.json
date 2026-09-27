@@ -285,7 +285,7 @@
     "deleteAccount": "Excluir conta",
     "nobodyBlocked": "Ninguém bloqueado",
     "unblock": "Desbloquear",
-    "lockScreenFooter": "Avisos de novo ShyText nunca incluem a nota. Alertas de chat podem mostrar uma prévia curta.",
+    "lockScreenFooter": "Enquanto você está em Shyne, o iOS mostra uma Live Activity na tela de bloqueio e Dynamic Island (Estender / Shy Out). Banners de ShyText nunca incluem a nota. Alertas de chat podem mostrar uma prévia.",
     "helpSupport": "Ajuda e suporte",
     "supportHint": "Dúvidas ou segurança — {{email}}",
     "newShyText": "Novo ShyText",

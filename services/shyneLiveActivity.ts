@@ -86,7 +86,7 @@ export async function syncShyneLiveActivity(
   if (!ShyneLiveActivity) {
     if (__DEV__) {
       console.warn(
-        '[ShyneLiveActivity] factory missing — rebuild the iOS native app with expo-widgets'
+        '[ShyneLiveActivity] factory missing — check widgets/ShyneLiveActivity.tsx exports createLiveActivity'
       );
     }
     return;
@@ -115,7 +115,12 @@ export async function syncShyneLiveActivity(
         await Promise.all(existing.slice(1).map((instance) => instance.end('immediate')));
       }
     } else {
-      ShyneLiveActivity.start(props, url, staleDate);
+      const instance = ShyneLiveActivity.start(props, url, staleDate);
+      if (!instance && __DEV__) {
+        console.warn(
+          '[ShyneLiveActivity] start returned empty — check Settings → ShyText → Live Activities'
+        );
+      }
       if (__DEV__) {
         console.log('[ShyneLiveActivity] started', snap.venueName, 'until', staleDate.toISOString());
       }

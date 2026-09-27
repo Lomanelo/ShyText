@@ -35,6 +35,8 @@
         "UIBackgroundModes": [
           "remote-notification"
         ],
+        "NSSupportsLiveActivities": true,
+        "NSSupportsLiveActivitiesFrequentUpdates": true,
         "UIDeviceFamily": [
           1
         ]

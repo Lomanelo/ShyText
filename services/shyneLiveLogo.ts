@@ -4,7 +4,7 @@ import { File } from 'expo-file-system';
 import { widgetsDirectory } from 'expo-widgets';
 
 /** Bump when the asset changes so devices re-copy into the App Group. */
-const LOGO_FILE = 'shyne-live-flame-v6.png';
+const LOGO_FILE = 'shyne-live-flame-v7.png';
 
 let cachedUri: string | undefined;
 let seeding: Promise<string | undefined> | null = null;
