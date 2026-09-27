@@ -36,7 +36,7 @@ Demo venue “Paddy’s Corner” and seed people (Sarah, Adam, Marie) exist onl
 
 ## Product Principles
 
-1. Invisible until the user holds to check in.
+1. Invisible until the user slides to Shyne.
 2. One place at a time. Mood can change after you’re in.
 3. Approach, don’t broadcast: one person, one ShyText, one accept.
 4. Location is a venue name, never a pin.
