@@ -32,7 +32,7 @@ Venue cards: matchbook painting by place type (bar, café, park, door) on cream 
 People: only after you check in here; mood chips update live; Other opens a 40-character status; swipe left to send (button remains); Send a ShyText is a bottom sheet, never a silent skip. Reopening more than 100 m from the venue auto-checks you out with a drop-in notice.
 OTP: six tall slots, number pad, SMS autofill. Phone number is display-size type beside a country chip.
 Launch: static native flame splash (warm paper / near-black) hands off to an identical in-app overlay — one flame breath, wordmark echo, then a push-in dissolve into the first screen; Reduce Motion gets a plain fade
-Onboarding: three skippable cinematic title-card beats (statement + quiet echo, lower-third, breathing flame) with story bars, then phone
+Onboarding: four skippable story-bar beats (invisible → Shyne → one ShyText → accept & meet) with looping UI demos, letter marks only (no photos), title + echo copy, auto-advance ~4.2s, and Reduce Motion static holds. Auth welcome stays three title-card beats, then phone.
 Loading: pulse skeletons, not static blocks
 Timers: tabular-nums; pulse when under 5 minutes
 Tabs: system tab bar, outline idle / fill selected, flame tint, light haptic on tab press
