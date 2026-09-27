@@ -28,10 +28,7 @@ import { useTranslation } from 'react-i18next';
 const DEMO_VENUE = 'Café Lumen';
 const DEMO_PERSON = 'Maya';
 
-/**
- * Play once when the beat becomes active, then hold the end frame.
- * No loops, no auto-advance — user taps Continue.
- */
+/** Play once, then hold. User taps Continue — no auto-advance. */
 function usePlayOnce(reduce: boolean, active: boolean, duration = 1600, delay = 280) {
   const p = useSharedValue(0);
   useEffect(() => {
@@ -103,11 +100,19 @@ function Progress({ count, index, theme }: { count: number; index: number; theme
   );
 }
 
-/** Beat 0 — browsing a venue does not make you visible. */
+function VenuePill({ theme }: { theme: Theme }) {
+  return (
+    <View style={[styles.venuePill, { backgroundColor: theme.bg }]}>
+      <Ionicons name="location" size={14} color={theme.accent} />
+      <Text style={[type.caption, { color: theme.text, fontWeight: '600' }]}>{DEMO_VENUE}</Text>
+    </View>
+  );
+}
+
+/** 1 — Looking at a place does nothing. */
 function InvisibleDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; active: boolean }) {
   const { t } = useTranslation();
   const p = usePlayOnce(reduce, active, 900, 200);
-
   const row = useAnimatedStyle(() => ({
     opacity: interpolate(p.value, [0, 1], [0, 1], Extrapolation.CLAMP),
     transform: [{ translateY: interpolate(p.value, [0, 1], [10, 0], Extrapolation.CLAMP) }],
@@ -115,23 +120,23 @@ function InvisibleDemo({ theme, reduce, active }: { theme: Theme; reduce: boolea
 
   return (
     <View style={styles.stageInner}>
-      <View style={[styles.venuePill, { backgroundColor: theme.bg }]}>
-        <Ionicons name="location" size={14} color={theme.accent} />
-        <Text style={[type.caption, { color: theme.text, fontWeight: '600' }]}>{DEMO_VENUE}</Text>
-      </View>
+      <VenuePill theme={theme} />
       <Animated.View style={[styles.personCard, { backgroundColor: theme.bg }, row]}>
-        <LetterMark label={t('common.you')} theme={theme} size={48} />
+        <LetterMark label={t('common.you')} theme={theme} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={[type.headline, { color: theme.text }]}>{t('common.you')}</Text>
           <Text style={[type.caption, { color: theme.muted }]}>{t('walkthrough.notVisible')}</Text>
         </View>
-        <Ionicons name="eye-off" size={18} color={theme.quiet} />
+        <Ionicons name="eye-off" size={20} color={theme.quiet} />
       </Animated.View>
+      <Text style={[type.caption, { color: theme.quiet, textAlign: 'center' }]}>
+        {t('walkthrough.lookingHint')}
+      </Text>
     </View>
   );
 }
 
-/** Beat 1 — slide to Shyne; rolling ~30 min while active. */
+/** 2 — Slide to Shyne is the only way you appear. */
 function ShyneDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; active: boolean }) {
   const { t } = useTranslation();
   const p = usePlayOnce(reduce, active, 1800, 350);
@@ -160,10 +165,7 @@ function ShyneDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; a
 
   return (
     <View style={styles.stageInner}>
-      <View style={[styles.venuePill, { backgroundColor: theme.bg }]}>
-        <Ionicons name="location" size={14} color={theme.accent} />
-        <Text style={[type.caption, { color: theme.text, fontWeight: '600' }]}>{DEMO_VENUE}</Text>
-      </View>
+      <VenuePill theme={theme} />
       <View
         onLayout={(e: LayoutChangeEvent) => setTrackW(e.nativeEvent.layout.width)}
         style={[styles.slideTrack, { backgroundColor: theme.bg, borderColor: theme.border }]}
@@ -199,18 +201,108 @@ function ShyneDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; a
           />
         </Animated.View>
       </View>
-      <Text style={[type.caption, { color: theme.muted, textAlign: 'center' }]}>
-        {t('walkthrough.shyneIdleHint')}
+      <Text style={[type.caption, { color: theme.quiet, textAlign: 'center' }]}>
+        {t('walkthrough.mustBeThere')}
       </Text>
     </View>
   );
 }
 
-/** Beat 2 — only co-Shyners appear; send one directed note. */
+/** 3 — ~30 min; open the app to restart. */
+function TimerDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; active: boolean }) {
+  const { t } = useTranslation();
+  const p = usePlayOnce(reduce, active, 1200, 200);
+  const fade = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0, 1], [0, 1], Extrapolation.CLAMP),
+    transform: [{ translateY: interpolate(p.value, [0, 1], [8, 0], Extrapolation.CLAMP) }],
+  }));
+
+  return (
+    <View style={styles.stageInner}>
+      <Animated.View style={[styles.timerCard, { backgroundColor: theme.bg }, fade]}>
+        <AnimatedFlameImage
+          source={flameSource('lit')}
+          cachePolicy="memory-disk"
+          transition={0}
+          priority="high"
+          contentFit="contain"
+          style={{ width: 36, height: 36 }}
+        />
+        <Text style={[styles.timerBig, { color: theme.accent }]}>30</Text>
+        <Text style={[type.headline, { color: theme.text }]}>{t('walkthrough.timerUnit')}</Text>
+        <Text style={[type.caption, { color: theme.muted, textAlign: 'center' }]}>
+          {t('walkthrough.timerHint')}
+        </Text>
+      </Animated.View>
+    </View>
+  );
+}
+
+/** 4 — Mutual visibility only. */
+function MutualDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; active: boolean }) {
+  const { t } = useTranslation();
+  const p = usePlayOnce(reduce, active, 1400, 200);
+  const you = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0, 0.35], [0, 1], Extrapolation.CLAMP),
+  }));
+  const them = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0.35, 0.7], [0, 1], Extrapolation.CLAMP),
+  }));
+  const ghost = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0.7, 1], [0, 1], Extrapolation.CLAMP),
+  }));
+
+  return (
+    <View style={styles.stageInner}>
+      <VenuePill theme={theme} />
+      <Animated.View style={[styles.personCard, { backgroundColor: theme.bg }, you]}>
+        <LetterMark label={t('common.you')} theme={theme} lit />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[type.headline, { color: theme.text }]}>{t('common.you')}</Text>
+          <Text style={[type.caption, { color: theme.accent }]}>{t('venue.shyningHere')}</Text>
+        </View>
+        <AnimatedFlameImage
+          source={flameSource('lit')}
+          cachePolicy="memory-disk"
+          transition={0}
+          priority="high"
+          contentFit="contain"
+          style={{ width: 18, height: 18 }}
+        />
+      </Animated.View>
+      <Animated.View style={[styles.personCard, { backgroundColor: theme.bg }, them]}>
+        <LetterMark label={DEMO_PERSON} theme={theme} lit />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[type.headline, { color: theme.text }]}>{DEMO_PERSON}</Text>
+          <Text style={[type.caption, { color: theme.accent }]}>{t('venue.shyningHere')}</Text>
+        </View>
+        <AnimatedFlameImage
+          source={flameSource('lit')}
+          cachePolicy="memory-disk"
+          transition={0}
+          priority="high"
+          contentFit="contain"
+          style={{ width: 18, height: 18 }}
+        />
+      </Animated.View>
+      <Animated.View
+        style={[styles.personCard, { backgroundColor: theme.bg, opacity: 0.45 }, ghost]}
+      >
+        <LetterMark label="?" theme={theme} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[type.headline, { color: theme.muted }]}>{t('walkthrough.hiddenPerson')}</Text>
+          <Text style={[type.caption, { color: theme.quiet }]}>{t('walkthrough.notShyning')}</Text>
+        </View>
+        <Ionicons name="eye-off" size={18} color={theme.quiet} />
+      </Animated.View>
+    </View>
+  );
+}
+
+/** 5 — One note to one person. */
 function SendDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; active: boolean }) {
   const { t } = useTranslation();
   const p = usePlayOnce(reduce, active, 2000, 250);
-
   const person = useAnimatedStyle(() => ({
     opacity: interpolate(p.value, [0, 0.25], [0, 1], Extrapolation.CLAMP),
     transform: [{ translateY: interpolate(p.value, [0, 0.25], [12, 0], Extrapolation.CLAMP) }],
@@ -226,19 +318,11 @@ function SendDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; ac
   return (
     <View style={styles.stageInner}>
       <Animated.View style={[styles.personCard, { backgroundColor: theme.bg }, person]}>
-        <LetterMark label={DEMO_PERSON} theme={theme} size={48} lit />
+        <LetterMark label={DEMO_PERSON} theme={theme} lit />
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={[type.headline, { color: theme.text }]}>{DEMO_PERSON}</Text>
           <Text style={[type.caption, { color: theme.muted }]}>{t('vibes.coffee')}</Text>
         </View>
-        <AnimatedFlameImage
-          source={flameSource('lit')}
-          cachePolicy="memory-disk"
-          transition={0}
-          priority="high"
-          contentFit="contain"
-          style={{ width: 18, height: 18 }}
-        />
       </Animated.View>
       <Animated.View style={[styles.noteBubble, { backgroundColor: theme.accent }, note]}>
         <Text style={[type.body, { color: theme.onAccent }]}>{t('walkthrough.demoNote')}</Text>
@@ -246,18 +330,17 @@ function SendDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; ac
       <Animated.View style={[styles.waitingRow, waiting]}>
         <Ionicons name="time-outline" size={16} color={theme.accent} />
         <Text style={[type.caption, { color: theme.accent, fontWeight: '700' }]}>
-          {t('venue.alreadySent')}
+          {t('walkthrough.waitingInChats')}
         </Text>
       </Animated.View>
     </View>
   );
 }
 
-/** Beat 3 — accept opens chat; chat survives after Shyne ends. */
+/** 6 — Accept → chat that outlives Shyne. */
 function AcceptDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; active: boolean }) {
   const { t } = useTranslation();
   const p = usePlayOnce(reduce, active, 2200, 250);
-
   const card = useAnimatedStyle(() => ({
     opacity: interpolate(p.value, [0, 0.2], [0, 1], Extrapolation.CLAMP),
   }));
@@ -280,9 +363,9 @@ function AcceptDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; 
   return (
     <View style={styles.stageInner}>
       <Animated.View style={[styles.personCard, { backgroundColor: theme.bg }, card]}>
-        <LetterMark label={t('common.you')} theme={theme} size={48} />
+        <LetterMark label={DEMO_PERSON} theme={theme} lit />
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[type.headline, { color: theme.text }]}>{t('common.you')}</Text>
+          <Text style={[type.headline, { color: theme.text }]}>{DEMO_PERSON}</Text>
           <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
             {t('walkthrough.demoNote')}
           </Text>
@@ -318,17 +401,20 @@ function AcceptDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; 
   );
 }
 
+type BeatKey = '0' | '1' | '2' | '3' | '4' | '5';
 type Beat = {
-  titleKey: 'title0' | 'title1' | 'title2' | 'title3';
-  bodyKey: 'body0' | 'body1' | 'body2' | 'body3';
+  titleKey: `title${BeatKey}`;
+  bodyKey: `body${BeatKey}`;
   Demo: typeof InvisibleDemo;
 };
 
 const BEATS: Beat[] = [
   { titleKey: 'title0', bodyKey: 'body0', Demo: InvisibleDemo },
   { titleKey: 'title1', bodyKey: 'body1', Demo: ShyneDemo },
-  { titleKey: 'title2', bodyKey: 'body2', Demo: SendDemo },
-  { titleKey: 'title3', bodyKey: 'body3', Demo: AcceptDemo },
+  { titleKey: 'title2', bodyKey: 'body2', Demo: TimerDemo },
+  { titleKey: 'title3', bodyKey: 'body3', Demo: MutualDemo },
+  { titleKey: 'title4', bodyKey: 'body4', Demo: SendDemo },
+  { titleKey: 'title5', bodyKey: 'body5', Demo: AcceptDemo },
 ];
 
 export default function HowItWorksScreen() {
@@ -476,7 +562,7 @@ const styles = StyleSheet.create({
     minHeight: 260,
     justifyContent: 'center',
   },
-  stageInner: { gap: space[16], justifyContent: 'center' },
+  stageInner: { gap: space[12], justifyContent: 'center' },
   venuePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -493,6 +579,20 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderCurve: 'continuous',
     padding: space[12],
+  },
+  timerCard: {
+    alignItems: 'center',
+    gap: space[8],
+    borderRadius: radius.lg,
+    borderCurve: 'continuous',
+    paddingVertical: space[32],
+    paddingHorizontal: space[24],
+  },
+  timerBig: {
+    fontSize: 56,
+    lineHeight: 60,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   slideTrack: {
     height: 60,
@@ -569,12 +669,12 @@ const styles = StyleSheet.create({
   copy: {
     paddingHorizontal: space[24],
     gap: space[8],
-    minHeight: 108,
+    minHeight: 120,
   },
   title: {
     ...type.title,
-    fontSize: 26,
-    lineHeight: 32,
+    fontSize: 24,
+    lineHeight: 30,
   },
   body: {
     ...type.body,
