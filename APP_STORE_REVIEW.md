@@ -6,6 +6,32 @@ Use this when submitting via EAS / App Store Connect.
 
 ShyText is a **Social Networking** venue check-in. People **Shyne** at a place, send a short ShyText to someone else who Shyned there, and chat only if they accept. It is **not** a dating app and has **no** public social feed or people map.
 
+**Auth is phone SMS only.** There is no Sign in with Apple and no Google Login in the product.
+
+### App Review reply — Guideline 2.3 (1.1.2) — paste in ASC
+
+```
+Hello App Review,
+
+Thank you for the note on Guideline 2.3.
+
+ShyText does not offer Sign in with Apple or Google Login. Authentication is phone number + SMS verification only (Firebase Auth). The review sign-in fields already use our Firebase test numbers (+1 650 555 3434 / 123456 and +1 650 555 3435 / 654321).
+
+Any mention of Sign in with Apple or Google Login in App Privacy or elsewhere was incorrect leftover configuration, not an in-app feature. We have corrected App Privacy / capabilities accordingly. Description, screenshots, and What’s New do not advertise those login methods.
+
+This update is a bug-fix / Live Activity submission. Please proceed with approval of version 1.1.2 under the Bug Fix Submissions path.
+
+Thank you,
+Rahim
+```
+
+### After reply (so the next build is clean)
+
+1. **Apple Developer** → Identifiers → `com.rahimrady.myshytext` → turn **OFF** Sign in with Apple → Save.  
+2. Regenerate iOS distribution profiles (`eas credentials` or next EAS build with `EXPO_NO_CAPABILITY_SYNC=1`).  
+3. **App Store Connect → App Privacy** → ensure login methods do **not** list Sign in with Apple or Google; only phone number / app account.  
+4. Confirm screenshots/description never mention Apple/Google login.
+
 ## Age rating answers (September 2026 questionnaire)
 
 - User-Generated Content: Yes

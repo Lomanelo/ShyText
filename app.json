@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.rahimrady.myshytext",
-      "buildNumber": "34",
+      "buildNumber": "36",
       "googleServicesFile": "./GoogleService-Info.plist",
       "requireFullScreen": true,
       "entitlements": {
@@ -25,8 +25,7 @@
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
-              "com.rahimrady.myshytext",
-              "com.googleusercontent.apps.680911194317-g3amhmkgvie7gdmdcalkn14p46ralg1h"
+              "com.rahimrady.myshytext"
             ]
           }
         ],
