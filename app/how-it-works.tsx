@@ -8,11 +8,12 @@ import Animated, {
   Easing,
   Extrapolation,
   FadeIn,
+  FadeOut,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
-  withRepeat,
-  withSequence,
+  withDelay,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,10 +29,10 @@ const DEMO_VENUE = 'Café Lumen';
 const DEMO_PERSON = 'Maya';
 
 /**
- * Demo loop: rest → act → hold long enough to read → reset.
- * No page auto-advance — user taps Continue.
+ * Play once when the beat becomes active, then hold the end frame.
+ * No loops, no auto-advance — user taps Continue.
  */
-function useDemoLoop(reduce: boolean, active: boolean) {
+function usePlayOnce(reduce: boolean, active: boolean, duration = 1600, delay = 280) {
   const p = useSharedValue(0);
   useEffect(() => {
     if (!active) {
@@ -43,60 +44,97 @@ function useDemoLoop(reduce: boolean, active: boolean) {
       return;
     }
     p.value = 0;
-    p.value = withRepeat(
-      withSequence(
-        withTiming(0, { duration: 600 }),
-        withTiming(1, { duration: 900, easing: Easing.inOut(Easing.cubic) }),
-        withTiming(1, { duration: 2400 }),
-        withTiming(0, { duration: 500, easing: Easing.out(Easing.cubic) })
-      ),
-      -1
-    );
-    return () => {
-      p.value = 0;
-    };
-  }, [p, reduce, active]);
+    p.value = withDelay(delay, withTiming(1, { duration, easing: Easing.out(Easing.cubic) }));
+  }, [p, reduce, active, duration, delay]);
   return p;
 }
 
-function VenuePill({ theme }: { theme: Theme }) {
+function LetterMark({
+  label,
+  theme,
+  size = 48,
+  lit,
+}: {
+  label: string;
+  theme: Theme;
+  size?: number;
+  lit?: boolean;
+}) {
   return (
-    <View style={[styles.venuePill, { backgroundColor: theme.bg }]}>
-      <Ionicons name="location" size={14} color={theme.accent} />
-      <Text style={[type.caption, { color: theme.text, fontWeight: '600' }]}>{DEMO_VENUE}</Text>
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: lit ? theme.accent : theme.accentSoft,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <Text
+        style={[
+          type.headline,
+          {
+            color: lit ? theme.onAccent : theme.accent,
+            fontSize: size * 0.38,
+            fontWeight: '700',
+          },
+        ]}
+      >
+        {label.slice(0, 1).toUpperCase()}
+      </Text>
     </View>
   );
 }
 
-/** Beat 1 — browsing ≠ visible. */
-function LookingDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; active: boolean }) {
-  const { t } = useTranslation();
-  const p = useDemoLoop(reduce, active);
+function Progress({ count, index, theme }: { count: number; index: number; theme: Theme }) {
+  return (
+    <View style={styles.progress} accessibilityRole="progressbar">
+      {Array.from({ length: count }).map((_, i) => (
+        <View
+          key={i}
+          style={[
+            styles.progressSeg,
+            { backgroundColor: i <= index ? theme.accent : theme.border },
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
 
-  const fade = useAnimatedStyle(() => ({
-    opacity: interpolate(p.value, [0, 0.4, 1], [0.45, 1, 0.45], Extrapolation.CLAMP),
+/** Beat 0 — browsing a venue does not make you visible. */
+function InvisibleDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; active: boolean }) {
+  const { t } = useTranslation();
+  const p = usePlayOnce(reduce, active, 900, 200);
+
+  const row = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0, 1], [0, 1], Extrapolation.CLAMP),
+    transform: [{ translateY: interpolate(p.value, [0, 1], [10, 0], Extrapolation.CLAMP) }],
   }));
 
   return (
-    <View style={styles.demo}>
-      <VenuePill theme={theme} />
-      <Animated.View style={[styles.emptyBlock, { borderColor: theme.border }, fade]}>
-        <Ionicons name="eye-off-outline" size={28} color={theme.quiet} />
-        <Text style={[type.headline, { color: theme.muted, textAlign: 'center' }]}>
-          {t('walkthrough.lookingOnly')}
-        </Text>
-        <Text style={[type.caption, { color: theme.quiet, textAlign: 'center' }]}>
-          {t('walkthrough.noOneSeesYou')}
-        </Text>
+    <View style={styles.stageInner}>
+      <View style={[styles.venuePill, { backgroundColor: theme.bg }]}>
+        <Ionicons name="location" size={14} color={theme.accent} />
+        <Text style={[type.caption, { color: theme.text, fontWeight: '600' }]}>{DEMO_VENUE}</Text>
+      </View>
+      <Animated.View style={[styles.personCard, { backgroundColor: theme.bg }, row]}>
+        <LetterMark label={t('common.you')} theme={theme} size={48} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[type.headline, { color: theme.text }]}>{t('common.you')}</Text>
+          <Text style={[type.caption, { color: theme.muted }]}>{t('walkthrough.notVisible')}</Text>
+        </View>
+        <Ionicons name="eye-off" size={18} color={theme.quiet} />
       </Animated.View>
     </View>
   );
 }
 
-/** Beat 2 — the real control: Slide to Shyne. */
+/** Beat 1 — slide to Shyne; rolling ~30 min while active. */
 function ShyneDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; active: boolean }) {
   const { t } = useTranslation();
-  const p = useDemoLoop(reduce, active);
+  const p = usePlayOnce(reduce, active, 1800, 350);
   const [trackW, setTrackW] = useState(0);
   const thumb = 52;
   const travel = Math.max(0, trackW - thumb - 8);
@@ -105,48 +143,51 @@ function ShyneDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; a
     transform: [{ translateX: p.value * travel }],
   }));
   const dimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(p.value, [0, 0.8], [1, 0], Extrapolation.CLAMP),
+    opacity: interpolate(p.value, [0, 0.85], [1, 0], Extrapolation.CLAMP),
   }));
   const litStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(p.value, [0.3, 0.85], [0, 1], Extrapolation.CLAMP),
+    opacity: interpolate(p.value, [0.35, 0.95], [0, 1], Extrapolation.CLAMP),
   }));
   const fillStyle = useAnimatedStyle(() => ({
     width: 4 + p.value * travel + thumb * 0.5,
   }));
   const hintStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(p.value, [0, 0.35], [1, 0], Extrapolation.CLAMP),
+    opacity: interpolate(p.value, [0, 0.45], [1, 0], Extrapolation.CLAMP),
   }));
   const doneStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(p.value, [0.85, 1], [0, 1], Extrapolation.CLAMP),
+    opacity: interpolate(p.value, [0.9, 1], [0, 1], Extrapolation.CLAMP),
   }));
 
   return (
-    <View style={styles.demo}>
-      <VenuePill theme={theme} />
+    <View style={styles.stageInner}>
+      <View style={[styles.venuePill, { backgroundColor: theme.bg }]}>
+        <Ionicons name="location" size={14} color={theme.accent} />
+        <Text style={[type.caption, { color: theme.text, fontWeight: '600' }]}>{DEMO_VENUE}</Text>
+      </View>
       <View
         onLayout={(e: LayoutChangeEvent) => setTrackW(e.nativeEvent.layout.width)}
-        style={[styles.track, { backgroundColor: theme.bg, borderColor: theme.border }]}
+        style={[styles.slideTrack, { backgroundColor: theme.bg, borderColor: theme.border }]}
       >
-        <Animated.View style={[styles.trackFill, { backgroundColor: theme.accentSoft }, fillStyle]} />
-        <Animated.View style={[styles.trackHint, hintStyle]}>
+        <Animated.View style={[styles.slideFill, { backgroundColor: theme.accentSoft }, fillStyle]} />
+        <Animated.View style={[styles.slideHint, hintStyle]}>
           <Text style={[type.caption, { color: theme.muted, fontWeight: '600' }]}>
             {t('nearby.slideHint')}
           </Text>
           <Ionicons name="chevron-forward" size={14} color={theme.muted} />
         </Animated.View>
-        <Animated.View style={[styles.trackDone, doneStyle]}>
+        <Animated.View style={[styles.slideDone, doneStyle]}>
           <Text style={[type.caption, { color: theme.accent, fontWeight: '700' }]}>
             {t('venue.shyningHere')}
           </Text>
         </Animated.View>
-        <Animated.View style={[styles.thumb, { backgroundColor: theme.card }, thumbStyle]}>
+        <Animated.View style={[styles.slideThumb, { backgroundColor: theme.card }, thumbStyle]}>
           <AnimatedFlameImage
             source={flameSource('dim')}
             cachePolicy="memory-disk"
             transition={0}
             priority="high"
             contentFit="contain"
-            style={[styles.flame, dimStyle]}
+            style={[styles.slideFlame, dimStyle]}
           />
           <AnimatedFlameImage
             source={flameSource('lit')}
@@ -154,57 +195,101 @@ function ShyneDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; a
             transition={0}
             priority="high"
             contentFit="contain"
-            style={[styles.flame, styles.flameOn, litStyle]}
+            style={[styles.slideFlame, styles.slideFlameOn, litStyle]}
           />
         </Animated.View>
       </View>
-      <Text style={[type.caption, { color: theme.quiet, textAlign: 'center' }]}>
+      <Text style={[type.caption, { color: theme.muted, textAlign: 'center' }]}>
         {t('walkthrough.shyneIdleHint')}
       </Text>
     </View>
   );
 }
 
-/** Beat 3 — one note → accept in Chats → private thread. */
-function RequestDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; active: boolean }) {
+/** Beat 2 — only co-Shyners appear; send one directed note. */
+function SendDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; active: boolean }) {
   const { t } = useTranslation();
-  const p = useDemoLoop(reduce, active);
+  const p = usePlayOnce(reduce, active, 2000, 250);
 
+  const person = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0, 0.25], [0, 1], Extrapolation.CLAMP),
+    transform: [{ translateY: interpolate(p.value, [0, 0.25], [12, 0], Extrapolation.CLAMP) }],
+  }));
   const note = useAnimatedStyle(() => ({
-    opacity: interpolate(p.value, [0.05, 0.25], [0, 1], Extrapolation.CLAMP),
-    transform: [{ translateY: interpolate(p.value, [0.05, 0.25], [12, 0], Extrapolation.CLAMP) }],
+    opacity: interpolate(p.value, [0.4, 0.65], [0, 1], Extrapolation.CLAMP),
+    transform: [{ translateY: interpolate(p.value, [0.4, 0.65], [14, 0], Extrapolation.CLAMP) }],
   }));
-  const actions = useAnimatedStyle(() => ({
-    opacity: interpolate(p.value, [0.3, 0.45, 0.7, 0.82], [0, 1, 1, 0], Extrapolation.CLAMP),
-  }));
-  const press = useAnimatedStyle(() => ({
-    transform: [
-      { scale: interpolate(p.value, [0.5, 0.58, 0.66], [1, 0.94, 1], Extrapolation.CLAMP) },
-    ],
-  }));
-  const open = useAnimatedStyle(() => ({
-    opacity: interpolate(p.value, [0.78, 0.92], [0, 1], Extrapolation.CLAMP),
-    transform: [{ translateY: interpolate(p.value, [0.78, 0.92], [8, 0], Extrapolation.CLAMP) }],
+  const waiting = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0.78, 1], [0, 1], Extrapolation.CLAMP),
   }));
 
   return (
-    <View style={styles.demo}>
-      <View style={[styles.row, { backgroundColor: theme.bg }]}>
-        <View style={[styles.avatar, { backgroundColor: theme.accentSoft }]}>
-          <Text style={[type.headline, { color: theme.accent }]}>{DEMO_PERSON[0]}</Text>
-        </View>
+    <View style={styles.stageInner}>
+      <Animated.View style={[styles.personCard, { backgroundColor: theme.bg }, person]}>
+        <LetterMark label={DEMO_PERSON} theme={theme} size={48} lit />
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={[type.headline, { color: theme.text }]}>{DEMO_PERSON}</Text>
           <Text style={[type.caption, { color: theme.muted }]}>{t('vibes.coffee')}</Text>
         </View>
-      </View>
-
-      <Animated.View style={[styles.note, { backgroundColor: theme.accent }, note]}>
+        <AnimatedFlameImage
+          source={flameSource('lit')}
+          cachePolicy="memory-disk"
+          transition={0}
+          priority="high"
+          contentFit="contain"
+          style={{ width: 18, height: 18 }}
+        />
+      </Animated.View>
+      <Animated.View style={[styles.noteBubble, { backgroundColor: theme.accent }, note]}>
         <Text style={[type.body, { color: theme.onAccent }]}>{t('walkthrough.demoNote')}</Text>
       </Animated.View>
+      <Animated.View style={[styles.waitingRow, waiting]}>
+        <Ionicons name="time-outline" size={16} color={theme.accent} />
+        <Text style={[type.caption, { color: theme.accent, fontWeight: '700' }]}>
+          {t('venue.alreadySent')}
+        </Text>
+      </Animated.View>
+    </View>
+  );
+}
 
-      <Animated.View style={[styles.actionsRow, actions]}>
-        <Animated.View style={[styles.pill, { backgroundColor: theme.accent }, press]}>
+/** Beat 3 — accept opens chat; chat survives after Shyne ends. */
+function AcceptDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean; active: boolean }) {
+  const { t } = useTranslation();
+  const p = usePlayOnce(reduce, active, 2200, 250);
+
+  const card = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0, 0.2], [0, 1], Extrapolation.CLAMP),
+  }));
+  const pills = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0.15, 0.35, 0.55, 0.65], [0, 1, 1, 0], Extrapolation.CLAMP),
+  }));
+  const acceptPress = useAnimatedStyle(() => ({
+    transform: [
+      { scale: interpolate(p.value, [0.38, 0.48, 0.55], [1, 0.94, 1], Extrapolation.CLAMP) },
+    ],
+  }));
+  const chat = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0.62, 0.8], [0, 1], Extrapolation.CLAMP),
+    transform: [{ translateY: interpolate(p.value, [0.62, 0.8], [8, 0], Extrapolation.CLAMP) }],
+  }));
+  const keep = useAnimatedStyle(() => ({
+    opacity: interpolate(p.value, [0.85, 1], [0, 1], Extrapolation.CLAMP),
+  }));
+
+  return (
+    <View style={styles.stageInner}>
+      <Animated.View style={[styles.personCard, { backgroundColor: theme.bg }, card]}>
+        <LetterMark label={t('common.you')} theme={theme} size={48} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[type.headline, { color: theme.text }]}>{t('common.you')}</Text>
+          <Text style={[type.caption, { color: theme.muted }]} numberOfLines={1}>
+            {t('walkthrough.demoNote')}
+          </Text>
+        </View>
+      </Animated.View>
+      <Animated.View style={[styles.pillRow, pills]}>
+        <Animated.View style={[styles.pill, { backgroundColor: theme.accent }, acceptPress]}>
           <Text style={[type.headline, { color: theme.onAccent, fontSize: 15 }]}>
             {t('common.accept')}
           </Text>
@@ -215,11 +300,18 @@ function RequestDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean;
           </Text>
         </View>
       </Animated.View>
-
-      <Animated.View style={[styles.openRow, open]}>
-        <Ionicons name="chatbubbles-outline" size={18} color={theme.accent} />
-        <Text style={[type.caption, { color: theme.accent, fontWeight: '700' }]}>
-          {t('walkthrough.chatOpen')}
+      <Animated.View style={[{ gap: space[8], width: '100%' }, chat]}>
+        <View style={[styles.chatBubble, styles.chatLeft, { backgroundColor: theme.bg }]}>
+          <Text style={[type.body, { color: theme.text }]}>{t('walkthrough.demoMsg1')}</Text>
+        </View>
+        <View style={[styles.chatBubble, styles.chatRight, { backgroundColor: theme.accent }]}>
+          <Text style={[type.body, { color: theme.onAccent }]}>{t('walkthrough.demoMsg2')}</Text>
+        </View>
+      </Animated.View>
+      <Animated.View style={[styles.keepRow, keep]}>
+        <Ionicons name="chatbubbles-outline" size={16} color={theme.muted} />
+        <Text style={[type.caption, { color: theme.muted, fontWeight: '600' }]}>
+          {t('walkthrough.chatKeepsGoing')}
         </Text>
       </Animated.View>
     </View>
@@ -227,15 +319,16 @@ function RequestDemo({ theme, reduce, active }: { theme: Theme; reduce: boolean;
 }
 
 type Beat = {
-  titleKey: 'title0' | 'title1' | 'title2';
-  bodyKey: 'body0' | 'body1' | 'body2';
-  Demo: typeof LookingDemo;
+  titleKey: 'title0' | 'title1' | 'title2' | 'title3';
+  bodyKey: 'body0' | 'body1' | 'body2' | 'body3';
+  Demo: typeof InvisibleDemo;
 };
 
 const BEATS: Beat[] = [
-  { titleKey: 'title0', bodyKey: 'body0', Demo: LookingDemo },
+  { titleKey: 'title0', bodyKey: 'body0', Demo: InvisibleDemo },
   { titleKey: 'title1', bodyKey: 'body1', Demo: ShyneDemo },
-  { titleKey: 'title2', bodyKey: 'body2', Demo: RequestDemo },
+  { titleKey: 'title2', bodyKey: 'body2', Demo: SendDemo },
+  { titleKey: 'title3', bodyKey: 'body3', Demo: AcceptDemo },
 ];
 
 export default function HowItWorksScreen() {
@@ -247,13 +340,31 @@ export default function HowItWorksScreen() {
   const isFirstRun = first === '1';
   const [page, setPage] = useState(0);
   const last = page === BEATS.length - 1;
-  const { Demo } = BEATS[page];
+  const enter = useSharedValue(1);
 
   useEffect(() => {
     void AsyncStorage.setItem(HOW_IT_WORKS_SEEN_KEY, '1').catch(() => undefined);
   }, []);
 
-  const close = useCallback(() => {
+  useEffect(() => {
+    if (reduce) {
+      enter.value = 1;
+      return;
+    }
+    enter.value = 0;
+    enter.value = withSpring(1, motion.spring);
+  }, [page, reduce, enter]);
+
+  const titleStyle = useAnimatedStyle(() => ({
+    opacity: enter.value,
+    transform: [{ translateY: interpolate(enter.value, [0, 1], [10, 0]) }],
+  }));
+  const bodyStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(enter.value, [0.4, 1], [0, 1]),
+    transform: [{ translateY: interpolate(enter.value, [0.4, 1], [8, 0]) }],
+  }));
+
+  const closeWalkthrough = useCallback(() => {
     void Haptics.selectionAsync();
     if (isFirstRun) {
       router.replace('/(tabs)/nearby');
@@ -266,14 +377,16 @@ export default function HowItWorksScreen() {
     router.replace('/(tabs)/nearby');
   }, [isFirstRun]);
 
-  const next = useCallback(() => {
+  const goNext = useCallback(() => {
     if (last) {
-      close();
+      closeWalkthrough();
       return;
     }
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setPage((n) => n + 1);
-  }, [last, close]);
+  }, [last, closeWalkthrough]);
+
+  const { Demo } = BEATS[page];
 
   return (
     <Screen theme={theme} inset={false}>
@@ -281,30 +394,17 @@ export default function HowItWorksScreen() {
         style={[
           styles.wrap,
           {
-            paddingTop: insets.top + space[12],
+            paddingTop: insets.top + space[8],
             paddingBottom: Math.max(insets.bottom, space[16]),
           },
         ]}
       >
         <View style={styles.top}>
-          <View style={styles.dots}>
-            {BEATS.map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: i === page ? theme.accent : theme.border,
-                    width: i === page ? 18 : 8,
-                  },
-                ]}
-              />
-            ))}
-          </View>
+          <Progress count={BEATS.length} index={page} theme={theme} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={t('common.skip')}
-            onPress={close}
+            onPress={closeWalkthrough}
             hitSlop={12}
             style={styles.skip}
           >
@@ -315,23 +415,24 @@ export default function HowItWorksScreen() {
         </View>
 
         <Animated.View
-          key={page}
-          entering={reduce ? undefined : FadeIn.duration(motion.dissolve)}
+          key={`stage-${page}`}
+          entering={reduce ? undefined : FadeIn.duration(280)}
+          exiting={reduce ? undefined : FadeOut.duration(140)}
           style={[styles.stage, { backgroundColor: theme.card }]}
         >
           <Demo theme={theme} reduce={reduce} active />
         </Animated.View>
 
         <View style={styles.copy}>
-          <Text style={[styles.title, { color: theme.text }]}>
+          <Animated.Text style={[styles.title, { color: theme.text }, titleStyle]}>
             {t(`walkthrough.${BEATS[page].titleKey}`)}
-          </Text>
-          <Text style={[styles.body, { color: theme.muted }]}>
+          </Animated.Text>
+          <Animated.Text style={[styles.body, { color: theme.muted }, bodyStyle]}>
             {t(`walkthrough.${BEATS[page].bodyKey}`)}
-          </Text>
+          </Animated.Text>
         </View>
 
-        <View style={styles.footer}>
+        <View style={styles.actions}>
           <PrimaryButton
             title={
               last
@@ -341,7 +442,7 @@ export default function HowItWorksScreen() {
                 : t('common.continue')
             }
             theme={theme}
-            onPress={next}
+            onPress={goNext}
           />
         </View>
       </View>
@@ -350,27 +451,32 @@ export default function HowItWorksScreen() {
 }
 
 const styles = StyleSheet.create({
-  wrap: { flex: 1 },
+  wrap: { flex: 1, gap: space[12] },
   top: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: space[24],
-    minHeight: 44,
+    gap: space[12],
   },
-  dots: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dot: { height: 8, borderRadius: 4 },
-  skip: { minHeight: 44, justifyContent: 'center' },
+  progress: { flexDirection: 'row', gap: 6 },
+  progressSeg: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+  },
+  skip: {
+    alignSelf: 'flex-end',
+    minHeight: 36,
+    justifyContent: 'center',
+  },
   stage: {
     flex: 1,
-    marginTop: space[12],
     marginHorizontal: space[16],
     borderRadius: radius.lg,
     borderCurve: 'continuous',
     padding: space[24],
+    minHeight: 260,
     justifyContent: 'center',
   },
-  demo: { gap: space[16] },
+  stageInner: { gap: space[16], justifyContent: 'center' },
   venuePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -380,16 +486,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  emptyBlock: {
+  personCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: space[8],
-    paddingVertical: space[32],
-    paddingHorizontal: space[16],
+    gap: 12,
     borderRadius: radius.md,
     borderCurve: 'continuous',
-    borderWidth: StyleSheet.hairlineWidth,
+    padding: space[12],
   },
-  track: {
+  slideTrack: {
     height: 60,
     borderRadius: radius.pill,
     borderCurve: 'continuous',
@@ -397,8 +502,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  trackFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: radius.pill },
-  trackHint: {
+  slideFill: { position: 'absolute', left: 0, top: 0, bottom: 0, borderRadius: radius.pill },
+  slideHint: {
     position: 'absolute',
     left: 64,
     right: 16,
@@ -406,8 +511,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  trackDone: { position: 'absolute', left: 64, right: 16 },
-  thumb: {
+  slideDone: { position: 'absolute', left: 64, right: 16 },
+  slideThumb: {
     position: 'absolute',
     left: 4,
     width: 52,
@@ -421,32 +526,23 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 3,
   },
-  flame: { width: 30, height: 30 },
-  flameOn: { position: 'absolute' },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: radius.md,
-    borderCurve: 'continuous',
-    padding: space[12],
-  },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  note: {
+  slideFlame: { width: 30, height: 30 },
+  slideFlameOn: { position: 'absolute' },
+  noteBubble: {
     alignSelf: 'flex-end',
     borderRadius: radius.md,
     borderCurve: 'continuous',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     maxWidth: '88%',
   },
-  actionsRow: { flexDirection: 'row', gap: space[12] },
+  waitingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-end',
+  },
+  pillRow: { flexDirection: 'row', gap: space[12] },
   pill: {
     flex: 1,
     minHeight: 48,
@@ -455,7 +551,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  openRow: {
+  chatBubble: {
+    borderRadius: radius.md,
+    borderCurve: 'continuous',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    maxWidth: '82%',
+  },
+  chatLeft: { alignSelf: 'flex-start' },
+  chatRight: { alignSelf: 'flex-end' },
+  keepRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -463,8 +568,8 @@ const styles = StyleSheet.create({
   },
   copy: {
     paddingHorizontal: space[24],
-    paddingTop: space[20],
     gap: space[8],
+    minHeight: 108,
   },
   title: {
     ...type.title,
@@ -475,5 +580,5 @@ const styles = StyleSheet.create({
     ...type.body,
     lineHeight: 24,
   },
-  footer: { paddingHorizontal: space[24], paddingTop: space[16] },
+  actions: { paddingHorizontal: space[24] },
 });
