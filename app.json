@@ -11,7 +11,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.rahimrady.myshytext",
-      "buildNumber": "37",
+      "buildNumber": "36",
       "googleServicesFile": "./GoogleService-Info.plist",
       "requireFullScreen": true,
       "entitlements": {
